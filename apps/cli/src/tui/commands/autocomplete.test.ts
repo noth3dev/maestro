@@ -728,6 +728,74 @@ describe("command argument autocomplete", () => {
     expect(createCommandAutocompleteItems(modelsOnly).filter((item) => item.name === "model")).toHaveLength(1);
   });
 
+  it("routes explicit Tab at the slash command root before path fallback", async () => {
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    const signal = new AbortController().signal;
+
+    const partial = await provider.getSuggestions(["/go"], 0, 3, { signal, force: true });
+    expect(partial?.items.map((item) => item.value)).toContain("goal");
+
+    const root = await provider.getSuggestions(["/"], 0, 1, { signal, force: true });
+    expect(root?.items.map((item) => item.value)).toContain("goal");
+    expect(root?.items.map((item) => item.value)).not.toContain("/bin/");
+
+    const absolutePath = await provider.getSuggestions(["/tmp"], 0, 4, { signal, force: true });
+    expect(absolutePath?.items.map((item) => item.value)).toContain("/tmp/");
+
+    const indented = await provider.getSuggestions(["  /go"], 0, 5, { signal, force: true });
+    const goal = indented?.items.find((item) => item.value === "goal");
+    expect(goal).toBeDefined();
+    expect(indented).toBeDefined();
+    if (indented === undefined || goal === undefined) throw new Error("expected indented root command completion");
+    expect(provider.applyCompletion(["  /go"], 0, 5, goal, indented.prefix)).toMatchObject({
+      lines: ["  /goal "],
+      cursorLine: 0,
+      cursorCol: 8,
+    });
+  });
+
+  it("gates root command probes before absolute path fallback", async () => {
+    const calls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; force: boolean; signal: AbortSignal }> = [];
+    const signal = new AbortController().signal;
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        calls.push({ lines, cursorLine, cursorCol, force: options.force ?? false, signal: options.signal });
+        const line = lines[cursorLine]!.slice(0, cursorCol);
+        return options.force
+          ? Promise.resolve({ items: [{ value: "/tmp/", label: "/tmp/" }], prefix: line })
+          : Promise.resolve({
+            items: line === "/go" || line === "/" ? [{ value: "goal", label: "goal" }] : [{ value: "department-plan", label: "department-plan" }],
+            prefix: line,
+          });
+      },
+      applyCompletion: () => ({ lines: ["unchanged"], cursorLine: 0, cursorCol: 0 }),
+    });
+
+    const root = { signal, force: true };
+    expect((await provider.getSuggestions(["/go"], 0, 3, root))?.items).toEqual([{ value: "goal", label: "goal" }]);
+    expect(calls).toEqual([{ lines: ["/go"], cursorLine: 0, cursorCol: 3, force: false, signal }]);
+
+    calls.length = 0;
+    expect((await provider.getSuggestions(["/tmp"], 0, 4, root))?.items).toEqual([{ value: "/tmp/", label: "/tmp/" }]);
+    expect(calls).toEqual([
+      { lines: ["/tmp"], cursorLine: 0, cursorCol: 4, force: false, signal },
+      { lines: ["/tmp"], cursorLine: 0, cursorCol: 4, force: true, signal },
+    ]);
+
+    calls.length = 0;
+    expect((await provider.getSuggestions(["/g/o"], 0, 4, root))?.items).toEqual([{ value: "/tmp/", label: "/tmp/" }]);
+    expect(calls).toEqual([
+      { lines: ["/g/o"], cursorLine: 0, cursorCol: 4, force: false, signal },
+      { lines: ["/g/o"], cursorLine: 0, cursorCol: 4, force: true, signal },
+    ]);
+
+    calls.length = 0;
+    expect((await provider.getSuggestions(["/"], 0, 1, root))?.items).toEqual([{ value: "goal", label: "goal" }]);
+    expect(calls).toEqual([{ lines: ["/"], cursorLine: 0, cursorCol: 1, force: false, signal }]);
+  });
+
   it("routes explicit Tab in slash arguments to actions and options first", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),

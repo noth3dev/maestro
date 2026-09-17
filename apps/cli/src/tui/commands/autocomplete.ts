@@ -210,6 +210,18 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
 
       const textBeforeCursor = slashArgumentText(lines, cursorLine, cursorCol);
       if (options.force !== true || textBeforeCursor === undefined) {
+        if (options.force === true && textBeforeCursor === undefined) {
+          const rootTextBeforeCursor = normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(0, normalizedSlash.cursorCol).trimStart();
+          const rootPrefix = rootTextBeforeCursor.slice(1);
+          const rootSuggestions = await provider.getSuggestions(
+            normalizedSlash.lines,
+            normalizedSlash.cursorLine,
+            normalizedSlash.cursorCol,
+            { ...options, force: false },
+          );
+          const hasRootMatch = rootPrefix === "" || rootSuggestions?.items.some((item) => item.value.startsWith(rootPrefix));
+          if (hasRootMatch || options.signal?.aborted) return rootSuggestions;
+        }
         return provider.getSuggestions(normalizedSlash.lines, normalizedSlash.cursorLine, normalizedSlash.cursorCol, options);
       }
 
