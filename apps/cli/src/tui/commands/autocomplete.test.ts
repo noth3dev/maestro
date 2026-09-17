@@ -441,6 +441,13 @@ describe("command argument autocomplete", () => {
     }
   });
 
+  it("does not suggest an ignored project scope for Goal lifecycle actions", () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
+    for (const action of ["transition", "pause", "resume", "stop", "emergency-stop"]) {
+      expect(goal?.getArgumentCompletions?.(`${action} --p`), action).toEqual([]);
+    }
+  });
+
   it("does not suggest an ignored project scope for goal creation", () => {
     const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
     expect(goal?.getArgumentCompletions?.("create --")).toEqual(
