@@ -155,6 +155,18 @@ describe("command argument autocomplete", () => {
     expect(metronome?.getArgumentCompletions?.("correct --cha")).toEqual([expect.objectContaining({ value: "--challenge-id " })]);
   });
 
+  it("suggests Metronome resolution identity, reason, and idempotency inputs", () => {
+    const metronome = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "metronome");
+    expect(metronome?.getArgumentCompletions?.("resolve --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--challenge-id " }),
+        expect.objectContaining({ value: "--reason " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(metronome?.getArgumentCompletions?.("resolve --rea")).toEqual([expect.objectContaining({ value: "--reason " })]);
+  });
+
   it("suggests worker certification identity and payload options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("certify --")).toEqual(
