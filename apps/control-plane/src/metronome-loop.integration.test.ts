@@ -50,8 +50,9 @@ describeDatabase("real Metronome continuous-observation loop with a real GoalSer
 
     // No injected withGoalLease/scanGoal seam: this is the exact real
     // GoalService.withGoalLease production composition uses
-    // (apps/control-plane/src/main.ts), acquiring a genuine PostgreSQL Goal
-    // lease per Goal, and the loop's default real scanGoalForMetronomeFindings.
+    // (apps/control-plane/src/composition/foundation-services.ts, called from
+    // main.ts), acquiring a genuine PostgreSQL Goal lease per Goal, and the
+    // loop's default real scanGoalForMetronomeFindings.
     const goalService = createDurableGoalService({ pool, leaseOwnerId: `metronome-loop-test-${randomUUID()}` });
     const ticks: { goalId: string; outcome: string }[] = [];
     const loop = createMetronomeLoop({
