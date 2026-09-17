@@ -52,6 +52,18 @@ describe("command argument autocomplete", () => {
     expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
   });
 
+  it("suggests head activation input and identity options", () => {
+    const head = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "head");
+    expect(head?.getArgumentCompletions?.("activate --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
+        expect.objectContaining({ value: "--activation-json " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(head?.getArgumentCompletions?.("activate --a")).toEqual([expect.objectContaining({ value: "--activation-json " })]);
+  });
+
   it("suggests the required expected version for every goal lifecycle action", () => {
     const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
     for (const action of ["pause", "resume", "stop", "emergency-stop"]) {
