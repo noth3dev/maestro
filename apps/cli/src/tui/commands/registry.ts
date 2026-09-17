@@ -52,6 +52,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "worker get": ["--worker-id"],
   "worker cancel": ["--worker-id"],
   "worker observe": ["--worker-id"],
+  "worker list": ["--goal-id"],
   "worker accept": ["--worker-id", "--reason"],
   "events list": ["--after"],
   "models use": ["--model"],
