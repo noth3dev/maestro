@@ -42,6 +42,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "council get": ["--council-id"],
   "council submit-brief": ["--council-id", "--department-id", "--brief-json", "--command-id"],
   "council reveal": ["--council-id", "--command-id"],
+  "council decide": ["--council-id", "--packet-json", "--command-id"],
   "models use": ["--model"],
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],

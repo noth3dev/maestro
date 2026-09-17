@@ -52,6 +52,18 @@ describe("command argument autocomplete", () => {
     expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
   });
 
+  it("suggests council decision inputs and identity options", () => {
+    const council = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "council");
+    expect(council?.getArgumentCompletions?.("decide --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--council-id " }),
+        expect.objectContaining({ value: "--packet-json " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(council?.getArgumentCompletions?.("decide --pac")).toEqual([expect.objectContaining({ value: "--packet-json " })]);
+  });
+
   it("suggests the required council identity for reveal", () => {
     const council = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "council");
     expect(council?.getArgumentCompletions?.("reveal --")).toEqual(
