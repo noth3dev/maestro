@@ -52,6 +52,30 @@ describe("command argument autocomplete", () => {
     expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
   });
 
+  it("suggests Department Plan family inputs and identity options", () => {
+    const plans = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "department-plan");
+    expect(plans?.getArgumentCompletions?.("create --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--council-id " }),
+        expect.objectContaining({ value: "--department-id " }),
+        expect.objectContaining({ value: "--plan-json " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(plans?.getArgumentCompletions?.("get --dep")).toEqual([expect.objectContaining({ value: "--department-id " })]);
+    expect(plans?.getArgumentCompletions?.("revise --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--council-id " }),
+        expect.objectContaining({ value: "--department-id " }),
+        expect.objectContaining({ value: "--expected-version " }),
+        expect.objectContaining({ value: "--plan-json " }),
+        expect.objectContaining({ value: "--reason " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(plans?.getArgumentCompletions?.("revise --rea")).toEqual([expect.objectContaining({ value: "--reason " })]);
+  });
+
   it("suggests council decision inputs and identity options", () => {
     const council = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "council");
     expect(council?.getArgumentCompletions?.("decide --")).toEqual(
