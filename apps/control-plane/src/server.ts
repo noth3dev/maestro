@@ -1,122 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mapError } from "./api-error.js";
 import Fastify, { type FastifyInstance } from "fastify";
-import type { AccountLoginRecord, AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
-import { PersonaProposalInputSchema, PersonaReadQuerySchema, PersonaInspectionSchema } from "@maestro/contracts";
+import type { AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import type { PersonaInspectionService } from "./persona-inspection-service.js";
 
-import {
-  CreateGoalInputSchema,
-  CriticalActionInputSchema,
-  CriticalActionApprovalInputSchema,
-  CriticalActionResultSchema,
-  InboxReadSchema,
-  GoalQuerySchema,
-  GoalListSchema,
-  ConversationSchema,
-  CreateConversationInputSchema,
-  ConversationTurnInputSchema,
-  ConversationTurnResultSchema,
-  ConversationEventQuerySchema,
-  ConversationEventSchema,
-  ConversationActivityEventSchema,
-  ModelCatalogEntrySchema,
-  ProviderCredentialLoginInputSchema,
-  ProviderCredentialBindingSchema,
-  ProviderAccountLoginStartInputSchema,
-  ProviderAccountLoginStartResultSchema,
-  ProviderAccountLoginStatusSchema,
-  ProjectListSchema,
-  OrganizationReadModelSchema,
-  ProjectionQuerySchema,
-  ProjectionReadModelSchema,
-  GoalBudgetSummarySchema,
-  BillingReadModelSchema,
-  GoalResultSchema,
-  MetronomeChallengeListSchema,
-  EncoreCouncilRoundListSchema,
-  CertificationListSchema,
-  ConcertmasterFinalReportSchema,
-  EvidenceBundleReadSchema,
-  GoalGitIntegrationStateSchema,
-  WorkerListSchema,
-  ChannelSelectorSchema,
-  ChannelQuerySchema,
-  ChannelMessageInputSchema,
-  ChannelMessageSchema,
-  ChannelReadSchema,
-  ImprovementDigestListSchema,
-  ArrangementsReadSchema,
-  AuthenticatedDiscordSignalSchema,
-  StoredDiscordSignalSchema,
-  EventQuerySchema,
-  EventCursorSchema,
-  GoalEventPageSchema,
-  type EventCursor,
-  CreateTaskContractInputSchema,
-  TaskContractSchema,
-  TaskContractQuerySchema,
-  UpdateTaskContractInputSchema,
-  OvertureSelectionInputSchema,
-  OvertureRoleSelectionResultSchema,
-  TaskContractConfirmationInputSchema,
-  ProjectAccessProvisionInputSchema,
-  ProjectAccessProvisionResultSchema,
-  TransitionGoalInputSchema,
-  GoalControlInputSchema,
-  UuidSchema,
-  HeadParticipationInputSchema,
-  HeadParticipationSchema,
-  CreateHeadCouncilInputSchema,
-  SubmitCouncilBriefInputSchema,
-  HeadCouncilDecisionInputSchema,
-  HeadCouncilSchema,
-  CreateDepartmentPlanInputSchema,
-  DepartmentPlanSchema,
-  ReviseDepartmentPlanInputSchema,
-  CreateMissionBundleInputSchema,
-  IssueMissionPersonaOverlayInputSchema,
-  MissionPersonaOverlaySchema,
-  MissionBundleSchema,
-  SpawnWorkerInputSchema,
-  WorkerSchema,
-  QueuedWorkerAdmissionSchema,
-  WorkerObservationSchema,
-  WorkerActionInputSchema,
-  WorkerMessageInputSchema,
-  WorkerIntegrationInputSchema,
-  CapabilitySessionSelectionInputSchema,
-  CapabilitySessionSchema,
-  EvidenceCaptureInputSchema,
-  EvidenceRecordSchema,
-  IntegrationCommitSchema,
-  GoalIntegrationBranchInputSchema,
-  GoalIntegrationBranchSchema,
-  GoalIntegrationRevisionSchema,
-  DepartmentBranchSchema,
-  DepartmentBranchInputSchema,
-  WorkerWorktreeSchema,
-  WorkerWorktreeInputSchema,
-  MetronomeScanInputSchema,
-  MetronomeFindingListSchema,
-  RaiseMetronomeChallengeInputSchema,
-  WorkerOverlayChallengeInputSchema,
-  MetronomeCorrectionInputSchema,
-  MetronomeSafePauseInputSchema,
-  MetronomeResolutionInputSchema,
-  MetronomeChallengeSchema,
-  EncoreReviewInputSchema,
-  EncoreCouncilResultSchema,
-  AcceptWorkerInputSchema,
-  DepartmentAcceptanceSchema,
-  CertifyWorkerInputSchema,
-  CertificationSchema,
-  SettingsReadSchema,
-  SettingsPreferencesUpdateSchema,
-  SettingsModelPoolUpdateSchema,
-  SettingsAuthorityDefaultsUpdateSchema,
-} from "@maestro/contracts";
-import { DurableStoreUnavailableError, GoalNotFoundError, type GoalService } from "./goal-service.js";
+import { DurableStoreUnavailableError, type GoalService } from "./goal-service.js";
 import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
 import { type ReadStateService } from "./read-state-service.js";
 import type { ProjectionService } from "./projection-service.js";
@@ -140,7 +28,6 @@ import type { ConcertmasterReportService } from "./concertmaster-report-service.
 import { type MissionBundleService } from "./mission-bundle-service.js";
 import { type WorkerService } from "./worker-service.js";
 import { type ConversationService } from "./conversation-service.js";
-import { ModelGatewayClientError } from "./model-gateway-client.js";
 
 import { type GitIntegrationService } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
@@ -154,19 +41,27 @@ import {
   AuthenticationRequiredError,
   AuthenticationUnavailableError,
   CredentialForbiddenError,
-  CriticalActionDeniedError,
-  CriticalActionRequiresApprovalError,
-  RequestValidationError,
   bearerSecret,
   isProjectAccessProvisioningRoute,
-  parse,
-  parseCertificationKind,
-  parseDepartmentId,
-  parseItemId,
-  parsePositiveInteger,
-  requestOperator,
   requestProjectId,
 } from "./server-input.js";
+import { registerCapabilityRoutes } from "./routes/capability.js";
+import { registerSystemRoutes } from "./routes/system.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerProviderRoutes } from "./routes/providers.js";
+import { registerPersonaRoutes } from "./routes/persona.js";
+import { registerGoalRoutes } from "./routes/goals.js";
+import { registerCouncilRoutes } from "./routes/councils.js";
+import { registerWorkerRoutes } from "./routes/workers.js";
+import { registerOversightRoutes } from "./routes/oversight.js";
+import { registerGitRoutes } from "./routes/git.js";
+import { registerCriticalActionRoutes } from "./routes/critical-actions.js";
+import { registerTaskContractRoutes } from "./routes/task-contracts.js";
+import { registerConversationRoutes } from "./routes/conversations.js";
+import { registerChannelRoutes } from "./routes/channels.js";
+import { registerReadRoutes } from "./routes/reads.js";
+import { registerDiscordRoutes } from "./routes/discord.js";
+import { registerEventRoutes } from "./routes/events.js";
 
 export interface DiscordSignalService {
   record(envelope: AuthenticatedDiscordSignal): Promise<StoredDiscordSignal>;
@@ -279,22 +174,44 @@ const systemPollingScheduler: PollingScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-function toAccountLoginStartResult(record: AccountLoginRecord): import("@maestro/agent-runtime").GatewayAccountLoginStartResult {
-  if (record.providerLoginId === null || record.authUrl === null) throw new Error(record.message ?? "Provider account login is not ready");
-  return { providerId: record.providerId, loginId: record.loginId, authUrl: record.authUrl };
-}
-
-function isLostGatewayLogin(error: unknown): boolean {
-  return error instanceof ModelGatewayClientError && error.code === "account_login_session_unknown";
-}
-
-async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: string, requestId: string): Promise<AccountLoginRecord> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const record = await store.getByRequest(operatorId, requestId);
-    if (record !== undefined && record.state !== "starting") return record;
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error("account login start is still in progress");
+export interface RouteDeps {
+  goalService: GoalService;
+  events: EventService;
+  criticalActions: CriticalActionService;
+  capabilityApprovals: Pick<CapabilityApprovalService, "selectFullAccessMode">;
+  inbox: InboxService;
+  evidenceCapture: EvidenceCaptureService;
+  personaGoalEvidence: PersonaGoalEvidenceService;
+  concertmasterReports: ConcertmasterReportService;
+  pollingScheduler: PollingScheduler;
+  readState: ReadStateService;
+  taskContracts: TaskContractService;
+  headParticipations: HeadParticipationService;
+  councils: CouncilService;
+  departmentPlans: DepartmentPlanService;
+  missionBundles: MissionBundleService;
+  workers: WorkerService;
+  gitIntegrations: GitIntegrationService;
+  certifications: CertificationService;
+  metronome: MetronomeService;
+  encore: EncoreService;
+  discordSignal: DiscordSignalService;
+  conversations: ConversationService;
+  projections: ProjectionService;
+  personaInspection: PersonaInspectionService;
+  organizations: OrganizationService;
+  channels: ChannelService;
+  loginOwnerId: string;
+  loginOperationStaleAfterMs: number;
+  activeStreams: Set<() => void>;
+  maxActiveStreams: number;
+  authenticator: OperatorAuthenticator;
+  projectAccess?: ProjectAccessProvisioner;
+  projectDiscovery?: ProjectDiscoveryService;
+  providerCredentials?: ProviderCredentialService;
+  accountLoginStore?: AccountLoginStore;
+  settingsService?: SettingsService;
+  projectMembership?: ProjectMembershipChecker;
 }
 
 export function buildServer({
@@ -753,37 +670,46 @@ export function buildServer({
     if (candidate === undefined) return;
     await projectMembership.assertProjectMembership(operator.operatorId, candidate);
   });
-
-  app.get("/v1/inbox", async (request, reply) => {
-    const query = parse(GoalQuerySchema, request.query);
-    const result = await inbox.listPendingApprovals(query.projectId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(InboxReadSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/capabilities/full-access-mode", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(CapabilitySessionSelectionInputSchema, request.body);
-    const operatorContext = requestOperator(request as { operator?: OperatorContext });
-    const session = await capabilityApprovals.selectFullAccessMode(
-      { ...input, goalId },
-      { actorId: operatorContext.operatorId, kind: "user", projectId: input.projectId, goalId, active: true },
-    );
-    return reply.status(200).send(CapabilitySessionSchema.parse({ ...session, selectedAt: session.selectedAt.toISOString() }));
-  });
-
-  app.post("/v1/goals/:goalId/persona-evidence", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const evidence = await personaGoalEvidence.capture(goalId, request.body, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(evidence);
-  });
-
-  app.post("/v1/goals/:goalId/evidence-records", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(EvidenceCaptureInputSchema, request.body);
-    const record = await evidenceCapture.capture({ ...input, goalId }, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(EvidenceRecordSchema.parse(record));
-  });
-
+  const deps: RouteDeps = {
+    goalService,
+    events,
+    criticalActions,
+    capabilityApprovals,
+    inbox,
+    evidenceCapture,
+    personaGoalEvidence,
+    concertmasterReports,
+    pollingScheduler,
+    readState,
+    taskContracts,
+    headParticipations,
+    councils,
+    departmentPlans,
+    missionBundles,
+    workers,
+    gitIntegrations,
+    certifications,
+    metronome,
+    encore,
+    discordSignal,
+    conversations,
+    projections,
+    personaInspection,
+    organizations,
+    channels,
+    loginOwnerId,
+    loginOperationStaleAfterMs,
+    activeStreams,
+    maxActiveStreams,
+    authenticator,
+    ...(projectAccess === undefined ? {} : { projectAccess }),
+    ...(projectDiscovery === undefined ? {} : { projectDiscovery }),
+    ...(providerCredentials === undefined ? {} : { providerCredentials }),
+    ...(accountLoginStore === undefined ? {} : { accountLoginStore }),
+    ...(settingsService === undefined ? {} : { settingsService }),
+    ...(projectMembership === undefined ? {} : { projectMembership }),
+  };
+  registerCapabilityRoutes(app, deps);
   app.setErrorHandler((error, _request, reply) => {
     const mapped = mapError(error);
     reply.status(mapped.status).send(mapped.body);
@@ -798,1267 +724,22 @@ export function buildServer({
       return reply.status(503).send({ status: "not_ready" });
     }
   });
-
-  app.post("/v1/admin/project-access", async (request, reply) => {
-    if (!projectAccess) throw new DurableStoreUnavailableError();
-    const input = parse(ProjectAccessProvisionInputSchema, request.body);
-    const result = await projectAccess.provisionProjectAccess(requestOperator(request as { operator?: OperatorContext }).operatorId, input);
-    return reply.status(200).send(ProjectAccessProvisionResultSchema.parse(result));
-  });
-
-  app.get("/v1/projects", async (request, reply) => {
-    if (!projectDiscovery) throw new DurableStoreUnavailableError();
-    const projects = await projectDiscovery.listProjects(requestOperator(request as { operator?: OperatorContext }).operatorId);
-    return reply.status(200).send(ProjectListSchema.parse({ projects }));
-  });
-
-  app.get("/v1/organization", async (_request, reply) => {
-    return reply.status(200).send(OrganizationReadModelSchema.parse(await organizations.listOrganization()));
-  });
-
-  app.get("/v1/settings", async (request, reply) => {
-    if (settingsService === undefined) throw new DurableStoreUnavailableError();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.get(operatorId)));
-  });
-  app.patch("/v1/settings/preferences", async (request, reply) => {
-    if (settingsService === undefined) throw new DurableStoreUnavailableError();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const patch = parse(SettingsPreferencesUpdateSchema, request.body);
-    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.updatePreferences(operatorId, patch)));
-  });
-  app.patch("/v1/settings/model-pool", async (request, reply) => {
-    if (settingsService === undefined) throw new DurableStoreUnavailableError();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const patch = parse(SettingsModelPoolUpdateSchema, request.body);
-    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.updateModelPool(operatorId, patch)));
-  });
-  app.patch("/v1/settings/authority-defaults", async (request, reply) => {
-    if (settingsService === undefined) throw new DurableStoreUnavailableError();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const patch = parse(SettingsAuthorityDefaultsUpdateSchema, request.body);
-    return reply.status(200).send(SettingsReadSchema.parse(await settingsService.updateAuthorityDefaults(operatorId, patch)));
-  });
-
-  app.get("/v1/provider-credentials", async (_request, reply) => {
-    if (providerCredentials?.list === undefined) throw new DurableStoreUnavailableError();
-    return reply.status(200).send(await providerCredentials.list());
-  });
-
-  app.post("/v1/provider-credentials", async (request, reply) => {
-    if (!providerCredentials) throw new DurableStoreUnavailableError();
-    const input = parse(ProviderCredentialLoginInputSchema, request.body);
-    const header = request.headers["idempotency-key"];
-    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    const result = await providerCredentials.bind({
-      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
-      requestId,
-      providerId: input.providerId,
-      authMode: input.authMode,
-      secret: input.secret,
-    });
-    return reply.status(200).send(ProviderCredentialBindingSchema.parse(result));
-  });
-
-  app.post("/v1/provider-account-logins/start", async (request, reply) => {
-    const input = parse(ProviderAccountLoginStartInputSchema, request.body);
-    if (!providerCredentials?.startAccountLogin || accountLoginStore === undefined) throw new DurableStoreUnavailableError();
-    const header = request.headers["idempotency-key"];
-    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const reservation = await accountLoginStore.reserveStart(operatorId, requestId, input.providerId, loginOwnerId);
-    let record = reservation.record;
-    if (reservation.created) {
-      try {
-        const providerResult = await providerCredentials.startAccountLogin({ operatorId, requestId, providerId: input.providerId });
-        record = await accountLoginStore.completeStart(record.loginId, providerResult.loginId, providerResult.authUrl);
-      } catch (error) {
-        await accountLoginStore.failStart(record.loginId, "Provider account login failed").catch(() => undefined);
-        throw error;
-      }
-    } else if (record.state === "starting") {
-      record = await waitForAccountLoginStart(accountLoginStore, operatorId, requestId);
-    }
-    return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(toAccountLoginStartResult(record)));
-  });
-
-  app.post("/v1/provider-account-logins/logout", async (request, reply) => {
-    if (!providerCredentials?.logoutAccount) throw new DurableStoreUnavailableError();
-    const input = parse(ProviderAccountLoginStartInputSchema, request.body);
-    const header = request.headers["idempotency-key"];
-    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    await providerCredentials.logoutAccount({
-      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
-      requestId,
-      providerId: input.providerId,
-    });
-    return reply.status(200).send({ revoked: true });
-  });
-
-  app.post("/v1/provider-account-logins/status", async (request, reply) => {
-    if (!providerCredentials?.accountLoginStatus || accountLoginStore === undefined) throw new DurableStoreUnavailableError();
-    const body = request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
-    const input = parse(ProviderAccountLoginStatusSchema.pick({ providerId: true, loginId: true }), body);
-    const header = request.headers["idempotency-key"];
-    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const record = await accountLoginStore.get(input.loginId, operatorId);
-    if (record === undefined || record.providerId !== input.providerId) throw new Error("account login session is unknown");
-    if (record.state === "starting")
-      return reply
-        .status(200)
-        .send(ProviderAccountLoginStatusSchema.parse({ providerId: record.providerId, loginId: record.loginId, state: "pending" }));
-    if (record.state !== "pending" || record.providerLoginId === null)
-      return reply.status(200).send(
-        ProviderAccountLoginStatusSchema.parse({
-          providerId: record.providerId,
-          loginId: record.loginId,
-          state: record.state,
-          ...(record.message === null ? {} : { message: record.message }),
-        }),
-      );
-    const operationToken = await accountLoginStore.claimOperation(
-      record.loginId,
-      operatorId,
-      "status",
-      loginOwnerId,
-      loginOperationStaleAfterMs,
-    );
-    if (operationToken === undefined) {
-      const current = await accountLoginStore.get(record.loginId, operatorId);
-      if (current === undefined) throw new Error("account login session is unknown");
-      if (current.state !== "pending" || current.providerLoginId === null)
-        return reply.status(200).send(
-          ProviderAccountLoginStatusSchema.parse({
-            providerId: current.providerId,
-            loginId: current.loginId,
-            state: current.state,
-            ...(current.message === null ? {} : { message: current.message }),
-          }),
-        );
-      return reply.status(409).send({
-        error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" },
-      });
-    }
-    try {
-      let result: import("@maestro/agent-runtime").GatewayAccountLoginStatusResult;
-      try {
-        result = await providerCredentials.accountLoginStatus({
-          operatorId,
-          requestId,
-          providerId: input.providerId,
-          loginId: record.providerLoginId,
-        });
-      } catch (error) {
-        if (!isLostGatewayLogin(error)) throw error;
-        const unknown = await accountLoginStore.updateState(
-          record.loginId,
-          operatorId,
-          "unknown",
-          "Gateway login session was lost during restart",
-          loginOwnerId,
-          operationToken,
-        );
-        return reply.status(200).send(
-          ProviderAccountLoginStatusSchema.parse({
-            providerId: unknown.providerId,
-            loginId: unknown.loginId,
-            state: unknown.state,
-            message: unknown.message,
-          }),
-        );
-      }
-      const updated = await accountLoginStore.updateState(
-        record.loginId,
-        operatorId,
-        result.state,
-        result.message,
-        loginOwnerId,
-        operationToken,
-      );
-      return reply.status(200).send(
-        ProviderAccountLoginStatusSchema.parse({
-          providerId: updated.providerId,
-          loginId: updated.loginId,
-          state: updated.state,
-          ...(updated.message === null ? {} : { message: updated.message }),
-        }),
-      );
-    } finally {
-      await accountLoginStore.releaseOperation(record.loginId, operatorId, loginOwnerId, operationToken).catch(() => undefined);
-    }
-  });
-
-  app.post("/v1/provider-account-logins/cancel", async (request, reply) => {
-    if (!providerCredentials?.cancelAccountLogin || accountLoginStore === undefined) throw new DurableStoreUnavailableError();
-    const input = parse(ProviderAccountLoginStatusSchema.pick({ providerId: true, loginId: true }), request.body);
-    const header = request.headers["idempotency-key"];
-    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const record = await accountLoginStore.get(input.loginId, operatorId);
-    if (record === undefined || record.providerId !== input.providerId) throw new Error("account login session is unknown");
-    if (record.state !== "pending" || record.providerLoginId === null)
-      return reply.status(200).send({ cancelled: record.state === "cancelled" });
-    const operationToken = await accountLoginStore.claimOperation(
-      record.loginId,
-      operatorId,
-      "cancel",
-      loginOwnerId,
-      loginOperationStaleAfterMs,
-    );
-    if (operationToken === undefined) {
-      const current = await accountLoginStore.get(record.loginId, operatorId);
-      if (current === undefined) throw new Error("account login session is unknown");
-      if (current.state !== "pending" || current.providerLoginId === null)
-        return reply.status(200).send({ cancelled: current.state === "cancelled" });
-      return reply.status(409).send({
-        error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" },
-      });
-    }
-    try {
-      try {
-        await providerCredentials.cancelAccountLogin({
-          operatorId,
-          requestId,
-          providerId: input.providerId,
-          loginId: record.providerLoginId,
-        });
-        await accountLoginStore.updateState(record.loginId, operatorId, "cancelled", undefined, loginOwnerId, operationToken);
-      } catch (error) {
-        if (!isLostGatewayLogin(error)) throw error;
-        await accountLoginStore.updateState(
-          record.loginId,
-          operatorId,
-          "unknown",
-          "Gateway login session was lost during restart",
-          loginOwnerId,
-          operationToken,
-        );
-        return reply.status(200).send({ cancelled: false });
-      }
-      return reply.status(200).send({ cancelled: true });
-    } finally {
-      await accountLoginStore.releaseOperation(record.loginId, operatorId, loginOwnerId, operationToken).catch(() => undefined);
-    }
-  });
-
-  app.delete("/v1/provider-credentials/:providerId", async (request, reply) => {
-    if (!providerCredentials) throw new DurableStoreUnavailableError();
-    const providerId = (request.params as { providerId?: unknown }).providerId;
-    if (providerId !== "openai" && providerId !== "anthropic") throw new RequestValidationError();
-    const header = request.headers["idempotency-key"];
-    const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    await providerCredentials.revoke({
-      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
-      requestId,
-      providerId,
-    });
-    return reply.status(200).send({ revoked: true });
-  });
-
-  app.get("/v1/persona", async (request, reply) => {
-    const query = parse(PersonaReadQuerySchema, request.query);
-    const model = await personaInspection.read(query, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(PersonaInspectionSchema.parse(model));
-  });
-
-  app.post("/v1/persona/proposals", async (request, reply) => {
-    const input = parse(PersonaProposalInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await personaInspection.propose(input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(result);
-  });
-
-  app.post("/v1/persona/candidates/:candidateId/edits", async (request, reply) => {
-    const candidateId = parse(UuidSchema, (request.params as { candidateId?: unknown }).candidateId);
-    const input = parse(PersonaProposalInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await personaInspection.edit(candidateId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(result);
-  });
-
-  app.post("/v1/goals", async (request, reply) => {
-    const input = parse(CreateGoalInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.createGoal(input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(GoalResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/head-participations", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(HeadParticipationInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const participation = await headParticipations.activate(
-      goalId,
-      input,
-      requestOperator(request as { operator?: OperatorContext }),
-      commandId,
-    );
-    return reply.status(200).send(HeadParticipationSchema.parse(participation));
-  });
-
-  app.post("/v1/goals/:goalId/councils", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(CreateHeadCouncilInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const council = await councils.create(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(HeadCouncilSchema.parse(council));
-  });
-
-  app.get("/v1/councils/:councilId", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.status(200).send(HeadCouncilSchema.parse(await councils.get(councilId, query.projectId)));
-  });
-
-  app.post("/v1/councils/:councilId/briefs/:departmentId", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const departmentId = parseDepartmentId((request.params as { departmentId?: unknown }).departmentId);
-    const input = parse(SubmitCouncilBriefInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    await councils.submitBrief(councilId, departmentId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(204).send();
-  });
-
-  app.post("/v1/councils/:councilId/reveal", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const input = parse(GoalQuerySchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    await councils.reveal(councilId, input.projectId, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(204).send();
-  });
-
-  app.post("/v1/councils/:councilId/decision", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const input = parse(HeadCouncilDecisionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const council = await councils.decide(councilId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(HeadCouncilSchema.parse(council));
-  });
-
-  app.post("/v1/councils/:councilId/departments/:departmentId/plan", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const departmentId = parseDepartmentId((request.params as { departmentId?: unknown }).departmentId);
-    const input = parse(CreateDepartmentPlanInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const plan = await departmentPlans.create(
-      councilId,
-      departmentId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(201).send(DepartmentPlanSchema.parse(plan));
-  });
-
-  app.get("/v1/councils/:councilId/departments/:departmentId/plan", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const departmentId = parseDepartmentId((request.params as { departmentId?: unknown }).departmentId);
-    const query = parse(GoalQuerySchema, request.query);
-    const plan = await departmentPlans.get(councilId, departmentId, query.projectId);
-    return reply.status(200).send(DepartmentPlanSchema.parse(plan));
-  });
-
-  app.put("/v1/councils/:councilId/departments/:departmentId/plan", async (request, reply) => {
-    const councilId = parse(UuidSchema, (request.params as { councilId?: unknown }).councilId);
-    const departmentId = parseDepartmentId((request.params as { departmentId?: unknown }).departmentId);
-    const input = parse(ReviseDepartmentPlanInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const plan = await departmentPlans.revise(
-      councilId,
-      departmentId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(200).send(DepartmentPlanSchema.parse(plan));
-  });
-
-  app.post("/v1/councils/:councilId/departments/:departmentId/mission-bundles/:itemId", async (request, reply) => {
-    const params = request.params as { councilId?: unknown; departmentId?: unknown; itemId?: unknown };
-    const councilId = parse(UuidSchema, params.councilId);
-    const departmentId = parseDepartmentId(params.departmentId);
-    const itemId = parseItemId(params.itemId);
-    const input = parse(CreateMissionBundleInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const bundle = await missionBundles.create(
-      councilId,
-      departmentId,
-      itemId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(201).send(MissionBundleSchema.parse(bundle));
-  });
-
-  app.get("/v1/councils/:councilId/departments/:departmentId/mission-bundles/:itemId", async (request, reply) => {
-    const params = request.params as { councilId?: unknown; departmentId?: unknown; itemId?: unknown };
-    const councilId = parse(UuidSchema, params.councilId);
-    const departmentId = parseDepartmentId(params.departmentId);
-    const itemId = parseItemId(params.itemId);
-    const query = request.query as { projectId?: unknown; planVersion?: unknown };
-    const projectId = parse(UuidSchema, query.projectId);
-    const planVersion = parsePositiveInteger(query.planVersion);
-    const bundle = await missionBundles.get(councilId, departmentId, planVersion, itemId, projectId);
-    return reply.status(200).send(MissionBundleSchema.parse(bundle));
-  });
-
-  app.post("/v1/councils/:councilId/departments/:departmentId/mission-bundles/:itemId/persona-overlay", async (request, reply) => {
-    const params = request.params as { councilId?: unknown; departmentId?: unknown; itemId?: unknown };
-    const councilId = parse(UuidSchema, params.councilId);
-    const departmentId = parseDepartmentId(params.departmentId);
-    const itemId = parseItemId(params.itemId);
-    const input = parse(IssueMissionPersonaOverlayInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const overlay = await missionBundles.issuePersonaOverlay(
-      councilId,
-      departmentId,
-      itemId,
-      input.planVersion,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(201).send(MissionPersonaOverlaySchema.parse(overlay));
-  });
-
-  app.post("/v1/councils/:councilId/departments/:departmentId/workers", async (request, reply) => {
-    const params = request.params as { councilId?: unknown; departmentId?: unknown };
-    const councilId = parse(UuidSchema, params.councilId);
-    const departmentId = parseDepartmentId(params.departmentId);
-    const input = parse(SpawnWorkerInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const worker = await workers.spawn(
-      councilId,
-      departmentId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    if ("kind" in worker && worker.kind === "queued") return reply.status(202).send(QueuedWorkerAdmissionSchema.parse(worker));
-    return reply.status(201).send(WorkerSchema.parse(worker));
-  });
-
-  app.post("/v1/workers/:workerId/observe", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(WorkerActionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const worker = await workers.observe(workerId, input.projectId, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(WorkerObservationSchema.parse(worker));
-  });
-
-  app.post("/v1/workers/:workerId/messages", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(WorkerMessageInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const worker = await workers.sendMessage(workerId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(WorkerSchema.parse(worker));
-  });
-
-  app.post("/v1/workers/:workerId/cancel", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(WorkerActionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const worker = await workers.cancel(workerId, input.projectId, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(WorkerSchema.parse(worker));
-  });
-
-  app.post("/v1/workers/:workerId/accept", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(AcceptWorkerInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await certifications.accept(workerId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(DepartmentAcceptanceSchema.parse(result));
-  });
-
-  app.post("/v1/workers/:workerId/certifications/quality", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(CertifyWorkerInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await certifications.certify(workerId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(CertificationSchema.parse({ ...result, kind: "quality" }));
-  });
-
-  app.post("/v1/workers/:workerId/certifications/:kind", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const kind = parseCertificationKind((request.params as { kind?: unknown }).kind);
-    const input = parse(CertifyWorkerInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await certifications.certifyConditional(
-      workerId,
-      kind,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(201).send(CertificationSchema.parse(result));
-  });
-
-  app.get("/v1/workers/:workerId", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const query = parse(GoalQuerySchema, request.query);
-    const worker = await workers.get(workerId, query.projectId);
-    return reply.status(200).send(WorkerSchema.parse(worker));
-  });
-
-  app.post("/v1/goals/:goalId/encore/reviews", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(EncoreReviewInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await encore.review(goalId, input, commandId);
-    return reply.status(201).send(EncoreCouncilResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/metronome/scan", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(MetronomeScanInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await metronome.scan(goalId, input.projectId, commandId);
-    return reply.status(200).send(MetronomeFindingListSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/metronome/challenges", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(RaiseMetronomeChallengeInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await metronome.raise(goalId, input, commandId);
-    return reply.status(201).send(MetronomeChallengeSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/metronome/worker-overlays/challenges", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(WorkerOverlayChallengeInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await metronome.challengeWorkerOverlay(goalId, input, commandId);
-    return reply.status(201).send(MetronomeChallengeSchema.parse(result));
-  });
-
-  app.post("/v1/metronome/challenges/:challengeId/correction", async (request, reply) => {
-    const challengeId = parse(UuidSchema, (request.params as { challengeId?: unknown }).challengeId);
-    const input = parse(MetronomeCorrectionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await metronome.requestCorrection(challengeId, input, commandId);
-    return reply.status(200).send(MetronomeChallengeSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/metronome/challenges/:challengeId/safe-pause", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const challengeId = parse(UuidSchema, (request.params as { challengeId?: unknown }).challengeId);
-    const input = parse(MetronomeSafePauseInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await metronome.requestSafePause(goalId, challengeId, input, commandId);
-    return reply.status(200).send(MetronomeChallengeSchema.parse(result));
-  });
-
-  app.post("/v1/metronome/challenges/:challengeId/resolve", async (request, reply) => {
-    const challengeId = parse(UuidSchema, (request.params as { challengeId?: unknown }).challengeId);
-    const input = parse(MetronomeResolutionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const result = await metronome.resolve(challengeId, input, commandId, operatorId);
-    return reply.status(200).send(MetronomeChallengeSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/git/integration-branch", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(GoalIntegrationBranchInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await gitIntegrations.createGoalBranch(
-      goalId,
-      input,
-      requestOperator(request as { operator?: OperatorContext }).operatorId,
-      commandId,
-    );
-    return reply.status(201).send(GoalIntegrationBranchSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/git/integration-revision", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(DepartmentBranchInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await gitIntegrations.freezeGoalRevision(
-      goalId,
-      input.projectId,
-      requestOperator(request as { operator?: OperatorContext }).operatorId,
-      commandId,
-    );
-    return reply.status(201).send(GoalIntegrationRevisionSchema.parse(result));
-  });
-
-  app.post("/v1/councils/:councilId/departments/:departmentId/git/branch", async (request, reply) => {
-    const params = request.params as { councilId?: unknown; departmentId?: unknown };
-    const councilId = parse(UuidSchema, params.councilId);
-    const departmentId = parseDepartmentId(params.departmentId);
-    const input = parse(DepartmentBranchInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const result = await gitIntegrations.createDepartmentBranch(councilId, departmentId, input.projectId, operatorId, commandId);
-    return reply.status(201).send(DepartmentBranchSchema.parse(result));
-  });
-
-  app.post("/v1/workers/:workerId/git/worktree", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(WorkerWorktreeInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const result = await gitIntegrations.createWorkerWorktree(workerId, input, operatorId, commandId);
-    return reply.status(201).send(WorkerWorktreeSchema.parse(result));
-  });
-
-  app.post("/v1/workers/:workerId/git/advance", async (request, reply) => {
-    const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
-    const input = parse(WorkerIntegrationInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await gitIntegrations.advanceWorker(
-      workerId,
-      input,
-      requestOperator(request as { operator?: OperatorContext }).operatorId,
-      commandId,
-    );
-    return reply.status(201).send(IntegrationCommitSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/transitions", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(TransitionGoalInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.transitionGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(GoalResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/pause", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(GoalControlInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.pauseGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(GoalResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/stop", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(GoalControlInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.stopGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(GoalResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/resume", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(GoalControlInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.resumeGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(GoalResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/emergency-stop", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(GoalControlInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.emergencyStopGoal(
-      goalId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(200).send(GoalResultSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/critical-actions", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(CriticalActionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const decision = await criticalActions.performCriticalAction(
-      goalId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    if (decision.effect === "deny") throw new CriticalActionDeniedError(decision.reason);
-    if (decision.effect === "require_approval") throw new CriticalActionRequiresApprovalError(decision.reason);
-    return reply.status(200).send(
-      CriticalActionResultSchema.parse({
-        goalId,
-        effect: decision.effect,
-        reason: decision.reason,
-        classification: decision.classification,
-        ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
-      }),
-    );
-  });
-
-  app.post("/v1/goals/:goalId/critical-actions/approve-and-run", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(CriticalActionApprovalInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const decision = await criticalActions.approveAndPerformCriticalAction(
-      goalId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    if (decision.effect === "deny") throw new CriticalActionDeniedError(decision.reason);
-    if (decision.effect === "require_approval") throw new CriticalActionRequiresApprovalError(decision.reason);
-    return reply.status(200).send(
-      CriticalActionResultSchema.parse({
-        goalId,
-        effect: decision.effect,
-        reason: decision.reason,
-        classification: decision.classification,
-        ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
-      }),
-    );
-  });
-
-  app.post("/v1/goals/:goalId/critical-actions/deny", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(CriticalActionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    await criticalActions.denyCriticalAction(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(204).send();
-  });
-
-  app.post("/v1/task-contracts", async (request, reply) => {
-    const contractId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const input = parse(CreateTaskContractInputSchema, request.body);
-    const result = await taskContracts.createTaskContract(contractId, input, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(201).send(TaskContractSchema.parse(result));
-  });
-
-  app.get("/v1/task-contracts/:contractId", async (request, reply) => {
-    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
-    const query = parse(TaskContractQuerySchema, request.query);
-    const result = await taskContracts.getTaskContract(contractId, query.projectId);
-    return reply.status(200).send(TaskContractSchema.parse(result));
-  });
-
-  app.put("/v1/task-contracts/:contractId", async (request, reply) => {
-    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
-    const input = parse(UpdateTaskContractInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    const result = await taskContracts.updateTaskContract(
-      contractId,
-      input,
-      requestOperator(request as { operator?: OperatorContext }),
-      commandId,
-    );
-    return reply.status(200).send(TaskContractSchema.parse(result));
-  });
-
-  app.post("/v1/task-contracts/:contractId/overture-selection", async (request, reply) => {
-    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
-    const input = parse(OvertureSelectionInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    const roles = await taskContracts.selectOvertureRoles(
-      contractId,
-      input,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(200).send(OvertureRoleSelectionResultSchema.parse({ roles }));
-  });
-
-  app.post("/v1/task-contracts/:contractId/confirmation", async (request, reply) => {
-    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
-    const input = parse(TaskContractConfirmationInputSchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    await taskContracts.confirmTaskContract(contractId, input, requestOperator(request as { operator?: OperatorContext }), commandId);
-    return reply.status(204).send();
-  });
-
-  app.post("/v1/task-contracts/:contractId/launch", async (request, reply) => {
-    const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
-    const input = parse(TaskContractQuerySchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    const result = await taskContracts.launchTaskContract(
-      contractId,
-      input.projectId,
-      requestOperator(request as { operator?: OperatorContext }),
-      commandId,
-    );
-    return reply.status(200).send(TaskContractSchema.parse(result));
-  });
-
-  app.get("/v1/models", async (request, reply) => {
-    const models = await conversations.listModels(requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(models.map((model) => ModelCatalogEntrySchema.parse(model)));
-  });
-
-  app.post("/v1/conversations", async (request, reply) => {
-    const input = parse(CreateConversationInputSchema, request.body);
-    const header = request.headers["idempotency-key"];
-    if (typeof header !== "string" || header.trim() === "") throw new RequestValidationError("Idempotency-Key is required");
-    const requestId = parse(UuidSchema, header);
-    const conversation = await conversations.create(input, requestOperator(request as { operator?: OperatorContext }), requestId);
-    return reply.status(201).send(ConversationSchema.parse(conversation));
-  });
-
-  app.get("/v1/conversations/:conversationId", async (request, reply) => {
-    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
-    const query = parse(GoalQuerySchema, request.query);
-    const conversation = await conversations.get(
-      conversationId,
-      query.projectId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(200).send(ConversationSchema.parse(conversation));
-  });
-
-  app.post("/v1/conversations/:conversationId/turns", async (request, reply) => {
-    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
-    const input = parse(ConversationTurnInputSchema, request.body);
-    const header = request.headers["idempotency-key"];
-    if (typeof header !== "string" || header.trim() === "") throw new RequestValidationError("Idempotency-Key is required");
-    const requestId = parse(UuidSchema, header);
-    const result = await conversations.turn(conversationId, input, requestOperator(request as { operator?: OperatorContext }), requestId);
-    return reply.status(200).send(ConversationTurnResultSchema.parse(result));
-  });
-
-  app.post("/v1/conversations/:conversationId/cancel", async (request, reply) => {
-    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
-    const query = parse(GoalQuerySchema, request.body);
-    const result = await conversations.cancel(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
-    return reply.status(200).send(ConversationSchema.parse(result));
-  });
-
-  app.get("/v1/conversations/:conversationId/events", async (request, reply) => {
-    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
-    const query = parse(ConversationEventQuerySchema, request.query);
-    const events = await conversations.listEvents(
-      conversationId,
-      query.projectId,
-      query.after,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(200).send(events.map((event) => ConversationEventSchema.parse(event)));
-  });
-
-  app.get("/v1/conversations/:conversationId/events/stream", async (request, reply) => {
-    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
-    const rawQuery = request.query as { projectId?: unknown; after?: unknown };
-    const query = parse(ConversationEventQuerySchema, request.query);
-    const queryCursor = rawQuery.after === undefined ? undefined : query.after;
-    const lastEventId = request.headers["last-event-id"];
-    const headerCursor = lastEventId === undefined ? undefined : parse(EventCursorSchema, lastEventId);
-    if (queryCursor !== undefined && headerCursor !== undefined && queryCursor !== headerCursor) throw new RequestValidationError();
-    const operator = requestOperator(request as { operator?: OperatorContext });
-    let cursor = headerCursor ?? queryCursor ?? "0";
-    let closed = false;
-    let polling = false;
-    let backpressured = false;
-    let drainListenerInstalled = false;
-    const MAX_SSE_BUFFER_BYTES = 1_000_000;
-    const cleanup = () => {
-      if (closed) return;
-      closed = true;
-      if (pollTimer !== undefined) pollingScheduler.clearInterval(pollTimer);
-      if (heartbeatTimer !== undefined) pollingScheduler.clearInterval(heartbeatTimer);
-      activeStreams.delete(terminate);
-    };
-    const terminate = () => {
-      if (closed) return;
-      if (!reply.raw.writableEnded) reply.raw.end();
-      cleanup();
-    };
-    if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
-    request.raw.once("aborted", cleanup);
-    reply.raw.once("close", cleanup);
-    activeStreams.add(terminate);
-    const write = (listed: import("@maestro/contracts").ConversationEvent[]) => {
-      for (const event of listed) {
-        if (closed || backpressured) return;
-        const payload = `id: ${event.cursor}\nevent: conversation-event\ndata: ${JSON.stringify(ConversationEventSchema.parse(event))}\n\n`;
-        if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) {
-          terminate();
-          return;
-        }
-        cursor = event.cursor;
-        if (!reply.raw.write(payload)) {
-          backpressured = true;
-          if (!drainListenerInstalled) {
-            drainListenerInstalled = true;
-            reply.raw.once("drain", () => {
-              drainListenerInstalled = false;
-              if (closed) return;
-              backpressured = false;
-              void poll();
-            });
-          }
-        }
-      }
-    };
-    let initial: readonly import("@maestro/contracts").ConversationEvent[];
-    try {
-      initial = await conversations.listEvents(conversationId, query.projectId, cursor, operator);
-    } catch {
-      cleanup();
-      throw new DurableStoreUnavailableError();
-    }
-    if (closed) return reply;
-    reply.hijack();
-    reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
-    reply.raw.flushHeaders();
-    write([...initial]);
-    const poll = async () => {
-      if (closed || polling || backpressured) return;
-      polling = true;
-      try {
-        const listed = await conversations.listEvents(conversationId, query.projectId, cursor, operator);
-        // The durable cursor is the deduplication key. A reconnect or a repeated
-        // poll can never emit an event that is not strictly newer than `cursor`.
-        write([...listed].filter((event) => BigInt(event.cursor) > BigInt(cursor)));
-      } catch {
-        terminate();
-      } finally {
-        polling = false;
-      }
-    };
-    const pollTimer = pollingScheduler.setInterval(() => {
-      void poll();
-    }, 250);
-    const writeHeartbeat = () => {
-      if (closed || backpressured) return;
-      const payload = ": heartbeat\n\n";
-      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) {
-        terminate();
-        return;
-      }
-      if (!reply.raw.write(payload)) {
-        backpressured = true;
-        if (!drainListenerInstalled) {
-          drainListenerInstalled = true;
-          reply.raw.once("drain", () => {
-            drainListenerInstalled = false;
-            if (closed) return;
-            backpressured = false;
-            void poll();
-          });
-        }
-      }
-    };
-    const heartbeatTimer = pollingScheduler.setInterval(writeHeartbeat, 15_000);
-    writeHeartbeat();
-    return reply;
-  });
-
-  app.get("/v1/conversations/:conversationId/activity/stream", async (request, reply) => {
-    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
-    const query = parse(GoalQuerySchema, request.query);
-    const operator = requestOperator(request as { operator?: OperatorContext });
-    if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
-    let closed = false;
-    let ready = false;
-    const pending: import("@maestro/contracts").ConversationActivityEvent[] = [];
-    let unsubscribe: (() => void) | undefined;
-    let heartbeatTimer: ReturnType<typeof pollingScheduler.setInterval> | undefined = undefined;
-    const cleanup = () => {
-      if (closed) return;
-      closed = true;
-      unsubscribe?.();
-      if (heartbeatTimer !== undefined) pollingScheduler.clearInterval(heartbeatTimer);
-      activeStreams.delete(terminate);
-    };
-    const terminate = () => {
-      if (closed) return;
-      if (!reply.raw.writableEnded) reply.raw.end();
-      cleanup();
-    };
-    const writeFrame = (payload: string): void => {
-      if (closed) return;
-      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > 1_000_000 || !reply.raw.write(payload)) terminate();
-    };
-    const write = (event: import("@maestro/contracts").ConversationActivityEvent): void => {
-      if (closed) return;
-      if (!ready) {
-        if (pending.length < 32) pending.push(event);
-        return;
-      }
-      writeFrame(`event: conversation-activity\ndata: ${JSON.stringify(ConversationActivityEventSchema.parse(event))}\n\n`);
-    };
-    request.raw.once("aborted", cleanup);
-    reply.raw.once("close", cleanup);
-    activeStreams.add(terminate);
-    try {
-      if (conversations.subscribeActivity === undefined) throw new Error("conversation activity stream is unavailable");
-      unsubscribe = await conversations.subscribeActivity(conversationId, query.projectId, operator, write);
-    } catch (error) {
-      cleanup();
-      throw error;
-    }
-    if (closed) {
-      unsubscribe?.();
-      return reply;
-    }
-    reply.hijack();
-    reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
-    reply.raw.flushHeaders();
-    ready = true;
-    for (const event of pending.splice(0)) write(event);
-    heartbeatTimer = pollingScheduler.setInterval(() => writeFrame(": heartbeat\n\n"), 15_000);
-    return reply;
-  });
-
-  app.get("/v1/goals/:goalId/channels/:kind/:channelId", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const params = request.params as { kind?: unknown; channelId?: unknown };
-    const selector = parse(ChannelSelectorSchema, { kind: params.kind, channelId: params.channelId });
-    const query = parse(ChannelQuerySchema, request.query);
-    const result = await channels.get({
-      goalId,
-      projectId: query.projectId,
-      selector,
-      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
-    });
-    return reply.status(200).send(ChannelReadSchema.parse(result));
-  });
-
-  app.post("/v1/goals/:goalId/channels/:kind/:channelId/messages", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const params = request.params as { kind?: unknown; channelId?: unknown };
-    const selector = parse(ChannelSelectorSchema, { kind: params.kind, channelId: params.channelId });
-    const input = parse(ChannelMessageInputSchema, request.body);
-    const messageId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await channels.post({
-      goalId,
-      selector,
-      ...input,
-      messageId,
-      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
-    });
-    return reply.status(201).send(ChannelMessageSchema.parse(result));
-  });
-
-  app.get("/v1/goals", async (request, reply) => {
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(GoalListSchema.parse({ goals: await readState.listGoals(query.projectId) }));
-  });
-
-  app.get("/v1/billing", async (request, reply) => {
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(BillingReadModelSchema.parse(await readState.getBillingSummary(query.projectId)));
-  });
-
-  app.get("/v1/projection", async (request, reply) => {
-    const query = parse(ProjectionQuerySchema, request.query);
-    if (query.projectId === undefined) throw new RequestValidationError();
-    return reply.send(ProjectionReadModelSchema.parse(await projections.read(query)));
-  });
-
-  app.get("/v1/goals/:goalId/budget", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(GoalBudgetSummarySchema.parse(await readState.getBudgetSummary(goalId, query.projectId)));
-  });
-
-  app.get("/v1/goals/:goalId", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    const result = await goalService.getGoal(goalId, query.projectId);
-    return reply.status(200).send(GoalResultSchema.parse(result));
-  });
-
-  app.get("/v1/goals/:goalId/metronome-challenges", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(MetronomeChallengeListSchema.parse({ challenges: await readState.listMetronomeChallenges(goalId, query.projectId) }));
-  });
-  app.get("/v1/goals/:goalId/encore-council-rounds", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(EncoreCouncilRoundListSchema.parse({ rounds: await readState.listEncoreCouncilRounds(goalId, query.projectId) }));
-  });
-  app.get("/v1/goals/:goalId/certifications", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(CertificationListSchema.parse({ certifications: await readState.listCertifications(goalId, query.projectId) }));
-  });
-  app.post("/v1/goals/:goalId/concertmaster-report", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const input = parse(GoalQuerySchema, request.body);
-    const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const report = await concertmasterReports.generate(
-      goalId,
-      input.projectId,
-      commandId,
-      requestOperator(request as { operator?: OperatorContext }),
-    );
-    return reply.status(201).send(ConcertmasterFinalReportSchema.parse(report));
-  });
-
-  app.get("/v1/goals/:goalId/concertmaster-report", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    const report = await readState.getConcertmasterReport(goalId, query.projectId);
-    if (!report) throw new GoalNotFoundError();
-    return reply.send(ConcertmasterFinalReportSchema.parse(report));
-  });
-  app.get("/v1/goals/:goalId/evidence-bundle", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(EvidenceBundleReadSchema.parse(await readState.getEvidenceBundle(goalId, query.projectId)));
-  });
-  app.get("/v1/goals/:goalId/git/integration-state", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(GoalGitIntegrationStateSchema.parse(await readState.getGitIntegrationState(goalId, query.projectId)));
-  });
-  app.get("/v1/goals/:goalId/workers", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    return reply.send(WorkerListSchema.parse({ workers: await readState.listWorkersForGoal(goalId, query.projectId) }));
-  });
-  app.get("/v1/goals/:goalId/improvement-digests", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    return reply.send(
-      ImprovementDigestListSchema.parse({ digests: await readState.listImprovementDigestsForGoal(goalId, query.projectId, operatorId) }),
-    );
-  });
-  app.get("/v1/goals/:goalId/arrangements", async (request, reply) => {
-    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
-    const query = parse(GoalQuerySchema, request.query);
-    const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    return reply.send(ArrangementsReadSchema.parse(await readState.listArrangementsForGoal(goalId, query.projectId, operatorId)));
-  });
-  // Ingests one authenticated Discord watchdog signal. Bearer authentication (above) proves the
-  // caller holds a real operator credential; the signal's own HMAC signature (verified inside
-  // `discordSignal.record`) additionally proves it was genuinely produced by the configured
-  // Discord watchdog source, not merely by any authenticated operator.
-  app.post("/v1/discord/signals", async (request, reply) => {
-    const input = parse(AuthenticatedDiscordSignalSchema, request.body);
-    const stored = await discordSignal.record(input);
-    return reply.status(201).send(StoredDiscordSignalSchema.parse(stored));
-  });
-
-  app.get("/v1/events", async (request, reply) => {
-    const query = parse(EventQuerySchema, request.query);
-    const listed = await events.listEvents(query.projectId, query.after);
-    const nextCursor = listed.at(-1)?.cursor ?? query.after;
-    return reply.status(200).send(GoalEventPageSchema.parse({ events: listed, nextCursor }));
-  });
-
-  app.get("/v1/events/stream", async (request, reply) => {
-    const rawQuery = request.query as { projectId?: unknown; after?: unknown };
-    const projectId = parse(UuidSchema, rawQuery.projectId);
-    const afterFromQuery = rawQuery.after === undefined ? undefined : parse(EventCursorSchema, rawQuery.after);
-    const lastEventId = request.headers["last-event-id"];
-    const afterFromHeader = lastEventId === undefined ? undefined : parse(EventCursorSchema, lastEventId);
-    if (afterFromHeader !== undefined && afterFromQuery !== undefined && afterFromHeader !== afterFromQuery) {
-      throw new RequestValidationError();
-    }
-    let cursor = afterFromHeader ?? afterFromQuery ?? "0";
-    let closed = false;
-    let polling = false;
-    let timer: unknown;
-    let backpressured = false;
-    let drainListenerInstalled = false;
-    const MAX_SSE_BUFFER_BYTES = 1_000_000;
-    const streamOperator = (request as typeof request & { operator?: OperatorContext }).operator;
-    const streamSecret = bearerSecret(request.headers.authorization);
-    const reauthorize = async (): Promise<void> => {
-      if (!streamOperator || streamSecret === undefined) throw new AuthenticationRequiredError();
-      const authentication = await authenticator.authenticateBearerSecret(streamSecret);
-      if (authentication.outcome !== "authenticated" || authentication.operator.operatorId !== streamOperator.operatorId)
-        throw new CredentialForbiddenError();
-      await projectMembership?.assertProjectMembership(streamOperator.operatorId, projectId);
-    };
-    const cleanup = () => {
-      if (closed) return;
-      closed = true;
-      if (timer !== undefined) pollingScheduler.clearInterval(timer);
-      request.raw.off("aborted", cleanup);
-      reply.raw.off("close", cleanup);
-      activeStreams.delete(terminate);
-    };
-    // Terminal writers own the response until it has ended. Cleanup only unregisters it.
-    const terminate = () => {
-      if (closed) return;
-      if (!reply.raw.writableEnded) reply.raw.end();
-      // An ended SSE response may otherwise leave its keep-alive socket open,
-      // which prevents server shutdown from completing.
-      if (!reply.raw.destroyed) reply.raw.destroy();
-      cleanup();
-    };
-    if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
-    request.raw.once("aborted", cleanup);
-    reply.raw.once("close", cleanup);
-    activeStreams.add(terminate);
-
-    const markBackpressure = () => {
-      backpressured = true;
-      if (!drainListenerInstalled) {
-        drainListenerInstalled = true;
-        reply.raw.once("drain", () => {
-          drainListenerInstalled = false;
-          if (closed) return;
-          backpressured = false;
-          void fetchAndWrite();
-        });
-      }
-    };
-    const writeFrame = (payload: string): boolean => {
-      if (closed) return false;
-      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) {
-        terminate();
-        return false;
-      }
-      if (!reply.raw.write(payload)) markBackpressure();
-      return true;
-    };
-    const writeEvents = (listed: import("@maestro/contracts").GoalEvent[]) => {
-      for (const event of listed) {
-        if (closed || backpressured) return;
-        cursor = event.cursor;
-        if (!writeFrame(`id: ${event.cursor}\nevent: goal-event\ndata: ${JSON.stringify(event)}\n\n`)) return;
-      }
-    };
-    const fetchAndWrite = async () => {
-      if (closed || polling || backpressured) return;
-      polling = true;
-      try {
-        await reauthorize();
-        const listed = await events.listEvents(projectId, cursor);
-        if (listed.length === 0 && !closed) writeFrame(": heartbeat\n\n");
-        else writeEvents(listed);
-      } catch {
-        if (!closed) {
-          // Headers may already be sent. Closing is the only valid SSE failure signal then.
-          if (!reply.raw.headersSent) reply.raw.writeHead(503, { "content-type": "application/json" });
-          terminate();
-        }
-      } finally {
-        polling = false;
-      }
-    };
-
-    // Prove durable storage is available before committing the streaming response.
-    let initial: import("@maestro/contracts").GoalEvent[];
-    try {
-      initial = await events.listEvents(projectId, cursor);
-    } catch {
-      cleanup();
-      throw new DurableStoreUnavailableError();
-    }
-    // A client may disconnect while the initial durable read is in flight.
-    // In that case cleanup owns the response and this handler must not write.
-    if (closed) return reply;
-    reply.hijack();
-    reply.raw.writeHead(200, {
-      "content-type": "text/event-stream; charset=utf-8",
-      "cache-control": "no-cache",
-      connection: "keep-alive",
-    });
-    reply.raw.flushHeaders();
-    writeEvents(initial);
-    if (!closed) {
-      timer = pollingScheduler.setInterval(() => {
-        if (closed || polling) return;
-        void fetchAndWrite();
-      }, 500);
-    }
-    return reply;
-  });
+  registerSystemRoutes(app, deps);
+  registerSettingsRoutes(app, deps);
+  registerProviderRoutes(app, deps);
+  registerPersonaRoutes(app, deps);
+  registerGoalRoutes(app, deps);
+  registerCouncilRoutes(app, deps);
+  registerWorkerRoutes(app, deps);
+  registerOversightRoutes(app, deps);
+  registerGitRoutes(app, deps);
+  registerCriticalActionRoutes(app, deps);
+  registerTaskContractRoutes(app, deps);
+  registerConversationRoutes(app, deps);
+  registerChannelRoutes(app, deps);
+  registerReadRoutes(app, deps);
+  registerDiscordRoutes(app, deps);
+  registerEventRoutes(app, deps);
 
   return app;
 }
