@@ -52,6 +52,17 @@ describe("command argument autocomplete", () => {
     expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
   });
 
+  it("suggests worker accept identity and reason options", () => {
+    const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
+    expect(workers?.getArgumentCompletions?.("accept --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--worker-id " }),
+        expect.objectContaining({ value: "--reason " }),
+      ]),
+    );
+    expect(workers?.getArgumentCompletions?.("accept --rea")).toEqual([expect.objectContaining({ value: "--reason " })]);
+  });
+
   it("suggests worker spawn inputs and identity options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("spawn --")).toEqual(
