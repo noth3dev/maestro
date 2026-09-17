@@ -35,7 +35,7 @@ describe("release scenario runbook", () => {
     expect(inputWriter).not.toContain('testEvidenceIds: ["target-test"]');
     expect(inputWriter).not.toContain("release-scenario-runbook");
     expect(inputWriter).toContain("repairHold");
-    const apiClient = await readFile(new URL("../../packages/api-client/src/index.ts", import.meta.url), "utf8");
+    const apiClient = await readFile(new URL("../../packages/api-client/src/methods/reporting.ts", import.meta.url), "utf8");
     expect(apiClient).toContain("generateConcertmasterReport");
   });
 
