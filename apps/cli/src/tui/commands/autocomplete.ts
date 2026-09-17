@@ -12,7 +12,7 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
       const [action = "", ...rest] = prefix.split(/\s+/);
       if (rest.length === 0 && !prefix.includes("--")) return command.actions
         .filter((candidate) => candidate.name.startsWith(action.toLowerCase()))
-        .map((candidate) => ({ value: candidate.name, label: candidate.name, description: candidate.description }));
+        .map((candidate) => ({ value: `${candidate.name} `, label: candidate.name, description: candidate.description }));
       const actionDefinition = command.actions.find((candidate) => candidate.name === action.toLowerCase());
       const actionOptions = actionDefinition?.options ?? [];
       const optionPrefix = rest.at(-1) ?? "";

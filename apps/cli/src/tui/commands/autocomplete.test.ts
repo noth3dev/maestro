@@ -18,7 +18,7 @@ describe("command argument autocomplete", () => {
   it("suggests actions after a command and typed options after an action", () => {
     const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
     expect(goal).toBeDefined();
-    expect(goal?.getArgumentCompletions?.("se")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "select" })]));
+    expect(goal?.getArgumentCompletions?.("se")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "select " })]));
     expect(goal?.getArgumentCompletions?.("select --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
@@ -523,8 +523,8 @@ describe("command argument autocomplete", () => {
 
   it("suggests worker message and git worker-advance actions", () => {
     const items = createCommandAutocompleteItems(createCommandRegistry());
-    expect(items.find((item) => item.name === "worker")?.getArgumentCompletions?.("me")).toEqual([expect.objectContaining({ value: "message" })]);
-    expect(items.find((item) => item.name === "git")?.getArgumentCompletions?.("worker-")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "worker-advance" })]));
+    expect(items.find((item) => item.name === "worker")?.getArgumentCompletions?.("me")).toEqual([expect.objectContaining({ value: "message " })]);
+    expect(items.find((item) => item.name === "git")?.getArgumentCompletions?.("worker-")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "worker-advance " })]));
   });
 
   it("does not suggest ignored project scope for worker message or Git worker advance", () => {
