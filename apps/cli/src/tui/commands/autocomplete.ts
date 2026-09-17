@@ -66,6 +66,52 @@ function slashOptionPrefix(
   return currentToken.startsWith("--") && prefix.endsWith(currentToken) ? currentToken : undefined;
 }
 
+function scanAutocompleteArgumentTokens(text: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "\"" | "'" | undefined;
+  let escaped = false;
+  let tokenStarted = false;
+  for (const character of text) {
+    if (escaped) {
+      current += character;
+      escaped = false;
+      tokenStarted = true;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      current += character;
+      escaped = true;
+      tokenStarted = true;
+      continue;
+    }
+    if (quote !== undefined) {
+      current += character;
+      tokenStarted = true;
+      if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "\"" || character === "'") {
+      current += character;
+      quote = character;
+      tokenStarted = true;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (tokenStarted) {
+        tokens.push(current);
+        current = "";
+        tokenStarted = false;
+      }
+      continue;
+    }
+    current += character;
+    tokenStarted = true;
+  }
+  if (tokenStarted || /\s$/.test(text)) tokens.push(current);
+  return tokens;
+}
+
 function isPathShapedValue(value: string): boolean {
   return value.includes("/") || value.includes("\\") || value.startsWith(".") || value === "~" || value.startsWith("~/");
 }
@@ -142,7 +188,7 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
     description: command.description,
     getArgumentCompletions(argumentPrefix: string): AutocompleteItem[] {
       const prefix = argumentPrefix.trimStart();
-      const [action = "", ...rest] = prefix.split(/\s+/);
+      const [action = "", ...rest] = scanAutocompleteArgumentTokens(prefix);
       if (rest.length === 0 && !prefix.includes("--")) return command.actions
         .filter((candidate) => candidate.name.startsWith(action.toLowerCase()))
         .map((candidate) => ({ value: `${candidate.name} `, label: candidate.name, description: candidate.description }));

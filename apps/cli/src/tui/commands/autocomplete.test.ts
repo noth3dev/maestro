@@ -664,6 +664,32 @@ describe("command argument autocomplete", () => {
     expect(admin?.getArgumentCompletions?.("project-access --p")).toEqual([]);
   });
 
+  it("does not count option-like words inside quoted values", () => {
+    const worker = createCommandAutocompleteItems(createCommandRegistry()).find((command) => command.name === "worker");
+    expect(worker).toBeDefined();
+    if (worker === undefined || worker.getArgumentCompletions === undefined) throw new Error("expected worker autocomplete");
+
+    for (const quotedValue of [
+      '"please use --command-id later"',
+      "'please use --command-id later'",
+      String.raw`"escaped \"quote\" and \\ path --command-id"`,
+      String.raw`"hello	--command-id world"`,
+    ]) {
+      const suggestions = worker.getArgumentCompletions(`message --worker-id worker-1 --message ${quotedValue} --`);
+      expect(suggestions.map((item) => item.value)).toContain("--command-id ");
+    }
+
+    const incomplete = worker.getArgumentCompletions(
+      'message --worker-id worker-1 --message "please use --command-id later --',
+    );
+    expect(incomplete).toEqual([]);
+
+    const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((command) => command.name === "task-contract");
+    expect(taskContract?.getArgumentCompletions?.(String.raw`amend --substance-json="{\"text\":\"--expected-version\"}" --`).map((item) => item.value)).toContain(
+      "--expected-version ",
+    );
+  });
+
   it("does not repeat completed options while completing the next option", () => {
     const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
     expect(goal?.getArgumentCompletions?.("pause --goal-id goal-1 --")).toEqual([
