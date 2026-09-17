@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createSplashController,
+  renderInputPlaceholder,
   renderSetupSteps,
   renderShell,
   renderSplash,
@@ -81,6 +82,32 @@ describe("Maestro TUI shell", () => {
       expect(splash.split("\n").every((line) => line.length <= width)).toBe(true);
       expect(footer.length).toBeLessThanOrEqual(width);
     }
+  });
+
+  it("uses project recovery guidance in the normal-height input placeholder", () => {
+    const unavailableStates = [
+      { ...state, project: { kind: "unavailable", guidance: "No projects are available for this operator" } },
+      { ...state, project: { kind: "unavailable", guidance: "Project discovery unavailable: gateway timeout" } },
+      {
+        ...state,
+        project: {
+          kind: "unavailable",
+          guidance: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2",
+        },
+      },
+    ] as TuiShellState[];
+
+    for (const width of [40, 80]) {
+      for (const unavailable of unavailableStates) {
+        const input = renderInputPlaceholder(unavailable, width);
+        expect(input).not.toContain("message to Concertmaster");
+        expect(input.length).toBeLessThanOrEqual(width);
+      }
+    }
+
+    expect(renderInputPlaceholder(unavailableStates[0]!, 80)).toContain("ask admin");
+    expect(renderInputPlaceholder(unavailableStates[1]!, 80)).toContain("ctrl+r retry");
+    expect(renderInputPlaceholder(unavailableStates[2]!, 80)).toBe("/session attach --project-index=1");
   });
 
   it("shows attach guidance instead of project-bound actions when project discovery is unresolved", () => {

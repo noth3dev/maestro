@@ -2264,3 +2264,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - The provider API-key flow had a post-secret gap: after `pendingProviderLogin` was cleared, `loginProvider` could remain unresolved while the editor and global shortcuts were active. The chosen fix extends the existing modal boundary to `providerLoginInFlight`, blocks non-empty submits without a queue, preserves explicit cancellation controls, and shows provider-first compact progress.
 - Candidates were (1) extend the existing modal boundary and guard late handoff, (2) keep the editor hidden until storage settles, and (3) add a FIFO submit mutex. Independent design critique ranked **1 > 2 > 3** and selected #1.
 - The first implementation review found three blockers: narrow compact text lost the provider id, stale handoff could publish/persist after stop, and tests covered only pure predicates. Remediation moved model/session publication behind a deferred-save freshness helper and added a stale-save regression. Fresh independent § 0.3 review returned **REVIEW: PASS**.
+
+
+## 2026-09-17 — UX loop unattached-project composer truthfulness
+
+- At connected normal-height 80x24/40x24 with `project.kind === "unavailable"`, the input label advertised `message to Concertmaster · Enter to send`, but submit failed closed because no workspace project was attached.
+- Candidates: (1) use existing `projectActionText` in the normal input placeholder, (2) guard submit only, (3) broad shared recovery-copy extraction. Independent critiques ranked **1 > 3 > 2** and accepted #1.
+- RED reproduced the misleading normal placeholder; GREEN returned bounded existing attach/admin/retry guidance for unavailable projects without changing compact or command behavior. Focused shell tests passed **29/29**, full TUI **56 files / 392 tests**, root build and `git diff --check` passed. Separate § 0.3 review: **REVIEW: PASS**.

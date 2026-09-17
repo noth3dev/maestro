@@ -186,6 +186,7 @@ function hasPendingDecisionRows(state: TuiShellState): boolean {
 
 export function renderInputPlaceholder(state: TuiShellState, width: number, compact = false): string {
   if (state.connection.kind === "setup-required") return setupRequiredGuidance(width, compact);
+  if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state, width);
   const decisions = pendingDecisionRows(state);
   if (decisions.length > 0) {
     const tier = decisions[0]?.tier ?? "authority";
