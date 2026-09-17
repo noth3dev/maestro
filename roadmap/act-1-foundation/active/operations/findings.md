@@ -2566,3 +2566,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - `/metronome safe-pause` is a live palette-visible critical action but has no action-input autocomplete. Its handler requires `--challenge-id`, accepts explicit `--goal-id` when no Goal is attached, and uses optional/generated `--command-id`; an empty invocation fails truthfully before the existing critical approval/client path.
 - Candidates: (1) add static metadata `metronome safe-pause: [--goal-id, --challenge-id, --command-id]`, (2) move options onto the `CommandAction` definition, or (3) introduce a typed per-action command spec shared by handler validation and autocomplete. Independent design critique ranked **1 > 2 > 3**, selecting #1 as the smallest behavior-preserving repair and deferring #2/#3 as broader anti-drift work.
 - RED will add `safe-pause --` and typed-prefix regressions; GREEN will add only truthful completion metadata without changing Goal/challenge identity, critical approval, project/auth scope, cancellation, idempotency, or conversation boundaries. No excluded files are touched.
+
+
+## 2026-09-17 — UX loop plural workers list Goal autocomplete
+
+- `/workers list` is a supported palette-visible compatibility alias handled alongside `/worker list` through `selectedGoal`, but its literal `actionOptions` entry is missing. The singular key has `--goal-id`; `workers list` resolves to no options, so a beginner cannot discover the explicit Goal selector for the plural alias.
+- Candidates: (1) add static metadata `workers list: [--goal-id]`, (2) remove the plural alias, or (3) canonicalize the plural alias before autocomplete/dispatch. Independent design critique ranked **1 > 3 > 2**, selecting #1 for explicit alias parity, ranking #3 as a broader structural option, and rejecting #2 as compatibility-breaking.
+- RED will add `workers list --` and typed-prefix regressions; GREEN will add only the truthful alias metadata without changing Goal selection, project/auth scope, approvals, cancellation, idempotency, or conversation boundaries. No excluded files are touched.

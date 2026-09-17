@@ -88,6 +88,12 @@ describe("command argument autocomplete", () => {
     expect(workers?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
+  it("suggests the Goal scope for the plural workers alias", () => {
+    const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "workers");
+    expect(workers?.getArgumentCompletions?.("list --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(workers?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests goal branch repository and revision inputs", () => {
     const git = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "git");
     expect(git?.getArgumentCompletions?.("goal-branch --")).toEqual(
