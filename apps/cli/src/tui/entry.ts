@@ -33,7 +33,7 @@ import { activityView, createConversationActivityReadiness, runConversationActiv
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
 import { createCommandRegistry } from "./commands/registry.js";
-import { createCommandAutocompleteItems } from "./commands/autocomplete.js";
+import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "./commands/autocomplete.js";
 import { dispatchCommandPaletteInput } from "./commands/palette.js";
 import { parseInput } from "./commands/parser.js";
 import {
@@ -553,7 +553,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const footer = new Text("", 0, 0);
     const header = new ConversationViewport();
     const registry = createCommandRegistry();
-    editor.setAutocompleteProvider(new CombinedAutocompleteProvider(createCommandAutocompleteItems(registry), workspace.cwd));
+    const autocompleteProvider = new CombinedAutocompleteProvider(createCommandAutocompleteItems(registry), workspace.cwd);
+    editor.setAutocompleteProvider(createSlashCommandAutocompleteProvider(autocompleteProvider));
     let conversation: ConversationTranscriptState = createConversationTranscript();
     let draftedTaskContract: TaskContract | undefined;
     let renderedDraftIdentity: string | undefined;

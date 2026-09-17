@@ -1,6 +1,7 @@
+import { CombinedAutocompleteProvider } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { CommandRegistry, createCommandRegistry } from "./registry.js";
-import { createCommandAutocompleteItems } from "./autocomplete.js";
+import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "./autocomplete.js";
 
 describe("command argument autocomplete", () => {
   it("derives options from action metadata supplied by the registry", () => {
@@ -699,5 +700,31 @@ describe("command argument autocomplete", () => {
       { name: "models", description: "models", actions: [{ name: "use", kind: "write", description: "use", options: ["--model"] }] },
     ]);
     expect(createCommandAutocompleteItems(modelsOnly).filter((item) => item.name === "model")).toHaveLength(1);
+  });
+
+  it("routes explicit Tab in slash arguments to actions and options first", async () => {
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    const signal = new AbortController().signal;
+
+    const actions = await provider.getSuggestions(["/goal "], 0, 6, { signal, force: true });
+    expect(actions?.items.map((item) => item.value)).toContain("select ");
+
+    const options = await provider.getSuggestions(["/goal select --"], 0, 16, { signal, force: true });
+    expect(options?.items.map((item) => item.value)).toEqual(["--goal-id "]);
+  });
+
+  it("falls back to file completion only for path-shaped slash argument values", async () => {
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    const signal = new AbortController().signal;
+
+    const path = await provider.getSuggestions(["/git goal-branch --repository-path ./package"], 0, 44, { signal, force: true });
+    expect(path?.items.map((item) => item.value)).toEqual(expect.arrayContaining(["./package.json"]));
+
+    const optionValue = await provider.getSuggestions(["/goal select --goal-id package"], 0, 30, { signal, force: true });
+    expect(optionValue).toBeNull();
   });
 });

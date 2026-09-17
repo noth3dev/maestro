@@ -1,7 +1,41 @@
-import type { AutocompleteItem, SlashCommand } from "@earendil-works/pi-tui";
+import type { AutocompleteItem, AutocompleteProvider, SlashCommand } from "@earendil-works/pi-tui";
 import type { CommandRegistry } from "./registry.js";
 
+function slashArgumentText(lines: string[], cursorLine: number, cursorCol: number): string | undefined {
+  if (cursorLine !== 0) return undefined;
+  const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
+  return textBeforeCursor.startsWith("/") && textBeforeCursor.includes(" ") ? textBeforeCursor : undefined;
+}
 
+function looksLikeFileValue(textBeforeCursor: string): boolean {
+  const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
+  const currentToken = textBeforeCursor.slice(lastSpace + 1);
+  return currentToken.includes("/") || currentToken.startsWith(".") || currentToken.startsWith("~");
+}
+
+/**
+ * Keep explicit Tab in slash-command argument contexts on command completion.
+ * pi-tui uses force=true for Tab after a space, which otherwise bypasses its
+ * slash-command branch and invokes generic file completion instead.
+ */
+export function createSlashCommandAutocompleteProvider(provider: AutocompleteProvider): AutocompleteProvider {
+  const wrapped: AutocompleteProvider = {
+    async getSuggestions(lines, cursorLine, cursorCol, options) {
+      const textBeforeCursor = slashArgumentText(lines, cursorLine, cursorCol);
+      if (options.force !== true || textBeforeCursor === undefined) return provider.getSuggestions(lines, cursorLine, cursorCol, options);
+
+      const commandSuggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, { ...options, force: false });
+      if (commandSuggestions?.items.length || !looksLikeFileValue(textBeforeCursor)) return commandSuggestions;
+      return provider.getSuggestions(lines, cursorLine, cursorCol, options);
+    },
+    applyCompletion: (...args) => provider.applyCompletion(...args),
+  };
+  if (provider.triggerCharacters !== undefined) wrapped.triggerCharacters = [...provider.triggerCharacters];
+  if (provider.shouldTriggerFileCompletion !== undefined) {
+    wrapped.shouldTriggerFileCompletion = (...args) => provider.shouldTriggerFileCompletion!(...args);
+  }
+  return wrapped;
+}
 
 export function createCommandAutocompleteItems(registry: CommandRegistry): SlashCommand[] {
   const commands = registry.all().map((command) => ({
