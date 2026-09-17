@@ -112,6 +112,12 @@ describe("command argument autocomplete", () => {
     expect(git?.getArgumentCompletions?.("goal-branch --repo")).toEqual([expect.objectContaining({ value: "--repository-path " })]);
   });
 
+  it("suggests the Goal scope for Git status reads", () => {
+    const git = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "git");
+    expect(git?.getArgumentCompletions?.("status --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(git?.getArgumentCompletions?.("status --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests the Goal scope for Git revision freezing", () => {
     const git = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "git");
     expect(git?.getArgumentCompletions?.("goal-revision --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
