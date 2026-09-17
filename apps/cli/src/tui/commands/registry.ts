@@ -18,10 +18,12 @@ export interface CommandDefinition {
   actionless?: boolean;
 }
 
+const CRITICAL_APPROVAL_OPTIONS = ["--goal-id", "--action", "--target", "--version", "--budget-effect-cents", "--expires-at", "--command-id"] as const;
 const actionOptions: Record<string, readonly string[]> = {
   "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
   "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
-  "critical-action approve-and-run": ["--goal-id", "--action", "--target", "--version", "--budget-effect-cents", "--expires-at", "--command-id"],
+  "critical-action approve-and-run": CRITICAL_APPROVAL_OPTIONS,
+  "approval approve-and-run": CRITICAL_APPROVAL_OPTIONS,
   "goal create": ["--project-id", "--contract-id", "--command-id"],
   "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
   "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],

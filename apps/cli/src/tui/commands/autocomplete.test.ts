@@ -532,6 +532,22 @@ describe("command argument autocomplete", () => {
     expect(criticalAction?.getArgumentCompletions?.("approve-and-run --exp")).toEqual([expect.objectContaining({ value: "--expires-at " })]);
   });
 
+  it("suggests critical approval alias options", () => {
+    const approval = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "approval");
+    expect(approval?.getArgumentCompletions?.("approve-and-run --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
+        expect.objectContaining({ value: "--action " }),
+        expect.objectContaining({ value: "--target " }),
+        expect.objectContaining({ value: "--version " }),
+        expect.objectContaining({ value: "--budget-effect-cents " }),
+        expect.objectContaining({ value: "--expires-at " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(approval?.getArgumentCompletions?.("approve-and-run --ver")).toEqual([expect.objectContaining({ value: "--version " })]);
+  });
+
   it("suggests task contract creation options", () => {
     const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
     expect(taskContract?.getArgumentCompletions?.("create --su")).toEqual([expect.objectContaining({ value: "--substance-json " })]);
