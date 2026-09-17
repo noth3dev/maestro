@@ -164,7 +164,7 @@ function parseGatewayTurnResult(value: unknown): ModelTurnResult {
   ) {
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed turn result");
   }
-  return value as ModelTurnResult;
+  return value as unknown as ModelTurnResult;
 }
 
 function parseGatewayStreamEvent(value: unknown): ModelStreamEvent {
