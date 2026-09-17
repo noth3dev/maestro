@@ -80,16 +80,13 @@ Maestro is structured as an **npm workspace monorepo**:
 * **`apps/cli`**: Authenticated command-line client for the implemented Control Plane API; unsupported surfaces fail rather than being simulated.
 * **`apps/carnegie`**: Electron + React desktop client for the Control Plane (Concertmaster Office).
 * **`apps/discord`** (Discord Daemon): Independent out-of-band Discord daemon for incident detection and system health probes.
-* **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations.
-* **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations.
+* **`apps/device-agent`**: Separately running mTLS device protocol process for enrolled, grant-scoped local operations (runtime process; protocol support lives in `packages/device-agent`).
 * **`packages/domain`**: Pure TypeScript domain aggregates (Goal, TaskContract, HeadCouncil, DepartmentPlan).
 * **`packages/contracts`**: Shared Zod schemas, HTTP REST contracts, and SSE event payloads.
 * **`packages/persistence`**: PostgreSQL 17 schema definitions, `pg` queries, and migration files.
 * **`packages/authority`**: Authorization engine, action classification matrix, and `AuthorizedEffectExecutor`.
 * **`packages/evidence`**: SHA-256 evidence bundle generator and cryptographic verification.
 * **`packages/agent-runtime`**: Maestro-owned provider-neutral model/tool/child-agent runtime.
-* **`packages/environment-adapter`**: Bounded environment and browser adapters.
-* **`packages/device-agent`**: Device grants, signed envelopes, fencing, and command protocol support.
 * **`packages/environment-adapter`**: Bounded environment and browser adapters.
 * **`packages/device-agent`**: Device grants, signed envelopes, fencing, and command protocol support.
 * **`apps/model-gateway`**: Authenticated provider process that owns API keys and managed Codex login state.
