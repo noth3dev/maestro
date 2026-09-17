@@ -48,6 +48,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "department-plan revise": ["--council-id", "--department-id", "--expected-version", "--plan-json", "--reason", "--command-id"],
   "mission-bundle create": ["--council-id", "--department-id", "--item-id", "--bundle-json", "--command-id"],
   "mission-bundle get": ["--council-id", "--department-id", "--plan-version", "--item-id"],
+  "worker spawn": ["--council-id", "--department-id", "--worker-json", "--command-id"],
   "models use": ["--model"],
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],

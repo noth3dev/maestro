@@ -52,6 +52,18 @@ describe("command argument autocomplete", () => {
     expect(channel?.getArgumentCompletions?.("post --con")).toEqual([expect.objectContaining({ value: "--content " })]);
   });
 
+  it("suggests worker spawn inputs and identity options", () => {
+    const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
+    expect(workers?.getArgumentCompletions?.("spawn --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--council-id " }),
+        expect.objectContaining({ value: "--department-id " }),
+        expect.objectContaining({ value: "--worker-json " }),
+      ]),
+    );
+    expect(workers?.getArgumentCompletions?.("spawn --wor")).toEqual([expect.objectContaining({ value: "--worker-json " })]);
+  });
+
   it("suggests Mission Bundle inputs and identity options", () => {
     const bundles = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "mission-bundle");
     expect(bundles?.getArgumentCompletions?.("create --")).toEqual(
