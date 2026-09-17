@@ -753,6 +753,29 @@ describe("command argument autocomplete", () => {
     expect(calls).toEqual([false, true]);
   });
 
+  it("falls back for active quoted paths but not quoted text values", async () => {
+    const calls: boolean[] = [];
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(_lines, _cursorLine, _cursorCol, options) {
+        calls.push(options.force ?? false);
+        return options.force
+          ? Promise.resolve({ items: [{ value: "\"./package with\"", label: "\"./package with\"" }], prefix: "\"./package with" })
+          : Promise.resolve(null);
+      },
+      applyCompletion: () => ({ lines: [], cursorLine: 0, cursorCol: 0 }),
+    });
+    const signal = new AbortController().signal;
+
+    const quotedPath = '/git goal-branch --repository-path "./package with';
+    expect(await provider.getSuggestions([quotedPath], 0, quotedPath.length, { signal, force: true })).not.toBeNull();
+    expect(calls).toEqual([false, true]);
+
+    calls.length = 0;
+    const quotedText = '/conversation turn --text "hello world';
+    expect(await provider.getSuggestions([quotedText], 0, quotedText.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([false]);
+  });
+
   it("preserves the action when applying slash option completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),

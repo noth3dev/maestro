@@ -41,10 +41,37 @@ function slashOptionPrefix(
   return currentToken.startsWith("--") && prefix.endsWith(currentToken) ? currentToken : undefined;
 }
 
+function isPathShapedValue(value: string): boolean {
+  return value.includes("/") || value.startsWith(".") || value === "~" || value.startsWith("~/");
+}
+
+function activeQuotedValue(textBeforeCursor: string): string | undefined {
+  let quoteStart = -1;
+  let escaped = false;
+  for (let index = 0; index < textBeforeCursor.length; index += 1) {
+    const character = textBeforeCursor[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (character !== '"') continue;
+    quoteStart = quoteStart === -1 ? index : -1;
+  }
+  if (quoteStart === -1) return undefined;
+  const opener = textBeforeCursor[quoteStart - 1];
+  if (quoteStart > 0 && opener !== " " && opener !== "\t" && opener !== "=") return undefined;
+  return textBeforeCursor.slice(quoteStart + 1);
+}
+
 function looksLikeFileValue(textBeforeCursor: string): boolean {
+  const quotedValue = activeQuotedValue(textBeforeCursor);
+  if (quotedValue !== undefined) return isPathShapedValue(quotedValue);
   const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
-  const currentToken = textBeforeCursor.slice(lastSpace + 1);
-  return currentToken.includes("/") || currentToken.startsWith(".") || currentToken === "~" || currentToken.startsWith("~/");
+  return isPathShapedValue(textBeforeCursor.slice(lastSpace + 1));
 }
 
 /**
