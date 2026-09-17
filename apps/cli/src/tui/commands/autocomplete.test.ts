@@ -645,8 +645,6 @@ describe("command argument autocomplete", () => {
     expect(session?.getArgumentCompletions?.("attach --project-i")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "--project-index " })]));
     expect(session?.getArgumentCompletions?.("attach --project-id")).toEqual([expect.objectContaining({ value: "--project-id " })]);
   });
-});
-
 
   it("does not autocomplete dead Group B entries", () => {
     const items = createCommandAutocompleteItems(createCommandRegistry());
@@ -656,11 +654,12 @@ describe("command argument autocomplete", () => {
     }
   });
 
-it("does not autocomplete ignored project scope for admin project access", () => {
-  const admin = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "admin");
-  expect(admin?.getArgumentCompletions?.("project-access --")).toEqual([
-    expect.objectContaining({ value: "--operator-id " }),
-    expect.objectContaining({ value: "--roles-json " }),
-  ]);
-  expect(admin?.getArgumentCompletions?.("project-access --p")).toEqual([]);
+  it("does not autocomplete ignored project scope for admin project access", () => {
+    const admin = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "admin");
+    expect(admin?.getArgumentCompletions?.("project-access --")).toEqual([
+      expect.objectContaining({ value: "--operator-id " }),
+      expect.objectContaining({ value: "--roles-json " }),
+    ]);
+    expect(admin?.getArgumentCompletions?.("project-access --p")).toEqual([]);
+  });
 });
