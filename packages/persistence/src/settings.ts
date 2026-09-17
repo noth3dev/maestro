@@ -17,6 +17,12 @@ function refs(value: unknown): string[] {
   return (value as { enabledModelRefs: unknown[] }).enabledModelRefs.filter((ref): ref is string => typeof ref === "string");
 }
 
+function requiredSettingsRow<T>(rows: readonly T[]): T {
+  const row = rows[0];
+  if (row === undefined) throw new Error("operator settings row is missing after ensure");
+  return row;
+}
+
 export function createPostgresSettingsService(options: { pool: Pool; models: SettingsModelSource; providers?: SettingsProviderSource }) {
   async function ensure(operatorId: string): Promise<void> {
     await options.pool.query(`INSERT INTO operator_settings (operator_id) VALUES ($1) ON CONFLICT (operator_id) DO NOTHING`, [operatorId]);
@@ -24,7 +30,7 @@ export function createPostgresSettingsService(options: { pool: Pool; models: Set
   return {
     async get(operatorId: string): Promise<SettingsRead> {
       await ensure(operatorId);
-      const row = (await options.pool.query<{ preferences: unknown; model_pool: unknown; spend_ceiling_cents: string; critical_actions_require_approval: boolean; allow_flashmob: boolean }>(`SELECT preferences, model_pool, spend_ceiling_cents, critical_actions_require_approval, allow_flashmob FROM operator_settings WHERE operator_id = $1`, [operatorId])).rows[0]!;
+      const row = requiredSettingsRow((await options.pool.query<{ preferences: unknown; model_pool: unknown; spend_ceiling_cents: string; critical_actions_require_approval: boolean; allow_flashmob: boolean }>(`SELECT preferences, model_pool, spend_ceiling_cents, critical_actions_require_approval, allow_flashmob FROM operator_settings WHERE operator_id = $1`, [operatorId])).rows);
       const source = await options.models.list();
       const enabled = new Set(refs(row.model_pool));
       const models: SettingsModel[] = source.map((model) => ({ modelRef: model.modelRef, score: model.score, inUse: enabled.size === 0 ? true : enabled.has(model.modelRef) }));
@@ -55,7 +61,7 @@ export function createPostgresSettingsService(options: { pool: Pool; models: Set
     },
     async authorityDefaultsForOperator(operatorId: string): Promise<SettingsAuthorityDefaults> {
       await ensure(operatorId);
-      const row = (await options.pool.query<{ spend_ceiling_cents: string; critical_actions_require_approval: boolean; allow_flashmob: boolean }>(`SELECT spend_ceiling_cents, critical_actions_require_approval, allow_flashmob FROM operator_settings WHERE operator_id = $1`, [operatorId])).rows[0]!;
+      const row = requiredSettingsRow((await options.pool.query<{ spend_ceiling_cents: string; critical_actions_require_approval: boolean; allow_flashmob: boolean }>(`SELECT spend_ceiling_cents, critical_actions_require_approval, allow_flashmob FROM operator_settings WHERE operator_id = $1`, [operatorId])).rows);
       return { spendCeilingCents: Number(row.spend_ceiling_cents), criticalActionsRequireApproval: row.critical_actions_require_approval, allowFlashmob: row.allow_flashmob };
     },
   };

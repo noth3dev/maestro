@@ -1,6 +1,13 @@
 import type { OperatorContext } from "@maestro/persistence";
 
-export class RequestValidationError extends Error {}
+export class RequestValidationError extends Error {
+  readonly issues?: unknown;
+  constructor(messageOrIssues?: string | unknown) {
+    super(typeof messageOrIssues === "string" ? messageOrIssues : "Invalid request");
+    this.name = "RequestValidationError";
+    this.issues = typeof messageOrIssues === "string" ? undefined : messageOrIssues;
+  }
+}
 export class AuthenticationRequiredError extends Error {}
 export class CredentialForbiddenError extends Error {}
 export class AuthenticationUnavailableError extends Error {}
@@ -15,9 +22,12 @@ export class CriticalActionRequiresApprovalError extends Error {
   }
 }
 
-export function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }, value: unknown): T {
+export function parse<T>(
+  schema: { safeParse(value: unknown): { success: true; data: T } | { success: false; error?: unknown } },
+  value: unknown,
+): T {
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new RequestValidationError();
+  if (!parsed.success) throw new RequestValidationError(parsed.error);
   return parsed.data;
 }
 

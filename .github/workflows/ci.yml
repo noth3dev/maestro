@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check migration numbering
+        run: npm run migrations:check
+
   test:
     name: Vitest with PostgreSQL 17
     runs-on: ubuntu-latest

@@ -122,7 +122,6 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof TaskContractConflictError) return apiError(409, "task_contract_conflict", error.message);
   if (error instanceof TaskContractVersionConflictError) return apiError(409, "task_contract_version_conflict", error.message);
   if (error instanceof ExactConfirmationRequiredError) return apiError(409, "exact_confirmation_required", error.message);
-  if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError) return apiError(503, "task_contract_integrity_error", error.message);
   if (error instanceof VersionConflictError) return apiError(409, "version_conflict", error.message);
   if (error instanceof InvalidTransitionError) return apiError(422, "invalid_transition", error.message);
   if (error instanceof GoalNotFoundError || error instanceof ReadStateGoalNotFoundError) return apiError(404, "goal_not_found", "Goal was not found");

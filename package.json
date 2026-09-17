@@ -15,6 +15,7 @@
     "worktree:add": "node scripts/create-worktree.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "migrations:check": "node scripts/check-migration-numbers.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
