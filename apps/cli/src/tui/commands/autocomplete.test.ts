@@ -58,6 +58,12 @@ describe("command argument autocomplete", () => {
     expect(events?.getArgumentCompletions?.("list --aft")).toEqual([expect.objectContaining({ value: "--after " })]);
   });
 
+  it("suggests the selected Goal scope for budget reads", () => {
+    const budget = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "budget");
+    expect(budget?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(budget?.getArgumentCompletions?.("get --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests the required worker identity for worker reads", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--worker-id " })]);

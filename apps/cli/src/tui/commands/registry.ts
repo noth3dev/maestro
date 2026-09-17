@@ -53,6 +53,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "worker cancel": ["--worker-id"],
   "worker observe": ["--worker-id"],
   "worker list": ["--goal-id"],
+  "budget get": ["--goal-id"],
   "worker certify": ["--worker-id", "--certification-json"],
   "git goal-branch": ["--repository-path", "--branch-name", "--base-revision"],
   "worker accept": ["--worker-id", "--reason"],
