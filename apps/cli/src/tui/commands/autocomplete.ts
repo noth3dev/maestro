@@ -138,6 +138,56 @@ function activeQuotedValue(textBeforeCursor: string): string | undefined {
   return textBeforeCursor.slice(quoteStart + 1);
 }
 
+function activeSingleQuotedValue(textBeforeCursor: string): { start: number; value: string } | undefined {
+  let quoteStart = -1;
+  let quote: "\"" | "'" | undefined;
+  let escaped = false;
+  for (let index = 0; index < textBeforeCursor.length; index += 1) {
+    const character = textBeforeCursor[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "\"" || character === "'") {
+      quote = character;
+      quoteStart = index;
+    }
+  }
+  if (quote !== "'" || quoteStart === -1) return undefined;
+  const opener = textBeforeCursor[quoteStart - 1];
+  if (quoteStart > 0 && opener !== " " && opener !== "\t" && opener !== "=") return undefined;
+  return { start: quoteStart, value: textBeforeCursor.slice(quoteStart + 1) };
+}
+
+function replaceCharacter(text: string, index: number, replacement: string): string {
+  return `${text.slice(0, index)}${replacement}${text.slice(index + 1)}`;
+}
+
+function mapDoubleQuotedValueToSingle(value: string): string {
+  return value.startsWith('"') && value.endsWith('"') ? `'${value.slice(1, -1)}'` : value;
+}
+
+function mapDoubleQuotedPrefixToSingle(prefix: string): string {
+  return prefix.startsWith('"') ? `'${prefix.slice(1)}` : prefix;
+}
+
+function mapSingleQuotedSuggestions(suggestions: Awaited<ReturnType<AutocompleteProvider["getSuggestions"]>>): Awaited<ReturnType<AutocompleteProvider["getSuggestions"]>> {
+  if (suggestions === null) return null;
+  return {
+    ...suggestions,
+    prefix: mapDoubleQuotedPrefixToSingle(suggestions.prefix),
+    items: suggestions.items.map((item) => ({ ...item, value: mapDoubleQuotedValueToSingle(item.value) })),
+  };
+}
+
 function looksLikeFileValue(textBeforeCursor: string): boolean {
   const quotedValue = activeQuotedValue(textBeforeCursor);
   if (quotedValue !== undefined) return isPathShapedValue(quotedValue);
@@ -167,10 +217,62 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
         normalizedSlash.cursorCol,
         { ...options, force: false },
       );
-      if (commandSuggestions?.items.length || !looksLikeFileValue(textBeforeCursor)) return commandSuggestions;
+      if (commandSuggestions?.items.length) return commandSuggestions;
+
+      const normalizedTextBeforeCursor = normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(0, normalizedSlash.cursorCol);
+      const singleQuote = activeSingleQuotedValue(normalizedTextBeforeCursor);
+      if (singleQuote !== undefined
+        && !normalizedTextBeforeCursor.slice(singleQuote.start + 1).includes('"')
+        && !normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(singleQuote.start + 1).includes('"')
+        && isPathShapedValue(singleQuote.value)) {
+        const syntheticLines = [...normalizedSlash.lines];
+        syntheticLines[normalizedSlash.cursorLine] = replaceCharacter(syntheticLines[normalizedSlash.cursorLine]!, singleQuote.start, '"');
+        const singleSuggestions = await provider.getSuggestions(
+          syntheticLines,
+          normalizedSlash.cursorLine,
+          normalizedSlash.cursorCol,
+          options,
+        );
+        return mapSingleQuotedSuggestions(singleSuggestions);
+      }
+
+      if (!looksLikeFileValue(textBeforeCursor)) return commandSuggestions;
       return provider.getSuggestions(normalizedSlash.lines, normalizedSlash.cursorLine, normalizedSlash.cursorCol, options);
     },
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
+      const singleQuote = activeSingleQuotedValue(textBeforeCursor);
+      if (lines.length === 1
+        && slashArgumentText(lines, cursorLine, cursorCol) !== undefined
+        && singleQuote !== undefined
+        && isPathShapedValue(singleQuote.value)
+        && prefix.startsWith("'")
+        && textBeforeCursor.slice(singleQuote.start).startsWith(prefix)
+        && !lines[cursorLine]!.slice(singleQuote.start + 1).includes('"')
+        && item.value.startsWith("'")
+        && item.value.endsWith("'")) {
+        const syntheticLines = [...lines];
+        const syntheticLine = replaceCharacter(syntheticLines[cursorLine]!, singleQuote.start, '"');
+        syntheticLines[cursorLine] = syntheticLine[cursorCol] === "'"
+          ? replaceCharacter(syntheticLine, cursorCol, '"')
+          : syntheticLine;
+        const syntheticItem = { ...item, value: `"${item.value.slice(1, -1)}"` };
+        const syntheticResult = provider.applyCompletion(
+          syntheticLines,
+          cursorLine,
+          cursorCol,
+          syntheticItem,
+          `"${prefix.slice(1)}`,
+        );
+        const mappedLines = [...syntheticResult.lines];
+        const mappedLine = mappedLines[cursorLine]!;
+        const closingQuoteIndex = item.label.endsWith("/") ? syntheticResult.cursorCol : syntheticResult.cursorCol - 1;
+        let mappedResultLine = replaceCharacter(mappedLine, singleQuote.start, "'");
+        if (mappedResultLine[closingQuoteIndex] === '"') mappedResultLine = replaceCharacter(mappedResultLine, closingQuoteIndex, "'");
+        mappedLines[cursorLine] = mappedResultLine;
+        return { ...syntheticResult, lines: mappedLines };
+      }
+
       const optionPrefix = slashOptionPrefix(lines, cursorLine, cursorCol, item, prefix);
       return provider.applyCompletion(lines, cursorLine, cursorCol, item, optionPrefix ?? prefix);
     },

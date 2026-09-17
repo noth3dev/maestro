@@ -876,6 +876,103 @@ describe("command argument autocomplete", () => {
     expect(applied).toEqual({ lines: original, cursorLine: 0, cursorCol: original[0]!.length });
   });
 
+  it("preserves active single-quoted path completion and application", async () => {
+    const calls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; force: boolean; signal: AbortSignal }> = [];
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        calls.push({ lines, cursorLine, cursorCol, force: options.force ?? false, signal: options.signal });
+        return options.force
+          ? Promise.resolve({
+            items: [
+              { value: '"./package.json"', label: "package.json" },
+              { value: '"apps/"', label: "apps/" },
+            ],
+            prefix: '"./package with',
+          })
+          : Promise.resolve(null);
+      },
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        const beforePrefix = lines[cursorLine]!.slice(0, cursorCol - prefix.length);
+        const afterCursor = lines[cursorLine]!.slice(cursorCol);
+        const adjustedAfterCursor = prefix.startsWith('"') && item.value.endsWith('"') && afterCursor.startsWith('"')
+          ? afterCursor.slice(1)
+          : afterCursor;
+        const newLine = beforePrefix + item.value + adjustedAfterCursor;
+        const newLines = [...lines];
+        newLines[cursorLine] = newLine;
+        const cursorOffset = item.label.endsWith("/") ? item.value.length - 1 : item.value.length;
+        return { lines: newLines, cursorLine, cursorCol: beforePrefix.length + cursorOffset };
+      },
+    });
+    const signal = new AbortController().signal;
+    const line = String.raw`/git goal-branch --repository-path './package with`;
+
+    const suggestions = await provider.getSuggestions([line], 0, line.length, { signal, force: true });
+    expect(calls).toEqual([
+      { lines: [line], cursorLine: 0, cursorCol: line.length, force: false, signal },
+      { lines: [String.raw`/git goal-branch --repository-path "./package with`], cursorLine: 0, cursorCol: line.length, force: true, signal },
+    ]);
+    expect(suggestions).toMatchObject({
+      prefix: "'./package with",
+      items: [
+        { value: "'./package.json'", label: "package.json" },
+        { value: "'apps/'", label: "apps/" },
+      ],
+    });
+    expect(suggestions).toBeDefined();
+    if (suggestions === null || suggestions === undefined) throw new Error("expected single-quoted path completion");
+
+    const file = suggestions.items[0]!;
+    const directory = suggestions.items[1]!;
+    expect(provider.applyCompletion([line], 0, line.length, file, suggestions.prefix)).toMatchObject({
+      lines: [String.raw`/git goal-branch --repository-path './package.json'`],
+      cursorCol: String.raw`/git goal-branch --repository-path './package.json'`.length,
+    });
+    const suffixLine = String.raw`/git goal-branch --repository-path './package with' --next`;
+    const suffixCursor = suffixLine.indexOf("' --next");
+    expect(provider.applyCompletion([suffixLine], 0, suffixCursor, file, suggestions.prefix)).toMatchObject({
+      lines: [String.raw`/git goal-branch --repository-path './package.json' --next`],
+    });
+    const directoryResult = provider.applyCompletion([line], 0, line.length, directory, suggestions.prefix);
+    expect(directoryResult.lines).toEqual([String.raw`/git goal-branch --repository-path 'apps/'`]);
+    expect(directoryResult.cursorCol).toBe(String.raw`/git goal-branch --repository-path 'apps/`.length);
+
+    calls.length = 0;
+    const nonPath = String.raw`/conversation turn --text 'hello world`;
+    expect(await provider.getSuggestions([nonPath], 0, nonPath.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [nonPath], cursorLine: 0, cursorCol: nonPath.length, force: false, signal }]);
+
+    calls.length = 0;
+    const attachment = String.raw`/conversation turn --text @'hello world`;
+    expect(await provider.getSuggestions([attachment], 0, attachment.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [attachment], cursorLine: 0, cursorCol: attachment.length, force: false, signal }]);
+  });
+
+  it("passes single-quote apply through outside single-line slash paths", () => {
+    const calls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; item: { value: string; label: string }; prefix: string }> = [];
+    const sentinel = { lines: ["unchanged"], cursorLine: 3, cursorCol: 4 };
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions: async () => null,
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        calls.push({ lines, cursorLine, cursorCol, item, prefix });
+        return sentinel;
+      },
+    });
+    const item = { value: "'./package.json'", label: "package.json" };
+    const multiline = [String.raw`/git goal-branch --repository-path './pa`, "continuation"];
+    const attachment = [String.raw`/conversation turn --text @'./pa`];
+    const cases = [
+      { lines: ["'./pa"], cursorLine: 0, cursorCol: 5 },
+      { lines: multiline, cursorLine: 0, cursorCol: multiline[0]!.length },
+      { lines: attachment, cursorLine: 0, cursorCol: attachment[0]!.length },
+    ];
+
+    for (const current of cases) {
+      expect(provider.applyCompletion(current.lines, current.cursorLine, current.cursorCol, item, "'./pa")).toBe(sentinel);
+    }
+    expect(calls).toEqual(cases.map((current) => ({ ...current, item, prefix: "'./pa" })));
+  });
+
   it("preserves the action when applying slash option completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
