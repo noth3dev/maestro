@@ -28,5 +28,20 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
     },
   }));
   const models = commands.find((command) => command.name === "models");
-  return models === undefined || commands.some((command) => command.name === "model") ? commands : [...commands, { ...models, name: "model" }];
+  const withModelAlias = models === undefined || commands.some((command) => command.name === "model")
+    ? commands
+    : [...commands, { ...models, name: "model" }];
+
+  // `/new` and `/retry` are parser aliases for session actions, not registry commands.
+  const session = commands.find((command) => command.name === "session");
+  const sessionAliases = session === undefined
+    ? []
+    : ([
+      ["new", "start a new workspace session"],
+      ["retry", "retry the saved workspace session"],
+    ] as const)
+      .filter(([name]) => !commands.some((command) => command.name === name))
+      .map(([name, description]) => ({ name, description, getArgumentCompletions: () => [] }));
+
+  return [...withModelAlias, ...sessionAliases];
 }

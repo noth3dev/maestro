@@ -679,6 +679,16 @@ describe("command argument autocomplete", () => {
     ]);
   });
 
+  it("exposes parser-supported session aliases at the command root", () => {
+    const autocomplete = createCommandAutocompleteItems(createCommandRegistry());
+    const aliases = autocomplete.filter((item) => item.name === "new" || item.name === "retry");
+
+    expect(aliases.map((item) => item.name)).toEqual(["new", "retry"]);
+    expect(aliases.every((item) => item.getArgumentCompletions?.("")?.length === 0)).toBe(true);
+    expect(createCommandRegistry().find("new")).toBeUndefined();
+    expect(createCommandRegistry().find("retry")).toBeUndefined();
+  });
+
   it("does not duplicate the singular model autocomplete command", () => {
     const autocomplete = createCommandAutocompleteItems(createCommandRegistry());
     const modelCommands = autocomplete.filter((item) => item.name === "model");
