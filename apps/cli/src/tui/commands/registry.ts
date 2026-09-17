@@ -40,6 +40,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "head activate": ["--goal-id", "--activation-json", "--command-id"],
   "council create": ["--goal-id", "--council-json", "--command-id"],
   "council get": ["--council-id"],
+  "council submit-brief": ["--council-id", "--department-id", "--brief-json", "--command-id"],
   "models use": ["--model"],
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],
