@@ -20,7 +20,7 @@ export interface CommandDefinition {
 
 const CRITICAL_APPROVAL_OPTIONS = ["--goal-id", "--action", "--target", "--version", "--budget-effect-cents", "--expires-at", "--command-id"] as const;
 const actionOptions: Record<string, readonly string[]> = {
-  "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
+  "admin project-access": ["--operator-id", "--roles-json"],
   "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
   "critical-action approve-and-run": CRITICAL_APPROVAL_OPTIONS,
   "approval approve-and-run": CRITICAL_APPROVAL_OPTIONS,
