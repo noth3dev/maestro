@@ -25,6 +25,22 @@ function slashArgumentText(lines: string[], cursorLine: number, cursorCol: numbe
   return trimmedText.startsWith("/") && trimmedText.includes(" ") ? textBeforeCursor : undefined;
 }
 
+function slashOptionPrefix(
+  lines: string[],
+  cursorLine: number,
+  cursorCol: number,
+  item: AutocompleteItem,
+  prefix: string,
+): string | undefined {
+  if (cursorLine !== 0 || !item.value.startsWith("--")) return undefined;
+  const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
+  const trimmedText = textBeforeCursor.trimStart();
+  if (!trimmedText.startsWith("/") || !trimmedText.includes(" ")) return undefined;
+  const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
+  const currentToken = textBeforeCursor.slice(lastSpace + 1);
+  return currentToken.startsWith("--") && prefix.endsWith(currentToken) ? currentToken : undefined;
+}
+
 function looksLikeFileValue(textBeforeCursor: string): boolean {
   const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
   const currentToken = textBeforeCursor.slice(lastSpace + 1);
@@ -56,7 +72,10 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
       if (commandSuggestions?.items.length || !looksLikeFileValue(textBeforeCursor)) return commandSuggestions;
       return provider.getSuggestions(normalizedSlash.lines, normalizedSlash.cursorLine, normalizedSlash.cursorCol, options);
     },
-    applyCompletion: (...args) => provider.applyCompletion(...args),
+    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      const optionPrefix = slashOptionPrefix(lines, cursorLine, cursorCol, item, prefix);
+      return provider.applyCompletion(lines, cursorLine, cursorCol, item, optionPrefix ?? prefix);
+    },
   };
   if (provider.triggerCharacters !== undefined) wrapped.triggerCharacters = [...provider.triggerCharacters];
   if (provider.shouldTriggerFileCompletion !== undefined) {

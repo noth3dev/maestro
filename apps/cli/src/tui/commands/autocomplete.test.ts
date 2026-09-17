@@ -753,6 +753,28 @@ describe("command argument autocomplete", () => {
     expect(calls).toEqual([false, true]);
   });
 
+  it("preserves the action when applying slash option completion", async () => {
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    const signal = new AbortController().signal;
+    const cases = [
+      ["/goal select --g", "/goal select --goal-id "],
+      ["\t/goal select --g", "\t/goal select --goal-id "],
+      ["/goal transition --to active --e", "/goal transition --to active --expected-version "],
+      ["/goal transition --to=active --e", "/goal transition --to=active --expected-version "],
+    ] as const;
+
+    for (const [line, expectedLine] of cases) {
+      const suggestions = await provider.getSuggestions([line], 0, line.length, { signal, force: true });
+      const option = suggestions?.items.find((item) => item.value === "--goal-id " || item.value === "--expected-version ");
+      expect(option).toBeDefined();
+      expect(suggestions).toBeDefined();
+      if (suggestions === undefined || option === undefined) throw new Error("expected slash option completion");
+      expect(provider.applyCompletion([line], 0, line.length, option, suggestions.prefix).lines).toEqual([expectedLine]);
+    }
+  });
+
   it("keeps parser-supported leading-whitespace slash commands on command completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
