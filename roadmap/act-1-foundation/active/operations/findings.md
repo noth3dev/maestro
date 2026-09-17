@@ -2545,3 +2545,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - `/metronome-challenges list` is a live palette-visible read action but has no action-input autocomplete. Its handler routes through `selectedGoal`, which accepts attached Goal context or requires explicit `--goal-id` before calling `listMetronomeChallenges`; the manual route is supported, so this is discoverability drift.
 - Candidates: (1) add static metadata `metronome-challenges list: [--goal-id]`, (2) introduce a shared readonly Goal-scope tuple for `selectedGoal` reads and aliases, or (3) add usage guidance without metadata. Independent design critique ranked **2 > 1 > 3**, selecting #1 as the best bounded patch and rejecting #3 because it leaves completion broken.
 - RED will add `list --` and typed-prefix regressions; GREEN will add only truthful Goal metadata without changing Goal selection, project/auth scope, JSON validation, approvals, cancellation, idempotency, or conversation boundaries. No excluded files are touched.
+
+
+## 2026-09-17 — UX loop Metronome correct autocomplete
+
+- `/metronome correct` is a live palette-visible write action but has no action-input autocomplete. The handler requires `--challenge-id` and `--correction-request`; literal current-map verification confirms the key is absent, and an empty parsed invocation returns `Missing required option --challenge-id` before the existing client call.
+- Candidates: (1) add static metadata `metronome correct: [--challenge-id, --correction-request]`, (2) co-locate options on each `CommandAction` and migrate registry construction, or (3) introduce a typed per-action command spec shared with handler validation. Independent design critique ranked **1 > 2 > 3**, selecting #1 as the proportional behavior-preserving repair and deferring #2/#3 as broader anti-drift work.
+- RED will add `correct --` and typed-prefix regressions; GREEN will add only truthful completion metadata without changing challenge identity, correction validation, project/auth scope, approvals, cancellation, idempotency, or conversation boundaries. No excluded files are touched.
