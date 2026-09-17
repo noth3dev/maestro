@@ -805,6 +805,51 @@ describe("command argument autocomplete", () => {
     expect(calls).toEqual([false]);
   });
 
+  it("completes slash arguments separated by tabs", async () => {
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    const signal = new AbortController().signal;
+
+    const actionLine = "/goal\t";
+    const actions = await provider.getSuggestions([actionLine], 0, actionLine.length, { signal, force: true });
+    expect(actions?.items.map((item) => item.value)).toContain("select ");
+
+    const optionLine = "/goal\tselect\t--";
+    const options = await provider.getSuggestions([optionLine], 0, optionLine.length, { signal, force: true });
+    expect(options?.items.map((item) => item.value)).toEqual(["--goal-id "]);
+
+    const mixedLine = "/goal \tselect\t--";
+    const mixed = await provider.getSuggestions([mixedLine], 0, mixedLine.length, { signal, force: true });
+    expect(mixed?.items.map((item) => item.value)).toEqual(["--goal-id "]);
+  });
+
+  it("normalizes structural tabs only for slash provider lookup", async () => {
+    const observed: Array<{ lines: string[]; cursorLine: number; cursorCol: number; force: boolean }> = [];
+    const applied: { lines?: string[]; cursorLine?: number; cursorCol?: number } = {};
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        observed.push({ lines, cursorLine, cursorCol, force: options.force ?? false });
+        return Promise.resolve(null);
+      },
+      applyCompletion(lines, cursorLine, cursorCol) {
+        applied.lines = lines;
+        applied.cursorLine = cursorLine;
+        applied.cursorCol = cursorCol;
+        return { lines, cursorLine, cursorCol };
+      },
+    });
+    const signal = new AbortController().signal;
+    const line = '/conversation turn --text "hello\tworld';
+
+    await provider.getSuggestions([line], 0, line.length, { signal, force: false });
+    expect(observed).toEqual([{ lines: [line], cursorLine: 0, cursorCol: line.length, force: false }]);
+
+    const original = ["/goal\t"];
+    provider.applyCompletion(original, 0, original[0]!.length, { value: "select ", label: "select " }, "");
+    expect(applied).toEqual({ lines: original, cursorLine: 0, cursorCol: original[0]!.length });
+  });
+
   it("preserves the action when applying slash option completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),

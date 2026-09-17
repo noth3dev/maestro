@@ -1,20 +1,45 @@
 import type { AutocompleteItem, AutocompleteProvider, SlashCommand } from "@earendil-works/pi-tui";
 import type { CommandRegistry } from "./registry.js";
 
+function normalizeSlashSeparators(text: string): string {
+  let quote: "\"" | "'" | undefined;
+  let escaped = false;
+  return [...text].map((character) => {
+    if (escaped) {
+      escaped = false;
+      return character;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      return character;
+    }
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+      return character;
+    }
+    if (character === "\"" || character === "'") {
+      quote = character;
+      return character;
+    }
+    return character === "\t" ? " " : character;
+  }).join("");
+}
+
 function normalizeSlashContext(
   lines: string[],
   cursorLine: number,
   cursorCol: number,
 ): { lines: string[]; cursorLine: number; cursorCol: number } | undefined {
-  if (cursorLine !== 0) return undefined;
+  if (cursorLine !== 0 || lines.length !== 1) return undefined;
   const line = lines[cursorLine] ?? "";
   const textBeforeCursor = line.slice(0, cursorCol);
   const trimmedText = textBeforeCursor.trimStart();
   if (!trimmedText.startsWith("/")) return undefined;
   const leadingOffset = textBeforeCursor.length - trimmedText.length;
-  if (leadingOffset === 0) return { lines, cursorLine, cursorCol };
+  const normalizedLine = normalizeSlashSeparators(line.slice(leadingOffset));
+  if (leadingOffset === 0 && normalizedLine === line) return { lines, cursorLine, cursorCol };
   const normalizedLines = [...lines];
-  normalizedLines[cursorLine] = line.slice(leadingOffset);
+  normalizedLines[cursorLine] = normalizedLine;
   return { lines: normalizedLines, cursorLine, cursorCol: cursorCol - leadingOffset };
 }
 
@@ -22,7 +47,7 @@ function slashArgumentText(lines: string[], cursorLine: number, cursorCol: numbe
   if (cursorLine !== 0) return undefined;
   const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
   const trimmedText = textBeforeCursor.trimStart();
-  return trimmedText.startsWith("/") && trimmedText.includes(" ") ? textBeforeCursor : undefined;
+  return trimmedText.startsWith("/") && /[ \t]/.test(trimmedText) ? textBeforeCursor : undefined;
 }
 
 function slashOptionPrefix(
@@ -35,7 +60,7 @@ function slashOptionPrefix(
   if (cursorLine !== 0 || !item.value.startsWith("--")) return undefined;
   const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
   const trimmedText = textBeforeCursor.trimStart();
-  if (!trimmedText.startsWith("/") || !trimmedText.includes(" ")) return undefined;
+  if (!trimmedText.startsWith("/") || !/[ \t]/.test(trimmedText)) return undefined;
   const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
   const currentToken = textBeforeCursor.slice(lastSpace + 1);
   return currentToken.startsWith("--") && prefix.endsWith(currentToken) ? currentToken : undefined;
