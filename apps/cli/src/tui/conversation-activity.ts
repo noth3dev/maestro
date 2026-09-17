@@ -11,6 +11,31 @@ export function activityView(event: ConversationActivityEvent): ConversationActi
   };
 }
 
+export function createConversationActivityReadiness(
+  signal: AbortSignal,
+  timeoutMs = 750,
+): {
+  readonly promise: Promise<void>;
+  readonly markConnected: () => void;
+} {
+  let finish = () => {};
+  const promise = new Promise<void>((resolve) => {
+    let settled = false;
+    const complete = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal.removeEventListener("abort", complete);
+      resolve();
+    };
+    finish = complete;
+    const timer = setTimeout(complete, timeoutMs);
+    if (signal.aborted) complete();
+    else signal.addEventListener("abort", complete, { once: true });
+  });
+  return { promise, markConnected: () => finish() };
+}
+
 function waitForReconnect(signal: AbortSignal, delayMs: number): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) {
@@ -43,6 +68,7 @@ export async function runConversationActivityStream(options: {
   signal: AbortSignal;
   onEvent: (event: ConversationActivityEvent) => void;
   onReset?: () => void;
+  onConnected?: () => void;
 }): Promise<void> {
   let failures = 0;
   while (!options.signal.aborted) {
@@ -50,7 +76,7 @@ export async function runConversationActivityStream(options: {
       for await (const event of options.client.streamConversationActivity(
         options.conversationId,
         { projectId: options.projectId },
-        { signal: options.signal },
+        { signal: options.signal, ...(options.onConnected === undefined ? {} : { onConnected: options.onConnected }) },
       )) {
         if (options.signal.aborted) return;
         failures = 0;

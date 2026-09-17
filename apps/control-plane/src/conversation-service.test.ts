@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPostgresConversationService, modelActivity } from "./conversation-service.js";
-import type { ModelGatewayPort } from "@maestro/agent-runtime";
+import { CONCERTMASTER_PERSONA_BASELINE } from "@maestro/domain";
+import type { ModelGatewayPort, ModelTurnRequest } from "@maestro/agent-runtime";
 import type { OperatorContext } from "@maestro/persistence";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
@@ -134,7 +135,7 @@ class FakePool {
   }
 }
 
-function fakeGateway(): ModelGatewayPort {
+function fakeGateway(onTurn?: (request: ModelTurnRequest) => void): ModelGatewayPort {
   const binding = {
     bindingId: "binding-1",
     gatewayInstanceId: "gateway-1",
@@ -153,6 +154,7 @@ function fakeGateway(): ModelGatewayPort {
     ],
     admit: async () => binding,
     turn: async (request) => {
+      onTurn?.(request);
       request.emit({ kind: "text-delta", cursor: 1, text: "hello from model" });
       return {
         requestId: request.requestId,
@@ -189,6 +191,39 @@ describe("postgres conversation service", () => {
         expect.objectContaining({ event_type: "turn_delta", payload: expect.objectContaining({ text: "hello from model" }) }),
       ]),
     );
+  });
+  it("passes the resolved role persona and task-class context to the model as host-owned system guidance", async () => {
+    let firstSystemPrompt = "";
+    let resolverInput: { roleId: string; taskClass: string; projectId: string; goalId: string | null } | undefined;
+    const service = createPostgresConversationService({
+      pool: new FakePool() as never,
+      gateway: fakeGateway((request) => {
+        const first = request.messages[0];
+        if (first?.role === "system") firstSystemPrompt = first.content[0]?.kind === "text" ? first.content[0].text : "";
+      }),
+      gatewayOperatorId: "gateway-operator",
+      accountRefs: { openai: "acct-1" },
+      personaResolver: async (input) => {
+        resolverInput = input;
+        return {
+          roleId: input.roleId,
+          taskClass: input.taskClass,
+          profile: CONCERTMASTER_PERSONA_BASELINE,
+          mission: "Coordinate this Goal",
+          authority: ["review bounded work"],
+          truthfulness: "report only observed results",
+          safety: "preserve the approval boundary",
+          prohibitedBehavior: ["execute an unapproved critical action"],
+        };
+      },
+    });
+    const conversation = await service.create({ projectId, goalId, model: "openai/gpt-5" }, operator);
+    await service.turn(conversation.conversationId, { projectId, text: "hello" }, operator);
+
+    expect(resolverInput).toEqual({ roleId: "concertmaster", taskClass: "conversation", projectId, goalId });
+    expect(firstSystemPrompt).toContain("Mission: Coordinate this Goal");
+    expect(firstSystemPrompt).toContain("conscientiousness=0.95");
+    expect(firstSystemPrompt).toContain("execute an unapproved critical action");
   });
   it("creates and resumes a durable project-scoped conversation without a Goal", async () => {
     const pool = new FakePool();

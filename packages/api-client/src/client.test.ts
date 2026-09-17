@@ -1046,6 +1046,34 @@ it("selects full-access mode and captures Goal-scoped evidence", async () => {
   );
 });
 
+it("signals activity stream readiness before yielding the first event", async () => {
+  const conversationId = "44444444-4444-4444-8444-444444444444";
+  const event = {
+    activityId: "55555555-5555-4555-8555-555555555555",
+    conversationId,
+    projectId,
+    turnId: "66666666-6666-4666-8666-666666666666",
+    phase: "thinking",
+    occurredAt: "2030-01-01T00:00:00.000Z",
+  } as const;
+  let connected = false;
+  const fetch = vi.fn().mockResolvedValue(new Response(`event: conversation-activity\ndata: ${JSON.stringify(event)}\n\n`));
+  const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  const stream = client.streamConversationActivity(
+    conversationId,
+    { projectId },
+    {
+      onConnected: () => {
+        connected = true;
+      },
+    },
+  );
+  expect(connected).toBe(false);
+  const first = await stream[Symbol.asyncIterator]().next();
+  expect(connected).toBe(true);
+  expect(first.value).toEqual(event);
+});
+
 it("streams non-replayable safe conversation activity without a durable cursor", async () => {
   const conversationId = "44444444-4444-4444-8444-444444444444";
   const event = {

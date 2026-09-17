@@ -22,7 +22,7 @@ const grant = {
   remaining: { modelTurns: 3, toolCalls: 2, childCalls: 0, outputTokens: 128, wallTimeMs: 10_000, retryCount: 0 },
 } as const;
 
-function gateway(): ModelGatewayPort & { calls: number } {
+function gateway(onTurn?: (request: Parameters<ModelGatewayPort["turn"]>[0]) => void): ModelGatewayPort & { calls: number } {
   let calls = 0;
   return {
     get calls() {
@@ -35,6 +35,7 @@ function gateway(): ModelGatewayPort & { calls: number } {
       return binding;
     },
     async turn(request): Promise<ModelTurnResult> {
+      onTurn?.(request);
       calls += 1;
       if (calls === 1) {
         return {
@@ -66,6 +67,30 @@ function gateway(): ModelGatewayPort & { calls: number } {
 }
 
 describe("native Maestro agent runtime", () => {
+  it("supplies role-neutral host policy when no custom prompt is provided", async () => {
+    let firstMessageRole: string | undefined;
+    const modelGateway = gateway((request) => {
+      firstMessageRole = request.messages[0]?.role;
+    });
+    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
+    const spawned = await runtime.spawn({
+      name: "runtime-policy",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "runtime-policy-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
+    await runtime.prompt(spawned.execution, "hello");
+
+    expect(firstMessageRole).toBe("system");
+  });
+
   it("derives IPython effect command identity from the admission, turn, and tool call", async () => {
     const requests: unknown[] = [];
     let calls = 0;
@@ -378,8 +403,9 @@ describe("native Maestro agent runtime", () => {
     expect(events).toEqual([{ turnId: expect.stringContaining(`${spawned.invocation}-turn-1`), kind: "text-delta" }]);
   });
 
-  it("retains prior user and assistant messages across turns", async () => {
+  it("places host-owned system guidance before prior user and assistant messages", async () => {
     const requests: Array<readonly { role: string }[]> = [];
+    let systemPrompt = "";
     let calls = 0;
     const modelGateway: ModelGatewayPort = {
       async listModels() {
@@ -390,6 +416,8 @@ describe("native Maestro agent runtime", () => {
       },
       async turn(request): Promise<ModelTurnResult> {
         requests.push(request.messages.map((message) => ({ role: message.role })));
+        const first = request.messages[0];
+        if (first?.role === "system" && first.content[0]?.kind === "text") systemPrompt = first.content[0].text;
         calls += 1;
         return {
           requestId: request.requestId,
@@ -408,7 +436,12 @@ describe("native Maestro agent runtime", () => {
       },
       async close() {},
     };
-    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
+    const runtime = createMaestroAgentRuntime({
+      gateway: modelGateway,
+      binding,
+      tools: new ToolRegistry(),
+      systemPrompt: "host-owned guidance",
+    });
     const spawned = await runtime.spawn({
       name: "conversation",
       modelPolicy: ["fake/model-a"],
@@ -426,7 +459,11 @@ describe("native Maestro agent runtime", () => {
     await runtime.prompt(spawned.execution, "first question");
     await runtime.prompt(spawned.execution, "second question");
 
-    expect(requests).toEqual([[{ role: "user" }], [{ role: "user" }, { role: "assistant" }, { role: "user" }]]);
+    expect(requests).toEqual([
+      [{ role: "system" }, { role: "user" }],
+      [{ role: "system" }, { role: "user" }, { role: "assistant" }, { role: "user" }],
+    ]);
+    expect(systemPrompt).toBe("host-owned guidance");
     await expect(runtime.getInvocationStatus(spawned.invocation)).resolves.toBe("succeeded");
   });
 
@@ -704,6 +741,33 @@ describe("native Maestro agent runtime", () => {
     expect(received!.providerTimeoutMs).toBeLessThanOrEqual(600_000);
     expect(received!.wallTimeMs).toBeLessThanOrEqual(3_600_000);
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
+  });
+
+  it("fails closed when host-owned guidance exceeds the wire input bound", async () => {
+    const modelGateway = gateway();
+    const runtime = createMaestroAgentRuntime({
+      gateway: modelGateway,
+      binding,
+      tools: new ToolRegistry(),
+      systemPrompt: "x".repeat(70_000),
+    });
+    const spawned = await runtime.spawn({
+      name: "oversized-guidance",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "oversized-guidance-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
+    await runtime.prompt(spawned.execution, "continue");
+
+    expect(modelGateway.calls).toBe(0);
+    expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("unknown");
   });
 
   it("bounds the wire messages array to 128 entries for a long conversation well under the byte budget", async () => {

@@ -15,6 +15,7 @@ import {
   type TaskContract,
 } from "@maestro/contracts";
 import {
+  buildMaestroSystemPrompt,
   createMaestroAgentRuntime,
   createTaskContractDraftingTool,
   OVERTURE_TASK_CONTRACT_CREATE_TOOL,
@@ -23,6 +24,7 @@ import {
   formatModelRef,
   type ModelGatewayPort,
   type GatewayBinding,
+  type MaestroPersonaContext,
   type ModelMessage,
 } from "@maestro/agent-runtime";
 
@@ -186,6 +188,13 @@ export function createPostgresConversationService(options: {
   tools?: ToolRegistry;
   /** Narrow creator used only by project-scoped, goal-less Overture intake. */
   taskContractService?: TaskContractService;
+  /** Resolves the persisted role/task-class persona before a model turn starts. */
+  personaResolver?: (input: {
+    readonly roleId: string;
+    readonly taskClass: string;
+    readonly projectId: string;
+    readonly goalId: string | null;
+  }) => Promise<MaestroPersonaContext>;
 }): ConversationService {
   const runtimes = new Map<string, RuntimeHandle>();
   const activitySubscribers = new Map<string, Set<(event: ConversationActivityEvent) => void>>();
@@ -232,6 +241,14 @@ export function createPostgresConversationService(options: {
     );
   }
   const policyHash = options.dataPolicyHash ?? "maestro-local-v1";
+
+  async function conversationSystemPrompt(projectId: string, goalId: string | null): Promise<string> {
+    const persona =
+      options.personaResolver === undefined
+        ? undefined
+        : await options.personaResolver({ roleId: "concertmaster", taskClass: "conversation", projectId, goalId });
+    return buildMaestroSystemPrompt(persona);
+  }
 
   async function read(conversationId: string, projectId: string, operatorId: string): Promise<ConversationRow> {
     const result = await options.pool.query<ConversationRow>(
@@ -320,6 +337,7 @@ export function createPostgresConversationService(options: {
       gateway: options.gateway,
       binding: row.binding,
       tools,
+      systemPrompt: await conversationSystemPrompt(row.project_id, row.goal_id),
       initialMessages,
       onModelEvent: (event) => {
         queueTextDelta(stream, row.conversation_id, row.project_id, event);
@@ -397,6 +415,7 @@ export function createPostgresConversationService(options: {
           throw new ConversationConflictError("conversation Goal/project binding is invalid");
       }
       const parsed = parseModelRef(input.model);
+      const systemPrompt = await conversationSystemPrompt(input.projectId, goalId);
 
       const client = await options.pool.connect();
       let conversationId = randomUUID();
@@ -460,6 +479,7 @@ export function createPostgresConversationService(options: {
         gateway: options.gateway,
         binding: binding!,
         tools,
+        systemPrompt,
         onModelEvent: (event) => {
           queueTextDelta(stream, conversationId, input.projectId, event);
           if (stream.turnId !== undefined) publishActivity(conversationId, input.projectId, stream.turnId, event);

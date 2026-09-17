@@ -28,7 +28,7 @@ import { priorTaskContractDraft, taskContractDraftForConversation } from "./conv
 import { animateAccentProgress } from "./flashmob-animation.js";
 import { reconnectWorkspaceProject } from "./project-reconnect.js";
 import { cancelConversationTurn } from "./conversation-cancellation.js";
-import { activityView, runConversationActivityStream } from "./conversation-activity.js";
+import { activityView, createConversationActivityReadiness, runConversationActivityStream } from "./conversation-activity.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -841,6 +841,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       projectId: string,
       controller: AbortController,
       displayGeneration = conversationDisplayBoundary.capture(),
+      onConnected?: () => void,
     ): Promise<void> => {
       if (client === undefined) return;
       await runConversationActivityStream({
@@ -848,6 +849,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         conversationId,
         projectId,
         signal: controller.signal,
+        ...(onConnected === undefined ? {} : { onConnected }),
         onEvent: (event: ConversationActivityEvent) => {
           if (
             controller.signal.aborted ||
@@ -1532,6 +1534,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               }
               conversation = addConversationMessage(conversation, "user", text);
               render();
+              const turnController = new AbortController();
+              conversationTurnController = turnController;
+              state.working = true;
+              state.workingSince = Date.now();
+              state.workingTick = 0;
+              state.conversationActivity = { phase: "thinking" };
+              const activityReadiness = createConversationActivityReadiness(turnController.signal);
               const streamController = new AbortController();
               conversationStreamController?.abort();
               conversationActivityController?.abort();
@@ -1540,13 +1549,22 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               conversationActivityController = activityController;
               const displayGeneration = conversationDisplayBoundary.capture();
               void streamConversation(activeConversationId, project.projectId, streamController, displayGeneration);
-              void streamConversationActivity(activeConversationId, project.projectId, activityController, displayGeneration);
-              const turnController = new AbortController();
-              conversationTurnController = turnController;
-              state.working = true;
-              state.workingSince = Date.now();
-              state.workingTick = 0;
-              delete state.conversationActivity;
+              void streamConversationActivity(
+                activeConversationId,
+                project.projectId,
+                activityController,
+                displayGeneration,
+                activityReadiness.markConnected,
+              );
+              if (!conversationTurnBoundary.isCurrent(turnGeneration) || turnController.signal.aborted) {
+                editor.addToHistory(text);
+                return;
+              }
+              await activityReadiness.promise;
+              if (!conversationTurnBoundary.isCurrent(turnGeneration) || turnController.signal.aborted) {
+                editor.addToHistory(text);
+                return;
+              }
               if (workingLoaderTimer !== undefined) clearInterval(workingLoaderTimer);
               workingLoaderTimer = setInterval(() => {
                 if (isCurrentConversationTurnController(turnController, conversationTurnController)) {

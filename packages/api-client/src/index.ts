@@ -277,7 +277,7 @@ export interface ApiClient {
   streamConversationActivity(
     conversationId: string,
     query: GoalQuery,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; onConnected?: () => void },
   ): AsyncIterable<ConversationActivityEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
@@ -499,6 +499,7 @@ async function* readConversationActivityStream(
   conversationId: string,
   query: GoalQuery,
   signal?: AbortSignal,
+  onConnected?: () => void,
 ): AsyncGenerator<ConversationActivityEvent> {
   const parsed = GoalQuerySchema.parse(query);
   const url = new URL(`v1/conversations/${encodeURIComponent(conversationId)}/activity/stream`, base);
@@ -512,6 +513,7 @@ async function* readConversationActivityStream(
   if (!response.ok) throw new Error(`Control plane conversation activity stream returned HTTP ${response.status}`);
   if (response.body === null) throw new Error("Control plane conversation activity stream returned no body");
   const reader = response.body.getReader();
+  onConnected?.();
   const decoder = new TextDecoder();
   let buffer = "";
   try {
@@ -908,7 +910,15 @@ export function createApiClient({
       return readConversationEventStream(fetch, base, headers, UuidSchema.parse(conversationId), query, options?.signal);
     },
     streamConversationActivity(conversationId, query, options) {
-      return readConversationActivityStream(fetch, base, headers, UuidSchema.parse(conversationId), query, options?.signal);
+      return readConversationActivityStream(
+        fetch,
+        base,
+        headers,
+        UuidSchema.parse(conversationId),
+        query,
+        options?.signal,
+        options?.onConnected,
+      );
     },
     provisionProjectAccess(input) {
       return request(

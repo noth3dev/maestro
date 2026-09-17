@@ -242,15 +242,25 @@ export class CodexAppServerClient {
     if (input.signal.aborted) throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
     const account = await this.accountRead();
     if (account.authMode !== "chatgpt") throw new CodexAppServerError("provider_auth", "ChatGPT account authentication is required");
+    const systemInstructions = input.messages
+      .filter((message) => message.role === "system")
+      .map((message) => message.content
+        .filter((part): part is Extract<ModelMessage["content"][number], { kind: "text" }> => part.kind === "text")
+        .map((part) => part.text)
+        .join("\n"))
+      .filter((text) => text !== "")
+      .join("\n\n");
     const threadResult = await this.requestRaw("thread/start", {
       model: input.model,
       approvalPolicy: "never",
       sandboxPolicy: { type: "readOnly" },
       personality: "none",
+      ...(systemInstructions === "" ? {} : { developerInstructions: systemInstructions }),
     });
     const thread = isRecord(threadResult) && isRecord(threadResult.thread) ? threadResult.thread : undefined;
     const threadId = requiredString(thread?.id, "thread.id");
     const transcript = input.messages
+      .filter((message) => message.role !== "system")
       .map((message) => {
         const text = message.content
           .filter((part): part is Extract<ModelMessage["content"][number], { kind: "text" }> => part.kind === "text")

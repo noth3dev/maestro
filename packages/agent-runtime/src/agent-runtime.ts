@@ -28,6 +28,7 @@ import {
   type TurnLimits,
 } from "./model-provider.js";
 import type { WorkerProfileAssignment } from "@maestro/domain";
+import { buildMaestroSystemPrompt, DEFAULT_MAESTRO_RUNTIME_PERSONA } from "./system-prompt.js";
 
 export interface ToolContext extends InvocationContext {
   readonly commandId: string;
@@ -108,6 +109,7 @@ interface RuntimeRecord {
   readonly modelPolicy: readonly string[];
   readonly idempotencyKey: string;
   readonly workerProfile?: WorkerProfileAssignment;
+  readonly systemPrompt?: string;
   readonly parent?: InvocationRef;
   readonly sessionId: string;
   readonly messages: ModelMessage[];
@@ -198,6 +200,10 @@ function safeJson(value: unknown): string {
 function assistantMessage(text: string): ModelMessage {
   return { role: "assistant", content: [{ kind: "text", text }] };
 }
+function systemPromptMessage(prompt: string): ModelMessage {
+  return { role: "system", content: [{ kind: "text", text: prompt }] };
+}
+
 function workerProfileMessage(profile: WorkerProfileAssignment): ModelMessage {
   return {
     role: "system",
@@ -209,26 +215,35 @@ function workerProfileMessage(profile: WorkerProfileAssignment): ModelMessage {
     ],
   };
 }
+function wireMessagesBytes(messages: readonly ModelMessage[]): number {
+  return Buffer.byteLength(safeJson(messages), "utf8");
+}
+
 function messagesForGateway(record: RuntimeRecord, maxBytes: number): ModelMessage[] {
-  if (record.workerProfile === undefined) return boundedMessages(record.messages, maxBytes);
-  const assignment = workerProfileMessage(record.workerProfile);
-  const remaining = Math.max(1, maxBytes - messageBytes(assignment));
-  return [assignment, ...boundedMessages(record.messages, remaining).slice(0, MAX_WIRE_MESSAGE_COUNT - 1)];
-}
-function messageBytes(message: ModelMessage): number {
-  return Buffer.byteLength(safeJson(message.content), "utf8");
-}
-function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): ModelMessage[] {
-  const kept: ModelMessage[] = [];
-  let bytes = 0;
-  for (let index = messages.length - 1; index >= 0 && kept.length < MAX_WIRE_MESSAGE_COUNT; index -= 1) {
-    const message = messages[index]!;
-    const size = messageBytes(message);
-    if (bytes + size > maxBytes) continue;
-    kept.push(message);
-    bytes += size;
+  const prefixes = [
+    ...(record.systemPrompt === undefined ? [] : [systemPromptMessage(record.systemPrompt)]),
+    ...(record.workerProfile === undefined ? [] : [workerProfileMessage(record.workerProfile)]),
+  ];
+  if (wireMessagesBytes(prefixes) > maxBytes) throw new Error("host-owned model guidance exceeds the input byte limit");
+  const selected: ModelMessage[] = [];
+  const maxHistoryMessages = Math.max(0, MAX_WIRE_MESSAGE_COUNT - prefixes.length);
+  for (let index = record.messages.length - 1; index >= 0 && selected.length < maxHistoryMessages; index -= 1) {
+    selected.unshift(record.messages[index]!);
+    const candidate = [...prefixes, ...selected];
+    if (wireMessagesBytes(candidate) > maxBytes) selected.shift();
   }
-  return kept.reverse();
+  const latest = record.messages[record.messages.length - 1];
+  if (latest !== undefined && selected[selected.length - 1] !== latest) throw new Error("current model input exceeds the input byte limit");
+  return [...prefixes, ...selected];
+}
+
+function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): ModelMessage[] {
+  const selected: ModelMessage[] = [];
+  for (let index = messages.length - 1; index >= 0 && selected.length < MAX_WIRE_MESSAGE_COUNT; index -= 1) {
+    selected.unshift(messages[index]!);
+    if (wireMessagesBytes(selected) > maxBytes) selected.shift();
+  }
+  return selected;
 }
 
 export function createMaestroAgentRuntime(options: {
@@ -236,11 +251,13 @@ export function createMaestroAgentRuntime(options: {
   binding: GatewayBinding;
   tools: ToolRegistry;
   workerProfile?: WorkerProfileAssignment;
+  systemPrompt?: string;
   initialMessages?: readonly ModelMessage[];
   onModelEvent?: (event: ModelStreamEvent, turnId: string) => void;
   closeGateway?: boolean;
 }): MaestroAgentRuntime {
   const records = new Map<InvocationRef, RuntimeRecord>();
+  const systemPrompt = options.systemPrompt ?? buildMaestroSystemPrompt(DEFAULT_MAESTRO_RUNTIME_PERSONA);
   const byExecution = new Map<ExecutionRef, InvocationRef>();
   let closing = false;
 
@@ -602,6 +619,7 @@ export function createMaestroAgentRuntime(options: {
           modelPolicy: admission.modelPolicy,
           idempotencyKey: admission.idempotencyKey,
           ...(parent.workerProfile === undefined ? {} : { workerProfile: parent.workerProfile }),
+          ...(parent.systemPrompt === undefined ? {} : { systemPrompt: parent.systemPrompt }),
           parent: parent.invocation,
           sessionId: parent.sessionId,
           messages: [],
@@ -633,6 +651,7 @@ export function createMaestroAgentRuntime(options: {
         modelPolicy: admission.modelPolicy,
         idempotencyKey: admission.idempotencyKey,
         ...(options.workerProfile === undefined ? {} : { workerProfile: options.workerProfile }),
+        ...(systemPrompt === undefined ? {} : { systemPrompt }),
         sessionId: `session-${randomUUID()}`,
         messages: boundedMessages(options.initialMessages ?? [], 64_000),
         toolEvents: [],

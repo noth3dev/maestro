@@ -259,7 +259,10 @@ it("runs a text turn through the managed app-server and supports cancellation", 
   const resultPromise = client.runTextTurn({
     model: "gpt-5.3-codex",
     requestId: "request-1",
-    messages: [{ role: "user", content: [{ kind: "text", text: "hello" }] }],
+    messages: [
+      { role: "system", content: [{ kind: "text", text: "host-owned policy" }] },
+      { role: "user", content: [{ kind: "text", text: "hello" }] },
+    ],
     tools: [],
     signal: new AbortController().signal,
     maxOutputTokens: 100,
@@ -273,6 +276,14 @@ it("runs a text turn through the managed app-server and supports cancellation", 
   expect(events).toContainEqual({ kind: "thinking-delta", cursor: 1 });
   expect(events).toContainEqual({ kind: "text-delta", cursor: "Hello from Codex".length, text: "Hello from Codex" });
   expect(events.some((event) => JSON.stringify(event).includes("private reasoning"))).toBe(false);
+  const threadStart = transport.messages.find((message) => (message as { method?: string }).method === "thread/start") as {
+    params?: { developerInstructions?: string };
+  } | undefined;
+  expect(threadStart?.params?.developerInstructions).toBe("host-owned policy");
+  const turnStart = transport.messages.find((message) => (message as { method?: string }).method === "turn/start") as {
+    params?: { input?: readonly { text?: string }[] };
+  } | undefined;
+  expect(turnStart?.params?.input).toEqual([{ type: "text", text: "user: hello" }]);
   await client.close();
 });
 

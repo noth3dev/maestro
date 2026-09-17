@@ -6,9 +6,9 @@ import { Pool } from "pg";
 import { AuthorizedEffectExecutor, classifyAction, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import { FileEvidenceStore } from "@maestro/evidence";
-import { classifyHostEffects, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort } from "@maestro/domain";
+import { classifyHostEffects, PERSONA_AXES, type EnvironmentRecord, type ExecutionAdmission, type ExecutionKernelPort, type GitPort, type PersonaAxis } from "@maestro/domain";
 import { createIpPythonSessionManager, createIpPythonTool, createUnavailableIpPythonKernel, reapIpPythonProcessGroup, ToolRegistry, type IpPythonBlockApproval, type IpPythonHostRequest, type IpPythonKernel, type IpPythonSessionBinding, type IpPythonSessionManager, type IpPythonStageBoundary } from "@maestro/agent-runtime";
-import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, createPostgresSettingsService, listProjectMemberships, listPermanentOrganization, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, listPendingAuthorityApprovals, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, getChannel, postChannelMessage, readRoutingWorkSnapshot, type IpPythonSessionJournalEntry } from "@maestro/persistence";
+import { appendCapabilityJournal, appendIpPythonSessionJournal, assertProjectMembership, consumeCapabilityApprovals, authenticateLocalOperator, bootstrapAuthorityRecord, bootstrapPermanentOrganization, createPostgresAccountLoginStore, createPostgresSettingsService, listProjectMemberships, listPermanentOrganization, readActivePersonaProfile, getGoalControl, listGoalEvents, PostgresAuthorityRepository, provisionProjectAccess, readEnvironment, reconcileIpPythonOrphans, reconcileOnStartup, recordDiscordSignal, listPendingAuthorityApprovals, recordIpPythonSessionStarted, runMigrations, ensureCapacityInventory, reserveCapacity, releaseCapacityReservation, requeueCapacityReservation, readWorkerBySpawnCommand, getChannel, postChannelMessage, readRoutingWorkSnapshot, type IpPythonSessionJournalEntry } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { createCriticalActionService, CriticalActionGoalNotFoundError, CriticalActionProjectMismatchError } from "./critical-action-service.js";
 import { createCapabilityApprovalService } from "./capability-approval-service.js";
@@ -40,6 +40,17 @@ import { createEnsembleNativeAdmission } from "./ensemble-admission.js";
 import { readRoutingCandidateCatalog } from "./ensemble-candidate-catalog.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
+
+function parseConversationMissionOverlay(value: unknown): Readonly<Partial<Record<PersonaAxis, number>>> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("stored mission persona overlay is invalid");
+  const result: Partial<Record<PersonaAxis, number>> = {};
+  for (const [axis, raw] of Object.entries(value)) {
+    if (!PERSONA_AXES.includes(axis as PersonaAxis) || typeof raw !== "number" || !Number.isFinite(raw) || raw < -1 || raw > 1)
+      throw new Error("stored mission persona overlay is invalid");
+    result[axis as PersonaAxis] = raw;
+  }
+  return result;
+}
 
 const IPYTHON_LOCAL_ACTIONS = new Set([
   "project.file.read", "project.file.edit", "project.test.run", "project.shell.run", "project.environment.change",
@@ -651,7 +662,45 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     : createNativeExecutionKernel({ gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, dataPolicyHash: createHash("sha256").update("maestro-native-data-policy:v1").digest("hex"), tools }));
   const nativeAdmission = overrides.nativeAdmission ?? (modelGateway === undefined ? undefined : (input: NativeAdmissionInput) => createHostNativeAdmission(config, input));
   const taskContractService = createDurableTaskContractService(pool);
-  const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({ pool, gateway: modelGateway, gatewayOperatorId: config.modelGatewayOperatorId, accountRefs: config.modelAccountRefs, taskContractService });
+  const conversationPersonaResolver = async (input: {
+    readonly roleId: string;
+    readonly taskClass: string;
+    readonly projectId: string;
+    readonly goalId: string | null;
+  }) => {
+    let taskClass = input.taskClass;
+    let missionOverlay: Readonly<Partial<Record<PersonaAxis, number>>> = {};
+    if (input.goalId !== null) {
+      const evidence = await pool.query<{ task_class: string; mission_overlay: unknown }>(
+        "SELECT task_class, mission_overlay FROM persona_goal_evidence WHERE goal_id = $1 AND project_id = $2 AND role_id = $3 ORDER BY created_at DESC, evidence_id DESC LIMIT 1",
+        [input.goalId, input.projectId, input.roleId],
+      );
+      const row = evidence.rows[0];
+      if (row !== undefined) {
+        taskClass = row.task_class;
+        missionOverlay = parseConversationMissionOverlay(row.mission_overlay);
+      }
+    }
+    const active = await readActivePersonaProfile(pool, input.roleId, taskClass, missionOverlay);
+    return {
+      roleId: input.roleId,
+      taskClass,
+      profile: active.persona,
+      mission: active.coreIdentity.mission,
+      authority: active.coreIdentity.authority,
+      truthfulness: active.coreIdentity.truthfulness,
+      safety: active.coreIdentity.safety,
+      prohibitedBehavior: active.coreIdentity.prohibitedBehavior,
+    };
+  };
+  const conversationService = modelGateway === undefined ? undefined : createPostgresConversationService({
+    pool,
+    gateway: modelGateway,
+    gatewayOperatorId: config.modelGatewayOperatorId,
+    accountRefs: config.modelAccountRefs,
+    taskContractService,
+    personaResolver: conversationPersonaResolver,
+  });
   const goalService = createDurableGoalService({
     pool,
     actorId: config.actorId,

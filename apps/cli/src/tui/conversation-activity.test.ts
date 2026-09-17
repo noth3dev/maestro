@@ -17,6 +17,33 @@ describe("conversation activity tracker", () => {
     expect(activityView(event)).toEqual({ phase: "executing", toolName: "readGoal", status: "executing" });
   });
 
+  it("forwards the activity connection callback", async () => {
+    const controller = new AbortController();
+    let connected = false;
+    const client = {
+      async *streamConversationActivity(
+        _conversationId: string,
+        _query: { projectId: string },
+        options?: { signal?: AbortSignal; onConnected?: () => void },
+      ) {
+        options?.onConnected?.();
+        controller.abort();
+        yield event;
+      },
+    };
+    await runConversationActivityStream({
+      client,
+      conversationId: event.conversationId,
+      projectId: event.projectId,
+      signal: controller.signal,
+      onEvent: () => {},
+      onConnected: () => {
+        connected = true;
+      },
+    });
+    expect(connected).toBe(true);
+  });
+
   it("stops the best-effort stream when the turn is finished", async () => {
     const controller = new AbortController();
     const received: unknown[] = [];
