@@ -111,6 +111,18 @@ describe("command argument autocomplete", () => {
     expect(workers?.getArgumentCompletions?.("certify --cert")).toEqual([expect.objectContaining({ value: "--certification-json " })]);
   });
 
+  it("suggests conditional worker certification inputs", () => {
+    const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
+    expect(workers?.getArgumentCompletions?.("certify-conditional --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--worker-id " }),
+        expect.objectContaining({ value: "--kind " }),
+        expect.objectContaining({ value: "--certification-json " }),
+      ]),
+    );
+    expect(workers?.getArgumentCompletions?.("certify-conditional --kin")).toEqual([expect.objectContaining({ value: "--kind " })]);
+  });
+
   it("suggests certification alias identity and payload options", () => {
     const certification = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "certification");
     expect(certification?.getArgumentCompletions?.("certify --")).toEqual(
