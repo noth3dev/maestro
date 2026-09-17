@@ -124,6 +124,20 @@ describe("command argument autocomplete", () => {
     expect(git?.getArgumentCompletions?.("department-branch --coun")).toEqual([expect.objectContaining({ value: "--council-id " })]);
   });
 
+  it("suggests Metronome challenge Goal, reason, evidence, and idempotency inputs", () => {
+    const metronome = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "metronome");
+    expect(metronome?.getArgumentCompletions?.("challenge --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
+        expect.objectContaining({ value: "--reason " }),
+        expect.objectContaining({ value: "--finding-ids " }),
+        expect.objectContaining({ value: "--evidence-references " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(metronome?.getArgumentCompletions?.("challenge --find")).toEqual([expect.objectContaining({ value: "--finding-ids " })]);
+  });
+
   it("suggests worker certification identity and payload options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("certify --")).toEqual(
