@@ -2271,3 +2271,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - At connected normal-height 80x24/40x24 with `project.kind === "unavailable"`, the input label advertised `message to Concertmaster · Enter to send`, but submit failed closed because no workspace project was attached.
 - Candidates: (1) use existing `projectActionText` in the normal input placeholder, (2) guard submit only, (3) broad shared recovery-copy extraction. Independent critiques ranked **1 > 3 > 2** and accepted #1.
 - RED reproduced the misleading normal placeholder; GREEN returned bounded existing attach/admin/retry guidance for unavailable projects without changing compact or command behavior. Focused shell tests passed **29/29**, full TUI **56 files / 392 tests**, root build and `git diff --check` passed. Separate § 0.3 review: **REVIEW: PASS**.
+
+
+## 2026-09-17 — UX loop account-login chooser shortcut ownership
+
+- The account-login provider chooser allowed global shortcuts to escape while selecting: Ctrl+G/E/R/K/A and Ctrl+/ ran global actions before the chooser branch, even though the chooser remained active.
+- Candidates: (1) narrow selecting-state background guard before global dispatch, (2) move the whole chooser branch earlier, (3) guard each action handler. Independent critiques ranked **1 > 2 > 3** and accepted #1.
+- RED added the shortcut/control matrix; GREEN consumes only recognized global shortcuts and preserves navigation/cancellation. Focused entry tests passed **56/56**. Separate § 0.3 review: **REVIEW: PASS**. Full revalidation and push are pending.

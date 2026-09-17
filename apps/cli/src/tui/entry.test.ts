@@ -37,6 +37,7 @@ import {
   persistProviderLoginModelSelection,
   shouldRetryAutomaticProviderSignIn,
   shouldConsumeAccountLoginBackgroundInput,
+  shouldConsumeAccountLoginSelectingBackgroundInput,
   noModelSelectionMessage,
   runAutomaticProviderSignInOffer,
   shouldOfferAutomaticProviderSignIn,
@@ -222,6 +223,18 @@ describe("account-login modal input capture", () => {
     expect(shouldConsumeAccountLoginBackgroundInput("waiting", false, false, true)).toBe(false);
     expect(shouldConsumeAccountLoginBackgroundInput("waiting", true, false, false)).toBe(false);
     expect(shouldConsumeAccountLoginBackgroundInput("selecting", false, false, false)).toBe(false);
+  });
+
+  it("consumes only global shortcuts while the provider chooser is selecting", () => {
+    for (const data of ["\x1f", "\x01", "\x05", "\x07", "\x0b", "\x12"]) {
+      expect(shouldConsumeAccountLoginSelectingBackgroundInput("selecting", data)).toBe(true);
+    }
+
+    for (const data of ["\x1b[A", "\x1b[B", "\r", "\x1b", "\x03", "x", ""]) {
+      expect(shouldConsumeAccountLoginSelectingBackgroundInput("selecting", data)).toBe(false);
+    }
+    expect(shouldConsumeAccountLoginSelectingBackgroundInput("opening", "\x07")).toBe(false);
+    expect(shouldConsumeAccountLoginSelectingBackgroundInput(undefined, "\x07")).toBe(false);
   });
 });
 

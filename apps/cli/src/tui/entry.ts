@@ -251,6 +251,21 @@ export function shouldBlockProviderLoginInFlightSubmit(text: string, providerLog
   return providerLoginInFlight && text.trim() !== "";
 }
 
+export function shouldConsumeAccountLoginSelectingBackgroundInput(
+  accountLoginState: "selecting" | "opening" | "waiting" | undefined,
+  data: string,
+): boolean {
+  if (accountLoginState !== "selecting") return false;
+  return (
+    isSplashRestoreShortcut(data) ||
+    matchesKey(data, "ctrl+k") ||
+    matchesKey(data, "ctrl+g") ||
+    matchesKey(data, "ctrl+e") ||
+    matchesKey(data, "ctrl+r") ||
+    matchesKey(data, "ctrl+a")
+  );
+}
+
 export function shouldConsumeAccountLoginBackgroundInput(
   accountLoginState: "selecting" | "opening" | "waiting" | undefined,
   isCtrlC: boolean,
@@ -1606,6 +1621,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       ) {
         return { consume: true };
       }
+      if (shouldConsumeAccountLoginSelectingBackgroundInput(accountLoginState, data)) return { consume: true };
       if (isSplashRestoreShortcut(data)) {
         splash.restore();
         tui.requestRender(true);
