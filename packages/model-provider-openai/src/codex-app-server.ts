@@ -46,6 +46,11 @@ export interface CodexAccountSummary {
   readonly planType?: string;
 }
 
+export interface CodexModelSummary {
+  readonly id: string;
+  readonly displayName: string;
+}
+
 type JsonRpcResponse = { readonly id: number; readonly result?: unknown; readonly error?: { readonly message?: unknown } };
 type JsonRpcNotification = { readonly method: string; readonly params?: unknown };
 
@@ -272,6 +277,41 @@ export class CodexAppServerClient {
     this.logins.set(loginId, { loginId, state: "cancelled" });
   }
 
+  async listModels(): Promise<readonly CodexModelSummary[]> {
+    try {
+      await this.ensureInitialized();
+      const models: CodexModelSummary[] = [];
+      const seenIds = new Set<string>();
+      const seenCursors = new Set<string>();
+      let cursor: string | undefined;
+      for (let page = 0; page < 100; page += 1) {
+        const result = await this.requestRaw("model/list", cursor === undefined ? { includeHidden: false } : { cursor, includeHidden: false });
+        if (!isRecord(result) || !Array.isArray(result.data)) throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model catalog");
+        for (const entry of result.data) {
+          if (!isRecord(entry)) throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model entry");
+          if (entry.hidden === true) continue;
+          const rawId = typeof entry.model === "string" && entry.model.trim() !== "" ? entry.model : entry.id;
+          if (typeof rawId !== "string" || rawId.trim() === "") throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned a model without an id");
+          const id = rawId.trim();
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          const displayName = typeof entry.displayName === "string" && entry.displayName.trim() !== "" ? entry.displayName.trim() : id;
+          models.push({ id, displayName });
+        }
+        const nextCursor = result.nextCursor;
+        if (nextCursor === null || nextCursor === undefined) return models;
+        if (typeof nextCursor !== "string" || nextCursor.trim() === "" || seenCursors.has(nextCursor)) throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model catalog cursor");
+        seenCursors.add(nextCursor);
+        cursor = nextCursor;
+      }
+      throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned too many model catalog pages");
+    } catch (error) {
+      if (error instanceof CodexAppServerError) throw error;
+      throw new CodexAppServerError("provider_unavailable", "Codex app-server model catalog is unavailable");
+    }
+  }
+
+
   async accountRead(): Promise<CodexAccountSummary> {
     await this.ensureInitialized();
     const result = await this.requestRaw("account/read", { refreshToken: false });
@@ -399,14 +439,30 @@ export interface CodexAppServerPluginOptions {
 }
 
 export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions): ProviderPlugin {
-  const models = options.models ?? ["gpt-5.3-codex"];
+  const dynamic = options.models === undefined;
+  let models = dynamic ? [] : [...options.models];
+  let refreshFlight: Promise<void> | undefined;
   const catalog = (): readonly ModelCatalogEntry[] => models.map((id) => ({ identity: { provider: "openai-codex", id }, capabilities: new Set(["text", "cancellation", "managed-subscription"] as const), authModes: ["managed-subscription"], dataPolicy: codexDataPolicy }));
+  const refreshModels = async (): Promise<void> => {
+    if (!dynamic) return;
+    if (refreshFlight !== undefined) return refreshFlight;
+    const flight = (async () => {
+      models = [...new Set((await options.client.listModels()).map((model) => model.id))];
+    })();
+    refreshFlight = flight;
+    try {
+      await flight;
+    } finally {
+      if (refreshFlight === flight) refreshFlight = undefined;
+    }
+  };
   return {
     id: "openai-codex",
     authModes: ["managed-subscription"],
     capabilities: new Set(["text", "cancellation", "managed-subscription"] as const),
     dataPolicy: codexDataPolicy,
     listModels: catalog,
+    ...(dynamic ? { refreshModels } : {}),
     async create(request: ProviderModelRequest): Promise<ModelProviderPort> {
       if (request.model.provider !== "openai-codex" || request.account.providerId !== "openai-codex" || request.account.authMode !== "managed-subscription") throw new CodexAppServerError("provider_auth", "Codex managed account binding mismatch");
       if (!models.includes(request.model.id)) throw new CodexAppServerError("provider_malformed_response", "Codex model is not in the configured catalog");

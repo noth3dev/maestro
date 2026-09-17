@@ -35,6 +35,7 @@ export class ModelGateway implements ModelGatewayPort {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     if (request.operatorId !== this.options.operatorId) return [];
+    await this.options.registry.refreshModels();
     const bindings = await this.options.credentials.list(this.options.operatorId);
     const providers = new Set(bindings.map((binding) => binding.providerId));
     return (await this.options.registry.listModels()).filter((model) => providers.has(model.identity.provider));
@@ -108,6 +109,7 @@ export class ModelGateway implements ModelGatewayPort {
   async admit(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
+    await this.options.registry.refreshModels();
     const plugin = this.options.registry.resolve({ providerId: request.providerId, modelId: request.model.id });
     const identity = this.options.registry.resolveModel({ providerId: request.providerId, modelId: request.model.id });
     if (identity.provider !== request.model.provider || identity.id !== request.model.id) throw new Error("provider returned an unexpected model identity");

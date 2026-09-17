@@ -1,19 +1,38 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { resolveCodexAppServerCommand } from "../../../apps/cli/src/tui/local-bootstrap.js";
-import { CodexAppServerClient, type CodexAppServerTransport } from "./codex-app-server.js";
+import { CodexAppServerClient, createCodexAppServerPlugin, type CodexAppServerTransport } from "./codex-app-server.js";
+
+class SilentTransport implements CodexAppServerTransport {
+  onMessage(_listener: (message: unknown) => void): () => void { return () => {}; }
+  send(_message: unknown): void {}
+  async close(): Promise<void> {}
+}
 
 class FakeTransport implements CodexAppServerTransport {
   readonly messages: unknown[] = [];
   private listener?: (message: unknown) => void;
+  constructor(private readonly modelListMode: "normal" | "malformed-entry" | "error" = "normal") {}
   onMessage(listener: (message: unknown) => void): () => void { this.listener = listener; return () => { this.listener = undefined; }; }
   send(message: unknown): void {
     this.messages.push(message);
-    const request = message as { id?: number; method?: string };
+    const request = message as { id?: number; method?: string; params?: { cursor?: string | null } };
     if (request.method === "initialize") queueMicrotask(() => this.listener?.({ id: request.id, result: { userAgent: "codex-test" } }));
     if (request.method === "account/login/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { type: "chatgpt", loginId: "login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" } }));
     if (request.method === "account/login/cancel") queueMicrotask(() => this.listener?.({ id: request.id, result: {} }));
     if (request.method === "account/read") queueMicrotask(() => this.listener?.({ id: request.id, result: { account: { type: "chatgpt", email: "user@example.com", planType: "pro" } } }));
+    if (request.method === "model/list") queueMicrotask(() => {
+      if (this.modelListMode === "error") {
+        this.listener?.({ id: request.id, error: { message: "model listing unavailable" } });
+        return;
+      }
+      const result = this.modelListMode === "malformed-entry"
+        ? { data: [{}], nextCursor: null }
+        : request.params?.cursor === "page-2"
+          ? { data: [{ id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false }], nextCursor: null }
+          : { data: [{ id: "gpt-5.6-luna", model: "gpt-5.6-luna", displayName: "GPT-5.6-Luna", hidden: false }, { id: "hidden", model: "hidden", displayName: "Hidden", hidden: true }], nextCursor: "page-2" };
+      this.listener?.({ id: request.id, result });
+    });
     if (request.method === "thread/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { thread: { id: "thread-1" } } }));
     if (request.method === "turn/start") queueMicrotask(() => {
       this.listener?.({ id: request.id, result: { turn: { id: "turn-1", status: "inProgress" } } });
@@ -43,6 +62,19 @@ describeLiveCodex("live local Codex account login acceptance", () => {
     const client = new CodexAppServerClient({ command, args: ["app-server"], requestTimeoutMs: 15_000 });
     try {
       await expect(client.accountRead()).resolves.toMatchObject({ authMode: "chatgpt" });
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("reads the currently offered Codex model catalog without a baked-in model name", async () => {
+    const command = liveCodexCommand;
+    if (command === undefined) return;
+    const client = new CodexAppServerClient({ command, args: ["app-server"], requestTimeoutMs: 15_000 });
+    try {
+      const models = await client.listModels();
+      expect(models.length).toBeGreaterThan(0);
+      expect(models.every((model) => model.id.length > 0 && model.displayName.length > 0)).toBe(true);
     } finally {
       await client.close();
     }
@@ -78,6 +110,60 @@ describe("Codex app-server transport diagnostics", () => {
     } finally {
       await transportFailure.close();
     }
+  });
+});
+
+describe("Codex app-server model catalog", () => {
+  it("fetches every visible model across paginated model/list responses", async () => {
+    const transport = new FakeTransport();
+    const client = new CodexAppServerClient({ transport });
+    await expect(client.listModels()).resolves.toEqual([
+      { id: "gpt-5.6-luna", displayName: "GPT-5.6-Luna" },
+      { id: "gpt-5.5", displayName: "GPT-5.5" },
+    ]);
+    expect(transport.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ method: "model/list", params: { includeHidden: false } }),
+      expect.objectContaining({ method: "model/list", params: { cursor: "page-2", includeHidden: false } }),
+    ]));
+    await client.close();
+  });
+
+  it("normalizes initialization timeouts as provider-unavailable catalog failures", async () => {
+    const client = new CodexAppServerClient({ transport: new SilentTransport(), requestTimeoutMs: 5 });
+    await expect(client.listModels()).rejects.toMatchObject({ code: "provider_unavailable" });
+    await client.close();
+  });
+
+  it("fails closed on malformed provider catalog entries", async () => {
+    const client = new CodexAppServerClient({ transport: new FakeTransport("malformed-entry") });
+    await expect(client.listModels()).rejects.toMatchObject({ code: "provider_malformed_response" });
+    await client.close();
+  });
+
+  it("does not retain or invent a model when provider catalog discovery fails", async () => {
+    const client = new CodexAppServerClient({ transport: new FakeTransport("error") });
+    const plugin = createCodexAppServerPlugin({ client });
+    await expect(plugin.refreshModels?.()).rejects.toMatchObject({ code: "provider_unavailable" });
+    expect(plugin.listModels()).toEqual([]);
+    await client.close();
+  });
+
+  it("single-flights concurrent dynamic catalog refreshes", async () => {
+    const transport = new FakeTransport();
+    const client = new CodexAppServerClient({ transport });
+    const plugin = createCodexAppServerPlugin({ client });
+    await Promise.all([plugin.refreshModels?.(), plugin.refreshModels?.()]);
+    expect(transport.messages.filter((message) => (message as { method?: string }).method === "model/list")).toHaveLength(2);
+    await client.close();
+  });
+
+  it("refreshes the provider catalog from the app-server when no explicit override is configured", async () => {
+    const client = new CodexAppServerClient({ transport: new FakeTransport() });
+    const plugin = createCodexAppServerPlugin({ client });
+    expect(plugin.listModels()).toEqual([]);
+    await plugin.refreshModels?.();
+    expect(plugin.listModels().map((model) => model.identity.id)).toEqual(["gpt-5.6-luna", "gpt-5.5"]);
+    await client.close();
   });
 });
 

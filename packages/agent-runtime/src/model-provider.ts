@@ -140,6 +140,8 @@ export interface ProviderPlugin {
   readonly capabilities: ReadonlySet<ProviderCapability>;
   readonly dataPolicy: ProviderDataPolicy;
   listModels(): readonly ModelCatalogEntry[];
+  /** Refreshes provider-reported model metadata before catalog reads when supported. */
+  refreshModels?(): Promise<void>;
   create(request: ProviderModelRequest): Promise<ModelProviderPort>;
 }
 

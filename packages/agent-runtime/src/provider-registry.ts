@@ -51,6 +51,10 @@ export class ProviderRegistry {
     if (!plugin.dataPolicy.regions.includes(required.region)) throw new Error("data policy region mismatch");
   }
 
+  async refreshModels(): Promise<void> {
+    await Promise.all([...this.providers.values()].map((plugin) => plugin.refreshModels?.()));
+  }
+
   listModels(): readonly ModelCatalogEntry[] {
     return [...this.providers.values()].flatMap((plugin) => plugin.listModels());
   }

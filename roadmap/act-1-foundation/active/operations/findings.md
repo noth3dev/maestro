@@ -2306,3 +2306,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - `/critical-action request` was visible in the TUI palette but `request --` returned no options, despite required handler inputs.
 - Candidates: (1) explicit autocomplete map entry, (2) registry metadata generation, (3) palette usage text. Independent design critique ranked **1 > 2 > 3** and accepted #1.
 - RED failed **1/15**; GREEN added the six truthful options. Focused autocomplete tests passed **16/16** and separate § 0.3 review with GPT-5.6 Sol returned **REVIEW: PASS**. Full revalidation and push are pending.
+
+
+## 2026-09-17 — UX loop dynamic Codex model catalog
+
+- Configured Codex selection used a hardcoded `gpt-5.3-codex`, hiding models actually offered by the provider and risking a model that admission could not authorize.
+- Candidates: (1) narrow Codex `model/list` client with bounded pagination plus provider refresh at gateway list/admission, (2) migrate every provider to an async catalog interface, (3) append discovery opportunistically in the TUI while retaining the hardcoded default. Independent design critique ranked **1 > 2 > 3** and **ACCEPTED #1**, with pagination bounds, deduplication, fail-closed discovery, and no fabricated fallback required.
+- RED failed **3 assertions** (missing client discovery/plugin refresh/gateway refresh); GREEN now covers paginated visible models, normalization, malformed/failure responses, initialization timeout normalization, concurrent refresh, active-credential filtering, and fresh-model admission. Focused tests passed **29/29** plus live Codex catalog acceptance; build, renderer typecheck, focused/full lint, and diff check passed. Repository-wide tests reached **1650 passed / 534 skipped** but 12 integration suites were blocked by the existing missing `DATABASE_URL` and fixed-port `55433` environment failures; format check remains a 641-file repository baseline failure. Independent § 0.3 re-review returned **REVIEW: PASS**.

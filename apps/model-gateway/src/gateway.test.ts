@@ -41,6 +41,33 @@ describe("model gateway", () => {
     await expect(gateway.listModels({ operatorId: "operator-2" })).resolves.toEqual([]);
   });
 
+  it("refreshes a provider catalog before exposing its active models", async () => {
+    const credentials = new InMemoryCredentialStore();
+    await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key", accountRef: "account-1" }, "secret");
+    const basePlugin = fakePlugin();
+    let refreshed = false;
+    const registry = new ProviderRegistry();
+    registry.register({
+      ...basePlugin,
+      listModels: () => refreshed ? basePlugin.listModels() : [],
+      refreshModels: async () => { refreshed = true; },
+    });
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+    await expect(gateway.listModels({ operatorId: "operator-1" })).resolves.toHaveLength(1);
+    expect(refreshed).toBe(true);
+  });
+
+  it("refreshes a dynamic provider before admitting a newly discovered model", async () => {
+    const credentials = new InMemoryCredentialStore();
+    await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key", accountRef: "account-1" }, "secret");
+    const basePlugin = fakePlugin();
+    let refreshed = false;
+    const registry = new ProviderRegistry();
+    registry.register({ ...basePlugin, listModels: () => refreshed ? basePlugin.listModels() : [], refreshModels: async () => { refreshed = true; } });
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+    await expect(gateway.admit({ requestId: "admit-1", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: "account-1", dataPolicyHash: "policy-1" })).resolves.toMatchObject({ provider: { provider: "fake", id: "model-a" } });
+  });
+
   it("admits an exact provider/model/account binding and delegates turns", async () => {
     const credentials = new InMemoryCredentialStore();
     const account = await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key" }, "secret");

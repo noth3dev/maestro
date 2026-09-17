@@ -171,7 +171,6 @@ Configure the gateway with a separately installed and trusted `codex` executable
 ```bash
 MAESTRO_MODEL_GATEWAY_TOKEN=<random-secret> \
 MAESTRO_CODEX_APP_SERVER_COMMAND=codex \
-MAESTRO_CODEX_MODELS=gpt-5.3-codex \
 npm --workspace @maestro/model-gateway start
 ```
 
@@ -182,7 +181,7 @@ maestro login openai-codex
 maestro models list
 ```
 
-Use an exact model identity such as `openai-codex/gpt-5.3-codex`. Anthropic Pro/Max subscription login is intentionally unavailable until Anthropic publishes or approves a supported integration. API-key login remains a separate legacy path for providers that support it.
+`maestro models list` reads the current model catalog from the Codex app-server, including all pages. Use an exact identity returned by that command, such as `openai-codex/<model-id>`. Set optional `MAESTRO_CODEX_MODELS` only when you want a restrictive comma-separated allowlist; an unset variable never invents a default model. Anthropic Pro/Max subscription login is intentionally unavailable until Anthropic publishes or approves a supported integration. API-key login remains a separate legacy path for providers that support it.
 
 ## 6. Phase 4 process boundaries
 

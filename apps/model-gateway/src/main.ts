@@ -16,6 +16,11 @@ function modelsFromEnv(value: string | undefined, fallback: string): readonly st
   return models.length > 0 ? models : [fallback];
 }
 
+function optionalModelsFromEnv(value: string | undefined): readonly string[] | undefined {
+  if (value === undefined) return undefined;
+  return value.split(",").map((model) => model.trim()).filter(Boolean);
+}
+
 function positiveMilliseconds(value: string | undefined, fallback: number): number {
   const parsed = Number(value ?? fallback);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -36,7 +41,8 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   const codex = codexCommand === undefined || codexCommand === "" ? undefined : new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: positiveMilliseconds(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS, 30000) });
   if (codex !== undefined) {
     accountRefs["openai-codex"] = `openai-codex-${operatorId}`;
-    registry.register(createCodexAppServerPlugin({ client: codex, models: modelsFromEnv(env.MAESTRO_CODEX_MODELS, "gpt-5.3-codex") }));
+    const codexModels = optionalModelsFromEnv(env.MAESTRO_CODEX_MODELS);
+    registry.register(createCodexAppServerPlugin({ client: codex, ...(codexModels === undefined ? {} : { models: codexModels }) }));
   }
   // Register provider adapters independently from credentials. The gateway
   // filters discovery and admission by the active operator-owned binding.
