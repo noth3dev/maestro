@@ -29,6 +29,7 @@ function api(): ApiClient {
     createTaskContract: vi.fn(),
     scanMetronome: vi.fn().mockResolvedValue({ findings: [] }),
     raiseMetronomeChallenge: vi.fn(),
+    requestMetronomeSafePause: vi.fn(),
     provisionProjectAccess: vi.fn(),
     requestCriticalAction: vi.fn().mockResolvedValue({ goalId, effect: "allow", reason: "approved by policy", classification: "ordinary" }),
     approveAndRunCriticalAction: vi.fn().mockResolvedValue({ effect: "allow", reason: "approved" }),
@@ -65,6 +66,50 @@ describe("TUI write commands", () => {
     expect(result).toEqual({ title: "Unavailable", lines: ["--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals"] });
     expect(confirm).not.toHaveBeenCalled();
     expect(client.selectFullAccessMode).not.toHaveBeenCalled();
+  });
+
+  it("rejects incomplete server-authorized critical commands before asking for approval", async () => {
+    const cases = [
+      {
+        command: { name: "goal", action: "emergency-stop", options: { "goal-id": goalId } },
+        message: "Missing required option --expected-version",
+      },
+      {
+        command: { name: "admin", action: "project-access", options: {} },
+        message: "Missing required option --operator-id",
+      },
+      {
+        command: { name: "admin", action: "project-access", options: { "operator-id": goalId } },
+        message: "Missing required option --roles-json",
+      },
+      {
+        command: { name: "metronome", action: "safe-pause", options: { "goal-id": goalId } },
+        message: "Missing required option --challenge-id",
+      },
+      {
+        command: { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId } },
+        message: "Missing required option --capability-kind",
+      },
+      {
+        command: { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython" } },
+        message: "Missing required option --session-id",
+      },
+      {
+        command: { name: "capability", action: "select-full-access-mode", options: { "goal-id": goalId, "capability-kind": "ipython", "session-id": goalId } },
+        message: "Missing required option --full-access-mode",
+      },
+    ] as const;
+
+    for (const { command, message } of cases) {
+      const client = api();
+      const confirm = vi.fn();
+      await expect(executeWriteCommand({ client, projectId, confirm }, command)).resolves.toEqual({ title: "Unavailable", lines: [message] });
+      expect(confirm).not.toHaveBeenCalled();
+      expect(client.emergencyStopGoal).not.toHaveBeenCalled();
+      expect(client.provisionProjectAccess).not.toHaveBeenCalled();
+      expect(client.requestMetronomeSafePause).not.toHaveBeenCalled();
+      expect(client.selectFullAccessMode).not.toHaveBeenCalled();
+    }
   });
 
   it("captures evidence and displays the created record identity", async () => {

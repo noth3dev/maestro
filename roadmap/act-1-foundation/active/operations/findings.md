@@ -2285,3 +2285,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - `/task-contract confirm` was visible at the goal-less draft approval boundary, but its required `--contract-id`, `--version`, and `--content-hash` options were absent from autocomplete, so `confirm --` returned no suggestions.
 - Candidates: (1) explicit confirm option map, (2) metadata-driven generation, (3) infer proof inputs or make them optional. Independent critiques ranked **1 > 2 > 3** and accepted #1.
 - RED failed **1/15**; GREEN added the single map entry. Focused autocomplete tests passed **15/15** and separate § 0.3 review returned **REVIEW: PASS**. Full revalidation and push are pending.
+
+
+## 2026-09-17 — UX loop critical-write approval preflight
+
+- Critical write commands opened approval before validating required inputs; malformed emergency-stop requests consumed approval interaction before returning the missing `--expected-version` error.
+- Candidates: (1) synchronous four-key preflight, (2) branch-local confirmation after validation, (3) lazy continuation. Independent critiques ranked **1 > 2 > 3** and accepted #1.
+- RED failed **1/36**; GREEN added preflight while retaining branch validation. Focused tests passed **36/36**; separate § 0.3 review: **REVIEW: PASS**. Full parent revalidation and push are pending.

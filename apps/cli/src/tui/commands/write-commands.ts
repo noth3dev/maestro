@@ -104,6 +104,8 @@ function isWriteError(value: unknown): value is WriteCommandResult {
 }
 
 
+const SERVER_AUTHORIZED_CRITICAL_KEYS = new Set(["admin:project-access", "goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
+
 export const TUI_WRITE_COMMAND_KEYS = new Set([
   "admin:project-access", "task-contract:create", "task-contract:amend", "task-contract:select-roles", "task-contract:confirm", "task-contract:launch",
   "goal:create", "goal:transition", "goal:pause", "goal:stop", "goal:resume", "goal:emergency-stop", "head:activate",
@@ -150,6 +152,47 @@ async function confirmIfCritical(context: WriteCommandContext, command: ParsedCo
   return approved === "cancelled" ? { title: "Cancelled", lines: ["No mutation was sent."] } : undefined;
 }
 
+function preflightServerAuthorizedCriticalCommand(
+  context: WriteCommandContext,
+  command: ParsedCommand,
+  key: string,
+): WriteCommandResult | undefined {
+  if (!SERVER_AUTHORIZED_CRITICAL_KEYS.has(key)) return undefined;
+  if (key === "admin:project-access") {
+    const operatorId = required(command, "operator-id");
+    const roles = required(command, "roles-json");
+    if (typeof operatorId !== "string") return operatorId;
+    if (typeof roles !== "string") return roles;
+    return undefined;
+  }
+  if (key === "goal:emergency-stop") {
+    const goalId = selectedGoal(command, context);
+    const expectedVersion = integer(command, "expected-version");
+    if (typeof goalId !== "string") return goalId;
+    if (typeof expectedVersion !== "number") return expectedVersion;
+    return undefined;
+  }
+  if (key === "metronome:safe-pause") {
+    const goalId = selectedGoal(command, context);
+    const challengeId = required(command, "challenge-id");
+    if (typeof goalId !== "string") return goalId;
+    if (typeof challengeId !== "string") return challengeId;
+    return undefined;
+  }
+  const goalId = selectedGoal(command, context);
+  const capabilityKind = required(command, "capability-kind");
+  const sessionId = required(command, "session-id");
+  const fullAccessMode = required(command, "full-access-mode");
+  if (typeof goalId !== "string") return goalId;
+  if (typeof capabilityKind !== "string") return capabilityKind;
+  if (typeof sessionId !== "string") return sessionId;
+  if (typeof fullAccessMode !== "string") return fullAccessMode;
+  if (fullAccessMode !== "retain_intermediate_approvals" && fullAccessMode !== "skip_intermediate_approvals") {
+    return unavailable("--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals");
+  }
+  return undefined;
+}
+
 export async function executeWriteCommand(context: WriteCommandContext, command: ParsedCommand): Promise<WriteCommandResult> {
   const definition = createCommandRegistry().find(command.name);
   const action = definition?.actions.find((item) => item.name === command.action);
@@ -159,15 +202,12 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   if (!TUI_WRITE_COMMAND_KEYS.has(key)) return unavailable(`${key} is not available from the typed Control Plane client`);
   // A local keypress is not durable authority. Only routes with an explicit
   // server-authorized critical boundary may proceed through local confirmation.
-  const serverAuthorizedCriticalKeys = new Set(["admin:project-access", "goal:emergency-stop", "metronome:safe-pause", "capability:select-full-access-mode"]);
-  if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run" && !serverAuthorizedCriticalKeys.has(key)) {
+  if (action.kind === "critical" && key !== "approval:approve-and-run" && key !== "critical-action:approve-and-run" && !SERVER_AUTHORIZED_CRITICAL_KEYS.has(key)) {
     return unavailable("Critical action requires the durable Control Plane approval path; no mutation was sent.");
   }
 
-  if (key === "capability:select-full-access-mode") {
-    const fullAccessMode = option(command, "full-access-mode");
-    if (fullAccessMode !== "retain_intermediate_approvals" && fullAccessMode !== "skip_intermediate_approvals") return unavailable("--full-access-mode must be retain_intermediate_approvals or skip_intermediate_approvals");
-  }
+  const criticalPreflight = preflightServerAuthorizedCriticalCommand(context, command, key);
+  if (criticalPreflight !== undefined) return criticalPreflight;
   const target = option(command, "target") ?? option(command, "goal-id") ?? context.goalId ?? context.projectId;
   const id = commandId(command);
   const cancelled = await confirmIfCritical(context, command, target, id);
