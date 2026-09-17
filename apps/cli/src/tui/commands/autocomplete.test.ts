@@ -946,6 +946,58 @@ describe("command argument autocomplete", () => {
     const attachment = String.raw`/conversation turn --text @'hello world`;
     expect(await provider.getSuggestions([attachment], 0, attachment.length, { signal, force: true })).toBeNull();
     expect(calls).toEqual([{ lines: [attachment], cursorLine: 0, cursorCol: attachment.length, force: false, signal }]);
+
+    calls.length = 0;
+    const attachmentPath = String.raw`/conversation turn --text @'./package`;
+    expect(await provider.getSuggestions([attachmentPath], 0, attachmentPath.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [attachmentPath], cursorLine: 0, cursorCol: attachmentPath.length, force: false, signal }]);
+
+    calls.length = 0;
+    const equalsAttachment = String.raw`/conversation turn --text=@'./package`;
+    expect(await provider.getSuggestions([equalsAttachment], 0, equalsAttachment.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [equalsAttachment], cursorLine: 0, cursorCol: equalsAttachment.length, force: false, signal }]);
+
+    calls.length = 0;
+    const embeddedAt = String.raw`/conversation turn --text x@'./package`;
+    expect(await provider.getSuggestions([embeddedAt], 0, embeddedAt.length, { signal, force: true })).not.toBeNull();
+    expect(calls).toEqual([
+      { lines: [embeddedAt], cursorLine: 0, cursorCol: embeddedAt.length, force: false, signal },
+      { lines: [embeddedAt], cursorLine: 0, cursorCol: embeddedAt.length, force: true, signal },
+    ]);
+
+    calls.length = 0;
+    const ordinaryAttachment = String.raw`/conversation turn --text @./package`;
+    expect(await provider.getSuggestions([ordinaryAttachment], 0, ordinaryAttachment.length, { signal, force: true })).not.toBeNull();
+    expect(calls).toEqual([
+      { lines: [ordinaryAttachment], cursorLine: 0, cursorCol: ordinaryAttachment.length, force: false, signal },
+      { lines: [ordinaryAttachment], cursorLine: 0, cursorCol: ordinaryAttachment.length, force: true, signal },
+    ]);
+
+    const applyCalls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; item: { value: string; label: string }; prefix: string }> = [];
+    const sentinel = { lines: ["attachment unchanged"], cursorLine: 7, cursorCol: 8 };
+    const passthroughProvider = createSlashCommandAutocompleteProvider({
+      getSuggestions: async () => null,
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        applyCalls.push({ lines, cursorLine, cursorCol, item, prefix });
+        return sentinel;
+      },
+    });
+    const attachmentItem = { value: "'./package.json'", label: "package.json" };
+    const attachmentPrefix = "'./pa";
+    expect(passthroughProvider.applyCompletion(
+      [attachmentPath],
+      0,
+      attachmentPath.length,
+      attachmentItem,
+      attachmentPrefix,
+    )).toBe(sentinel);
+    expect(applyCalls).toEqual([{
+      lines: [attachmentPath],
+      cursorLine: 0,
+      cursorCol: attachmentPath.length,
+      item: attachmentItem,
+      prefix: attachmentPrefix,
+    }]);
   });
 
   it("passes single-quote apply through outside single-line slash paths", () => {

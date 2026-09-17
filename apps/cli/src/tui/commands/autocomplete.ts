@@ -138,7 +138,7 @@ function activeQuotedValue(textBeforeCursor: string): string | undefined {
   return textBeforeCursor.slice(quoteStart + 1);
 }
 
-function activeSingleQuotedValue(textBeforeCursor: string): { start: number; value: string } | undefined {
+function activeSingleQuotedValue(textBeforeCursor: string): { start: number; value: string; isAttachment: boolean } | undefined {
   let quoteStart = -1;
   let quote: "\"" | "'" | undefined;
   let escaped = false;
@@ -163,8 +163,10 @@ function activeSingleQuotedValue(textBeforeCursor: string): { start: number; val
   }
   if (quote !== "'" || quoteStart === -1) return undefined;
   const opener = textBeforeCursor[quoteStart - 1];
-  if (quoteStart > 0 && opener !== " " && opener !== "\t" && opener !== "=") return undefined;
-  return { start: quoteStart, value: textBeforeCursor.slice(quoteStart + 1) };
+  const isAttachment = opener === "@"
+    && (quoteStart === 1 || textBeforeCursor[quoteStart - 2] === " " || textBeforeCursor[quoteStart - 2] === "\t" || textBeforeCursor[quoteStart - 2] === "=");
+  if (!isAttachment && quoteStart > 0 && opener !== " " && opener !== "\t" && opener !== "=") return undefined;
+  return { start: quoteStart, value: textBeforeCursor.slice(quoteStart + 1), isAttachment };
 }
 
 function replaceCharacter(text: string, index: number, replacement: string): string {
@@ -221,6 +223,7 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
 
       const normalizedTextBeforeCursor = normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(0, normalizedSlash.cursorCol);
       const singleQuote = activeSingleQuotedValue(normalizedTextBeforeCursor);
+      if (singleQuote?.isAttachment) return commandSuggestions;
       if (singleQuote !== undefined
         && !normalizedTextBeforeCursor.slice(singleQuote.start + 1).includes('"')
         && !normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(singleQuote.start + 1).includes('"')
@@ -245,6 +248,7 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
       if (lines.length === 1
         && slashArgumentText(lines, cursorLine, cursorCol) !== undefined
         && singleQuote !== undefined
+        && !singleQuote.isAttachment
         && isPathShapedValue(singleQuote.value)
         && prefix.startsWith("'")
         && textBeforeCursor.slice(singleQuote.start).startsWith(prefix)
