@@ -85,7 +85,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "concertmaster-report get": ["--goal-id"],
   "improvement-digests list": ["--goal-id"],
   "conversation create": ["--project-id", "--goal-id", "--model"],
-  "conversation get": ["--conversation-id", "--project-id"],
+  "conversation get": ["--conversation-id"],
   "conversation turn": ["--conversation-id", "--project-id", "--text"],
   "conversation cancel": ["--conversation-id", "--project-id"],
   "channel list": ["--goal-id"],

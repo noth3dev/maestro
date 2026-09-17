@@ -446,6 +446,12 @@ describe("command argument autocomplete", () => {
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);
   });
 
+  it("does not suggest an ignored project scope for conversation reads", () => {
+    const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
+    expect(conversation?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--conversation-id " })]);
+    expect(conversation?.getArgumentCompletions?.("get --p")).toEqual([]);
+  });
+
   it("suggests full-access and evidence options", () => {
     const items = createCommandAutocompleteItems(createCommandRegistry());
     const capability = items.find((item) => item.name === "capability");
