@@ -24,7 +24,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
   "critical-action approve-and-run": CRITICAL_APPROVAL_OPTIONS,
   "approval approve-and-run": CRITICAL_APPROVAL_OPTIONS,
-  "goal create": ["--project-id", "--contract-id", "--command-id"],
+  "goal create": ["--contract-id", "--command-id"],
   "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
   "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],
   "task-contract select-roles": ["--contract-id", "--outside-evidence", "--preview-needed"],
