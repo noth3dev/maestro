@@ -2258,3 +2258,9 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - The natural-language double-submit follow-up keeps `entry.ts` responsible for orchestration but moves generation state into one shared `conversation-turn-boundary.ts` state machine. `basic-shell.ts` reuses that state machine for its transcript-clear alias, avoiding two copies of the same capture/invalidate/isCurrent logic.
 - Three candidates were considered: (1) shared boundary extraction, (2) reset-closure extraction, and (3) generic async coordinator. Independent critique ranked **1 > 2 > 3** and selected #1. It also required stale create/hydration/terminal guards, preserved input history on stale returns, and removal of unrelated save-queue/reset/stream changes from the prepared WIP.
 - RED/GREEN and § 0.3 evidence are recorded in the corresponding `progress.md` entry.
+
+## 2026-09-17 — UX loop provider API-key post-submit modal ownership
+
+- The provider API-key flow had a post-secret gap: after `pendingProviderLogin` was cleared, `loginProvider` could remain unresolved while the editor and global shortcuts were active. The chosen fix extends the existing modal boundary to `providerLoginInFlight`, blocks non-empty submits without a queue, preserves explicit cancellation controls, and shows provider-first compact progress.
+- Candidates were (1) extend the existing modal boundary and guard late handoff, (2) keep the editor hidden until storage settles, and (3) add a FIFO submit mutex. Independent design critique ranked **1 > 2 > 3** and selected #1.
+- The first implementation review found three blockers: narrow compact text lost the provider id, stale handoff could publish/persist after stop, and tests covered only pure predicates. Remediation moved model/session publication behind a deferred-save freshness helper and added a stale-save regression. Fresh independent § 0.3 review returned **REVIEW: PASS**.

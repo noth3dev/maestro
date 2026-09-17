@@ -30,6 +30,11 @@ import {
   shouldIgnoreEmptySubmit,
   shouldCancelPendingProviderLogin,
   shouldConsumePendingProviderLoginBackgroundInput,
+  shouldConsumeProviderLoginInFlightBackgroundInput,
+  shouldBlockProviderLoginInFlightSubmit,
+  compactProviderLoginAcknowledgement,
+  isCurrentProviderLoginOperation,
+  persistProviderLoginModelSelection,
   shouldRetryAutomaticProviderSignIn,
   shouldConsumeAccountLoginBackgroundInput,
   noModelSelectionMessage,
@@ -238,6 +243,73 @@ describe("provider API-key modal input capture", () => {
       expect(shouldConsumePendingProviderLoginBackgroundInput("openai", data)).toBe(false);
     }
     expect(shouldConsumePendingProviderLoginBackgroundInput(undefined, "\x0b")).toBe(false);
+  });
+
+  it("consumes global shortcuts while provider credentials are being stored", () => {
+    for (const data of ["\x01", "\x05", "\x07", "\x0b", "\x12", "\x1f"]) {
+      expect(shouldConsumeProviderLoginInFlightBackgroundInput(true, data)).toBe(true);
+    }
+
+    for (const data of ["h", "hello", "\x7f", "\x1b[A", "\r", "\x1b", "\x03"]) {
+      expect(shouldConsumeProviderLoginInFlightBackgroundInput(true, data)).toBe(false);
+    }
+    expect(shouldConsumeProviderLoginInFlightBackgroundInput(false, "\x0b")).toBe(false);
+  });
+
+  it("blocks every non-empty submit without queueing or replaying it", () => {
+    expect(shouldBlockProviderLoginInFlightSubmit("hello", true)).toBe(true);
+    expect(shouldBlockProviderLoginInFlightSubmit("/goals list", true)).toBe(true);
+    expect(shouldBlockProviderLoginInFlightSubmit("   ", true)).toBe(false);
+    expect(shouldBlockProviderLoginInFlightSubmit("hello", false)).toBe(false);
+  });
+
+  it("keeps compact progress bounded and free of secret text", () => {
+    const message = compactProviderLoginAcknowledgement("openai", 80);
+    expect(message).toContain("openai");
+    expect(message).toContain("in progress");
+    expect(message).not.toContain("sk-secret");
+    expect(message.split("\n").every((line) => line.length <= 80)).toBe(true);
+  });
+
+  it("keeps the provider identity visible at compact widths", () => {
+    for (const width of [24, 30]) {
+      const message = compactProviderLoginAcknowledgement("anthropic", width);
+      expect(message.startsWith("anthropic")).toBe(true);
+      expect(message).toContain("login");
+      expect(message.length).toBeLessThanOrEqual(width);
+    }
+  });
+
+  it("does not publish a model selection after its save becomes stale", async () => {
+    let current = true;
+    let resolveSave!: () => void;
+    const save = new Promise<void>((resolve) => {
+      resolveSave = resolve;
+    });
+    const setSession = vi.fn();
+    const setModel = vi.fn();
+    const operation = persistProviderLoginModelSelection({
+      workspacePath: "/repo",
+      session: { workspacePath: "/repo", projectId: "project-1" },
+      model: "openai/gpt-5",
+      isCurrent: () => current,
+      save: () => save,
+      setSession,
+      setModel,
+    });
+
+    current = false;
+    resolveSave();
+
+    await expect(operation).resolves.toBe(false);
+    expect(setSession).not.toHaveBeenCalled();
+    expect(setModel).not.toHaveBeenCalled();
+  });
+
+  it("rejects late provider-login completion after stop or supersession", () => {
+    expect(isCurrentProviderLoginOperation(3, 3, false)).toBe(true);
+    expect(isCurrentProviderLoginOperation(3, 4, false)).toBe(false);
+    expect(isCurrentProviderLoginOperation(3, 3, true)).toBe(false);
   });
 });
 

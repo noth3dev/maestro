@@ -64,6 +64,7 @@ import {
   selectWorkspaceGoal,
   selectWorkspaceModel,
   startNewConversationSession,
+  type WorkspaceSession,
 } from "./session.js";
 import { subscribeToEvents } from "./activity-stream.js";
 import {
@@ -146,6 +147,10 @@ export function compactCommandResultAcknowledgement(text: string, width: number)
   return fitPlain(text, width);
 }
 
+export function compactProviderLoginAcknowledgement(providerId: "openai" | "anthropic", width: number): string {
+  return fitPlain(`${providerId} login in progress · please wait`, width);
+}
+
 export function compactTaskContractAcknowledgement(width: number): string {
   return [
     "Task contract ready · resize to review",
@@ -186,6 +191,29 @@ export function isCurrentAccountLoginOperation(controller: AbortController, acti
   return activeController === controller && !controller.signal.aborted;
 }
 
+export function isCurrentProviderLoginOperation(operationGeneration: number, activeGeneration: number, stopped: boolean): boolean {
+  return !stopped && operationGeneration === activeGeneration;
+}
+
+export async function persistProviderLoginModelSelection(options: {
+  workspacePath: string;
+  session: WorkspaceSession | undefined;
+  model: string;
+  isCurrent: () => boolean;
+  save: (session: WorkspaceSession) => Promise<void>;
+  setSession: (session: WorkspaceSession) => void;
+  setModel: (model: string) => void;
+}): Promise<boolean> {
+  if (!options.isCurrent()) return false;
+  const nextSession = selectWorkspaceModel(options.workspacePath, options.session, options.model);
+  if (!options.isCurrent()) return false;
+  await options.save(nextSession);
+  if (!options.isCurrent()) return false;
+  options.setSession(nextSession);
+  options.setModel(options.model);
+  return true;
+}
+
 export function firstAvailableModelIdentity(models: readonly Pick<ModelCatalogEntry, "identity">[]): string | undefined {
   const model = models[0];
   return model === undefined ? undefined : `${model.identity.provider}/${model.identity.id}`;
@@ -199,8 +227,8 @@ export function shouldCancelPendingProviderLogin(pendingProviderLogin: string | 
   return pendingProviderLogin !== undefined;
 }
 
-export function shouldConsumePendingProviderLoginBackgroundInput(pendingProviderLogin: string | undefined, data: string): boolean {
-  if (pendingProviderLogin === undefined || matchesKey(data, "ctrl+c") || matchesKey(data, "escape")) return false;
+function shouldConsumeProviderLoginBackgroundInput(active: boolean, data: string): boolean {
+  if (!active || matchesKey(data, "ctrl+c") || matchesKey(data, "escape")) return false;
   return (
     isSplashRestoreShortcut(data) ||
     matchesKey(data, "ctrl+k") ||
@@ -209,6 +237,18 @@ export function shouldConsumePendingProviderLoginBackgroundInput(pendingProvider
     matchesKey(data, "ctrl+r") ||
     matchesKey(data, "ctrl+a")
   );
+}
+
+export function shouldConsumePendingProviderLoginBackgroundInput(pendingProviderLogin: string | undefined, data: string): boolean {
+  return shouldConsumeProviderLoginBackgroundInput(pendingProviderLogin !== undefined, data);
+}
+
+export function shouldConsumeProviderLoginInFlightBackgroundInput(providerLoginInFlight: boolean, data: string): boolean {
+  return shouldConsumeProviderLoginBackgroundInput(providerLoginInFlight, data);
+}
+
+export function shouldBlockProviderLoginInFlightSubmit(text: string, providerLoginInFlight: boolean): boolean {
+  return providerLoginInFlight && text.trim() !== "";
 }
 
 export function shouldConsumeAccountLoginBackgroundInput(
@@ -459,11 +499,13 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               ? fitPlain(compactReview, width)
               : terminal.rows < 16 && state.connection.kind !== "connected"
                 ? compactConnectionRecoveryAcknowledgement(state.connection, width) ?? renderInputPlaceholder(state, width, terminal.rows < 16)
-                : compactModelList !== undefined && terminal.rows < 16
-                  ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
-                  : terminal.rows < 16 && project.kind !== "attached"
-                    ? compactProjectAttachmentNotice(compactProjectNotice, width)
-                    : compactTaskContractReview && terminal.rows < 16
+                : providerLoginInFlightProvider !== undefined && terminal.rows < 16
+                  ? compactProviderLoginAcknowledgement(providerLoginInFlightProvider, width)
+                  : compactModelList !== undefined && terminal.rows < 16
+                    ? compactModelListAcknowledgement(compactModelList.identities, width, compactModelList.unavailableLabel)
+                    : terminal.rows < 16 && project.kind !== "attached"
+                      ? compactProjectAttachmentNotice(compactProjectNotice, width)
+                      : compactTaskContractReview && terminal.rows < 16
                       ? compactTaskContractAcknowledgement(width)
                       : compactConversationResult !== undefined && terminal.rows < 16
                         ? compactConversationResult
@@ -505,6 +547,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const conversationTurnBoundary = createConversationTurnBoundary();
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
     let providerLoginInFlight = false;
+    let providerLoginInFlightProvider: "openai" | "anthropic" | undefined;
+    let providerLoginGeneration = 0;
     let accountLoginSelection: AccountLoginProviderSelection | undefined;
     let accountLoginState: "selecting" | "opening" | "waiting" | undefined;
     let accountLoginController: AbortController | undefined;
@@ -549,20 +593,33 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const appendError = (text: string): void => append({ kind: "error", text });
     const appendSuccess = (text: string): void => append({ kind: "success", text });
     const appendWarning = (text: string): void => append({ kind: "warning", text });
-    const handoffToAvailableModel = async (loginLabel: string): Promise<void> => {
+    const handoffToAvailableModel = async (loginLabel: string, isCurrent: () => boolean = () => true): Promise<void> => {
       if (client === undefined || !shouldHandoffAfterProviderLogin(resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model), session?.conversationId)) return;
       try {
         const models = await client.listModels();
+        if (!isCurrent()) return;
         const selectedModel = firstAvailableModelIdentity(models);
         if (selectedModel === undefined) {
           appendWarning(`${loginLabel} complete, but no model is available. Run /models list, then /model use --model provider/model.`);
         } else {
-          session = selectWorkspaceModel(sessionWorkspacePath, session, selectedModel);
-          await saveWorkspaceSession(session);
-          state.model = selectedModel;
+          const persisted = await persistProviderLoginModelSelection({
+            workspacePath: sessionWorkspacePath,
+            session,
+            model: selectedModel,
+            isCurrent,
+            save: saveWorkspaceSession,
+            setSession: (nextSession) => {
+              session = nextSession;
+            },
+            setModel: (model) => {
+              state.model = model;
+            },
+          });
+          if (!persisted) return;
           appendSuccess(`Model selected after ${loginLabel}: ${selectedModel}`);
         }
       } catch (error) {
+        if (!isCurrent()) return;
         const message = error instanceof Error ? error.message : "request failed";
         appendWarning(`${loginLabel} complete, but model discovery failed: ${message}. Run /models list, then /model use --model provider/model.`);
       }
@@ -985,6 +1042,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
 
     const submit = async (text: string) => {
       if (shouldIgnoreEmptySubmit(text, pendingProviderLogin)) return;
+      if (shouldBlockProviderLoginInFlightSubmit(text, providerLoginInFlight)) {
+        editor.setText(text);
+        appendWarning("Provider login in progress · please wait");
+        render();
+        return;
+      }
       if (shouldBlockConcurrentTurnSubmit(text, state.working === true, conversationTurnController, naturalSubmitInFlight)) {
         editor.setText(text);
         appendWarning("Turn in progress · Esc to stop");
@@ -994,22 +1057,32 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (text.trim() !== "") splash.dismiss();
       if (pendingProviderLogin !== undefined) {
         const providerId = pendingProviderLogin;
+        const operationGeneration = ++providerLoginGeneration;
         pendingProviderLogin = undefined;
         providerLoginInFlight = true;
+        providerLoginInFlightProvider = providerId;
         editor.hidden = false;
         editor.setText("");
+        render();
+        const isCurrentProviderLogin = (): boolean =>
+          isCurrentProviderLoginOperation(operationGeneration, providerLoginGeneration, stopped);
         try {
           if (client === undefined) {
             appendWarning("Provider login is unavailable until the Control Plane is connected.");
           } else {
             await client.loginProvider({ providerId, authMode: "api-key", secret: text });
+            if (!isCurrentProviderLogin()) return;
             appendSuccess(`Provider login complete: ${providerId} API key stored by the model gateway.`);
-            await handoffToAvailableModel("Provider login");
+            await handoffToAvailableModel("Provider login", isCurrentProviderLogin);
           }
         } catch (error) {
-          appendError(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
+          if (isCurrentProviderLogin()) appendError(`Provider login failed: ${error instanceof Error ? error.message : "request failed"}`);
         } finally {
-          providerLoginInFlight = false;
+          if (isCurrentProviderLogin()) {
+            providerLoginInFlight = false;
+            providerLoginInFlightProvider = undefined;
+            render();
+          }
         }
         return;
       }
@@ -1466,6 +1539,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       conversationTurnBoundary.invalidate();
       conversationDisplayBoundary.clear();
       naturalSubmitInFlight = false;
+      providerLoginGeneration += 1;
+      providerLoginInFlight = false;
+      providerLoginInFlightProvider = undefined;
       pendingConfirmation?.resolve("cancelled");
       pendingConfirmation = undefined;
       syncPendingDecisionState();
@@ -1489,7 +1565,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       });
 
     tui.addInputListener((data) => {
-      if (shouldConsumePendingProviderLoginBackgroundInput(pendingProviderLogin, data)) return { consume: true };
+      if (
+        shouldConsumePendingProviderLoginBackgroundInput(pendingProviderLogin, data) ||
+        shouldConsumeProviderLoginInFlightBackgroundInput(providerLoginInFlight, data)
+      )
+        return { consume: true };
       const reviewShortcut = matchesKey(data, "ctrl+a");
       const reviewAvailable = pendingConfirmation !== undefined || (state.pendingDecisions?.length ?? 0) > 0;
       if (compactHelp !== undefined) {
