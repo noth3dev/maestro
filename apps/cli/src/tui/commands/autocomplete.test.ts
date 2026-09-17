@@ -1025,6 +1025,32 @@ describe("command argument autocomplete", () => {
     expect(calls).toEqual(cases.map((current) => ({ ...current, item, prefix: "'./pa" })));
   });
 
+  it("passes multiline slash option apply through unchanged", async () => {
+    const getCalls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; force: boolean; signal: AbortSignal }> = [];
+    const applyCalls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; item: { value: string; label: string }; prefix: string }> = [];
+    const signal = new AbortController().signal;
+    const sentinel = { lines: ["unchanged"], cursorLine: 3, cursorCol: 4 };
+    const item = { value: "--goal-id ", label: "--goal-id" };
+    const provider = createSlashCommandAutocompleteProvider({
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        getCalls.push({ lines, cursorLine, cursorCol, force: options.force ?? false, signal: options.signal });
+        return Promise.resolve({ items: [item], prefix: "select --g" });
+      },
+      applyCompletion(lines, cursorLine, cursorCol, completion, prefix) {
+        applyCalls.push({ lines, cursorLine, cursorCol, item: completion, prefix });
+        return sentinel;
+      },
+    });
+    const lines = ["/goal select --g", "continuation"];
+    const cursorCol = lines[0]!.length;
+    const suggestions = await provider.getSuggestions(lines, 0, cursorCol, { signal, force: true });
+
+    expect(getCalls).toEqual([{ lines, cursorLine: 0, cursorCol, force: true, signal }]);
+    expect(suggestions).toEqual({ items: [item], prefix: "select --g" });
+    expect(provider.applyCompletion(lines, 0, cursorCol, item, "select --g")).toBe(sentinel);
+    expect(applyCalls).toEqual([{ lines, cursorLine: 0, cursorCol, item, prefix: "select --g" }]);
+  });
+
   it("preserves the action when applying slash option completion", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),

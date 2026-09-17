@@ -57,7 +57,7 @@ function slashOptionPrefix(
   item: AutocompleteItem,
   prefix: string,
 ): string | undefined {
-  if (cursorLine !== 0 || !item.value.startsWith("--")) return undefined;
+  if (lines.length !== 1 || cursorLine !== 0 || !item.value.startsWith("--")) return undefined;
   const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
   const trimmedText = textBeforeCursor.trimStart();
   if (!trimmedText.startsWith("/") || !/[ \t]/.test(trimmedText)) return undefined;
