@@ -1,10 +1,28 @@
 import type { AutocompleteItem, AutocompleteProvider, SlashCommand } from "@earendil-works/pi-tui";
 import type { CommandRegistry } from "./registry.js";
 
+function normalizeSlashContext(
+  lines: string[],
+  cursorLine: number,
+  cursorCol: number,
+): { lines: string[]; cursorLine: number; cursorCol: number } | undefined {
+  if (cursorLine !== 0) return undefined;
+  const line = lines[cursorLine] ?? "";
+  const textBeforeCursor = line.slice(0, cursorCol);
+  const trimmedText = textBeforeCursor.trimStart();
+  if (!trimmedText.startsWith("/")) return undefined;
+  const leadingOffset = textBeforeCursor.length - trimmedText.length;
+  if (leadingOffset === 0) return { lines, cursorLine, cursorCol };
+  const normalizedLines = [...lines];
+  normalizedLines[cursorLine] = line.slice(leadingOffset);
+  return { lines: normalizedLines, cursorLine, cursorCol: cursorCol - leadingOffset };
+}
+
 function slashArgumentText(lines: string[], cursorLine: number, cursorCol: number): string | undefined {
   if (cursorLine !== 0) return undefined;
   const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
-  return textBeforeCursor.startsWith("/") && textBeforeCursor.includes(" ") ? textBeforeCursor : undefined;
+  const trimmedText = textBeforeCursor.trimStart();
+  return trimmedText.startsWith("/") && trimmedText.includes(" ") ? textBeforeCursor : undefined;
 }
 
 function looksLikeFileValue(textBeforeCursor: string): boolean {
@@ -21,12 +39,22 @@ function looksLikeFileValue(textBeforeCursor: string): boolean {
 export function createSlashCommandAutocompleteProvider(provider: AutocompleteProvider): AutocompleteProvider {
   const wrapped: AutocompleteProvider = {
     async getSuggestions(lines, cursorLine, cursorCol, options) {
-      const textBeforeCursor = slashArgumentText(lines, cursorLine, cursorCol);
-      if (options.force !== true || textBeforeCursor === undefined) return provider.getSuggestions(lines, cursorLine, cursorCol, options);
+      const normalizedSlash = normalizeSlashContext(lines, cursorLine, cursorCol);
+      if (normalizedSlash === undefined) return provider.getSuggestions(lines, cursorLine, cursorCol, options);
 
-      const commandSuggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, { ...options, force: false });
+      const textBeforeCursor = slashArgumentText(lines, cursorLine, cursorCol);
+      if (options.force !== true || textBeforeCursor === undefined) {
+        return provider.getSuggestions(normalizedSlash.lines, normalizedSlash.cursorLine, normalizedSlash.cursorCol, options);
+      }
+
+      const commandSuggestions = await provider.getSuggestions(
+        normalizedSlash.lines,
+        normalizedSlash.cursorLine,
+        normalizedSlash.cursorCol,
+        { ...options, force: false },
+      );
       if (commandSuggestions?.items.length || !looksLikeFileValue(textBeforeCursor)) return commandSuggestions;
-      return provider.getSuggestions(lines, cursorLine, cursorCol, options);
+      return provider.getSuggestions(normalizedSlash.lines, normalizedSlash.cursorLine, normalizedSlash.cursorCol, options);
     },
     applyCompletion: (...args) => provider.applyCompletion(...args),
   };

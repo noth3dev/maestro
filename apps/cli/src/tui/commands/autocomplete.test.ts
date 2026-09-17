@@ -727,4 +727,44 @@ describe("command argument autocomplete", () => {
     const optionValue = await provider.getSuggestions(["/goal select --goal-id package"], 0, 30, { signal, force: true });
     expect(optionValue).toBeNull();
   });
+
+  it("keeps parser-supported leading-whitespace slash commands on command completion", async () => {
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    const signal = new AbortController().signal;
+
+    const root = await provider.getSuggestions(["  /go"], 0, 5, { signal, force: false });
+    const goal = root?.items.find((item) => item.value === "goal");
+    expect(goal).toBeDefined();
+    expect(root).toBeDefined();
+    if (root === undefined || goal === undefined) throw new Error("expected root command completion");
+    expect(provider.applyCompletion(["  /go"], 0, 5, goal, root.prefix)).toMatchObject({
+      lines: ["  /goal "],
+      cursorLine: 0,
+      cursorCol: 8,
+    });
+
+    const actions = await provider.getSuggestions(["\t/goal "], 0, 7, { signal, force: true });
+    const select = actions?.items.find((item) => item.value === "select ");
+    expect(select).toBeDefined();
+    expect(actions).toBeDefined();
+    if (actions === undefined || select === undefined) throw new Error("expected action completion");
+    expect(provider.applyCompletion(["\t/goal "], 0, 7, select, actions.prefix)).toMatchObject({
+      lines: ["\t/goal select "],
+      cursorLine: 0,
+      cursorCol: 14,
+    });
+
+    const observed: Array<{ lines: string[]; cursorLine: number; cursorCol: number; force: boolean }> = [];
+    const passthrough = createSlashCommandAutocompleteProvider({
+      getSuggestions(lines, cursorLine, cursorCol, options) {
+        observed.push({ lines, cursorLine, cursorCol, force: options.force ?? false });
+        return Promise.resolve({ items: [{ value: "@apps/", label: "@apps/" }], prefix: "@apps" });
+      },
+      applyCompletion: () => ({ lines: [], cursorLine: 0, cursorCol: 0 }),
+    });
+    await passthrough.getSuggestions(["  @apps"], 0, 7, { signal, force: true });
+    expect(observed).toEqual([{ lines: ["  @apps"], cursorLine: 0, cursorCol: 7, force: true }]);
+  });
 });
