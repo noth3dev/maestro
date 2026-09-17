@@ -86,6 +86,21 @@ describe("command argument autocomplete", () => {
     );
   });
 
+  it("suggests critical-action request options", () => {
+    const criticalAction = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "critical-action");
+    expect(criticalAction?.getArgumentCompletions?.("request --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
+        expect.objectContaining({ value: "--action " }),
+        expect.objectContaining({ value: "--target " }),
+        expect.objectContaining({ value: "--policy-version " }),
+        expect.objectContaining({ value: "--budget-effect-cents " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(criticalAction?.getArgumentCompletions?.("request --pol")).toEqual([expect.objectContaining({ value: "--policy-version " })]);
+  });
+
   it("suggests task contract creation options", () => {
     const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
     expect(taskContract?.getArgumentCompletions?.("create --su")).toEqual([expect.objectContaining({ value: "--substance-json " })]);

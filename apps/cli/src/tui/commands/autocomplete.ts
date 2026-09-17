@@ -3,6 +3,7 @@ import type { CommandRegistry } from "./registry.js";
 
 const options: Record<string, readonly string[]> = {
   "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
+  "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
   "goal create": ["--project-id", "--contract-id", "--command-id"],
   "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
   "task-contract get": ["--contract-id"],

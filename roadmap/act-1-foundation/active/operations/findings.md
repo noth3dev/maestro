@@ -2299,3 +2299,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - A later non-empty submit could clear or overwrite the sole pending critical approval resolver, allowing an ordinary write to run while the first approval became orphaned.
 - Candidates: (1) submit-level pending-approval guard, (2) split write/confirmation guards, (3) FIFO confirmation queue. Independent critiques ranked **1 > 2 > 3** and accepted #1.
 - RED failed **2/58**; GREEN blocks and retains non-empty submissions with bounded approval guidance. Focused entry tests passed **58/58** and separate § 0.3 review returned **REVIEW: PASS**. Full revalidation and push are pending.
+
+
+## 2026-09-17 — UX loop critical-action request autocomplete
+
+- `/critical-action request` was visible in the TUI palette but `request --` returned no options, despite required handler inputs.
+- Candidates: (1) explicit autocomplete map entry, (2) registry metadata generation, (3) palette usage text. Independent design critique ranked **1 > 2 > 3** and accepted #1.
+- RED failed **1/15**; GREEN added the six truthful options. Focused autocomplete tests passed **16/16** and separate § 0.3 review with GPT-5.6 Sol returned **REVIEW: PASS**. Full revalidation and push are pending.
