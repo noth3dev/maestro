@@ -36,6 +36,12 @@ describe("command argument autocomplete", () => {
     expect(report?.getArgumentCompletions?.("generate --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
+  it("suggests the Goal scope for Concertmaster report reads", () => {
+    const report = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "concertmaster-report");
+    expect(report?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(report?.getArgumentCompletions?.("get --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests projection navigation options, including typed prefixes", () => {
     const projection = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "projection");
     expect(projection?.getArgumentCompletions?.("read --g")).toEqual([
