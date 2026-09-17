@@ -40,6 +40,7 @@ import {
 } from "./entry.js";
 import type { TuiShellState } from "./components/shell.js";
 import { addConversationMessage, applyConversationEvent, createConversationTranscript } from "./conversation-transcript.js";
+import { createConversationTurnBoundary } from "./conversation-turn-boundary.js";
 
 const basicShellContext = (overrides: Partial<Parameters<typeof executeBasicShellCommand>[1]> = {}) => ({
   clearTranscript: vi.fn(),
@@ -130,6 +131,19 @@ describe("compact command result presentation", () => {
   it("keeps ordinary command results bounded for the compact dock", () => {
     expect(compactCommandResultAcknowledgement("Goals: a very long result", 12)).toBe("Goals: a ve…");
     expect(compactCommandResultAcknowledgement("Goals: ok", 80)).toBe("Goals: ok");
+  });
+});
+
+describe("conversation turn ownership", () => {
+  it("invalidates a pending turn when the conversation view resets", () => {
+    const boundary = createConversationTurnBoundary();
+    const oldGeneration = boundary.capture();
+
+    boundary.invalidate();
+
+    expect(boundary.isCurrent(oldGeneration)).toBe(false);
+    const nextGeneration = boundary.capture();
+    expect(boundary.isCurrent(nextGeneration)).toBe(true);
   });
 });
 

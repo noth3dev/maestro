@@ -21,6 +21,7 @@ import { runLiveActivityStream } from "./activity-live-stream.js";
 import { refreshDashboardState } from "./dashboard-refresh.js";
 import { selectedConversationGoalId } from "./dashboard-state.js";
 import { loadConversationHistory } from "./conversation-history.js";
+import { createConversationTurnBoundary } from "./conversation-turn-boundary.js";
 import { pendingDecisionsForView } from "./pending-decisions.js";
 import { draftForPresentation } from "./draft-presentation.js";
 import { priorTaskContractDraft, taskContractDraftForConversation } from "./conversation-draft.js";
@@ -501,6 +502,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     let activityController: AbortController | undefined;
     let conversationTurnController: AbortController | undefined;
     let naturalSubmitInFlight = false;
+    const conversationTurnBoundary = createConversationTurnBoundary();
     let pendingProviderLogin: "openai" | "anthropic" | undefined;
     let providerLoginInFlight = false;
     let accountLoginSelection: AccountLoginProviderSelection | undefined;
@@ -1012,6 +1014,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         return;
       }
       let ownsNaturalSubmit = false;
+      let conversationTurnGeneration: number | undefined;
       try {
         const parsed = parseInput(text);
         if (parsed.kind === "natural-language") {
@@ -1031,6 +1034,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           await executeBasicShellCommand(parsed.name, {
             clearTranscript: () => {
               activityHistoryBoundary.clear();
+              conversationTurnBoundary.invalidate();
               conversationDisplayBoundary.clear();
               conversationStreamController?.abort();
               conversationStreamController = undefined;
@@ -1110,6 +1114,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             await retryConnection();
           } else if (parsed.action === "new") {
             invalidateDashboardRefreshes();
+            conversationTurnBoundary.invalidate();
             conversationStreamController?.abort();
             conversationStreamController = undefined;
             conversationHydrationGeneration += 1;
@@ -1123,6 +1128,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             appendSuccess("New Concertmaster conversation started. Durable Goal state was preserved.");
           } else if (parsed.action === "attach") {
             invalidateDashboardRefreshes();
+            conversationTurnBoundary.invalidate();
             conversationStreamController?.abort();
             conversationStreamController = undefined;
             conversationHydrationGeneration += 1;
@@ -1330,12 +1336,18 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             if (session.conversationId === undefined && configuredModel === undefined) {
               appendWarning(noModelSelectionMessage());
             } else {
+              const turnGeneration = conversationTurnBoundary.capture();
+              conversationTurnGeneration = turnGeneration;
               if (session.conversationId === undefined) {
                 const conversationGoalId = selectedConversationGoalId(state.goal, session.goalId);
                 const created = await client.createConversation(
                   buildConversationInput(project.projectId, conversationGoalId, configuredModel!),
                   { idempotencyKey: randomUUID() },
                 );
+                if (!conversationTurnBoundary.isCurrent(turnGeneration)) {
+                  editor.addToHistory(text);
+                  return;
+                }
                 session = {
                   workspacePath: sessionWorkspacePath,
                   projectId: project.projectId,
@@ -1351,6 +1363,10 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               const activeConversationId = session.conversationId;
               if (activeConversationId === undefined) throw new Error("Conversation was not created");
               await conversationHydration;
+              if (!conversationTurnBoundary.isCurrent(turnGeneration)) {
+                editor.addToHistory(text);
+                return;
+              }
               conversation = addConversationMessage(conversation, "user", text);
               render();
               const streamController = new AbortController();
@@ -1389,7 +1405,7 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                   },
                   occurredAt: result.turn.createdAt,
                 };
-                if (conversationDisplayBoundary.isCurrent(displayGeneration)) {
+                if (conversationTurnBoundary.isCurrent(turnGeneration) && conversationDisplayBoundary.isCurrent(displayGeneration)) {
                   conversation = applyConversationEvent(conversation, terminalEvent);
                   if (terminal.rows < 16) {
                     compactConversationResult = compactConversationAcknowledgement(conversation, terminal.columns);
@@ -1410,7 +1426,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
           }
         }
       } catch (error) {
-        appendError(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
+        if (conversationTurnGeneration === undefined || conversationTurnBoundary.isCurrent(conversationTurnGeneration))
+          appendError(`Input error: ${error instanceof Error ? error.message : "invalid input"}`);
       } finally {
         if (ownsNaturalSubmit) naturalSubmitInFlight = false;
       }
@@ -1446,6 +1463,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (stopped) return;
       stopped = true;
       invalidateDashboardRefreshes();
+      conversationTurnBoundary.invalidate();
+      conversationDisplayBoundary.clear();
+      naturalSubmitInFlight = false;
       pendingConfirmation?.resolve("cancelled");
       pendingConfirmation = undefined;
       syncPendingDecisionState();

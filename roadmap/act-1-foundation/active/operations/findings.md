@@ -2252,3 +2252,9 @@ Conclusion: removing only the TUI Goal guard would route into an API/schema that
 ## 2026-09-16 — Plan 7-e §S2 finding resolved by Plan 9 S1–S4
 
 The separately scoped Plan 9 work shipped the missing boundary without fabricating a Goal or weakening the approval gate. S1's project-scoped nullable-Goal conversation and persistence work merged as `eb9407d`; S2's goal-less-only Overture Task Contract drafting tool merged as `c8bb854`; S3's TUI route merged as `c093965`; and S4's Carnegie route merged as `02c3bef`. The focused shipped-test set covers durable project scope, the Task Contract creator boundary, the goal-less-only tool grant, the explicit review/confirmation/launch boundary, Goal-bound regressions, and both clients using the same backend path. The original repository-boundary finding is closed for the Plan 9 code/test scope. A real PostgreSQL drafting-to-row run and live provider behavior are not claimed; external effects and production deployment remain unclaimed.
+
+## 2026-09-17 — UX loop conversation-turn boundary extraction
+
+- The natural-language double-submit follow-up keeps `entry.ts` responsible for orchestration but moves generation state into one shared `conversation-turn-boundary.ts` state machine. `basic-shell.ts` reuses that state machine for its transcript-clear alias, avoiding two copies of the same capture/invalidate/isCurrent logic.
+- Three candidates were considered: (1) shared boundary extraction, (2) reset-closure extraction, and (3) generic async coordinator. Independent critique ranked **1 > 2 > 3** and selected #1. It also required stale create/hydration/terminal guards, preserved input history on stale returns, and removal of unrelated save-queue/reset/stream changes from the prepared WIP.
+- RED/GREEN and § 0.3 evidence are recorded in the corresponding `progress.md` entry.

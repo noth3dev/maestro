@@ -1,5 +1,9 @@
 import type { ConversationTranscriptState } from "./conversation-transcript.js";
 
+import { createTranscriptClearBoundary } from "./conversation-turn-boundary.js";
+
+export { createTranscriptClearBoundary };
+
 export type BasicShellCommandName = "clear" | "exit" | "quit" | "version" | "copy";
 
 export interface BasicShellCommandContext {
@@ -9,22 +13,6 @@ export interface BasicShellCommandContext {
   copyToClipboard: (text: string) => Promise<void>;
   write: (text: string) => void;
   version: string;
-}
-
-/** Generation gate used to reject asynchronous transcript work started before `/clear`. */
-export function createTranscriptClearBoundary(): {
-  capture: () => number;
-  clear: () => void;
-  isCurrent: (generation: number) => boolean;
-} {
-  let generation = 0;
-  return {
-    capture: () => generation,
-    clear: () => {
-      generation += 1;
-    },
-    isCurrent: (candidate) => candidate === generation,
-  };
 }
 
 /** Return the latest non-empty assistant or system transcript content in display order. */
