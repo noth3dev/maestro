@@ -32,6 +32,8 @@ import {
   shouldConsumePendingProviderLoginBackgroundInput,
   shouldConsumeProviderLoginInFlightBackgroundInput,
   shouldBlockProviderLoginInFlightSubmit,
+  shouldBlockPendingConfirmationSubmit,
+  approvalPendingAcknowledgement,
   compactProviderLoginAcknowledgement,
   isCurrentProviderLoginOperation,
   persistProviderLoginModelSelection,
@@ -235,6 +237,20 @@ describe("account-login modal input capture", () => {
     }
     expect(shouldConsumeAccountLoginSelectingBackgroundInput("opening", "\x07")).toBe(false);
     expect(shouldConsumeAccountLoginSelectingBackgroundInput(undefined, "\x07")).toBe(false);
+  });
+});
+
+describe("pending approval submission ownership", () => {
+  it("blocks non-empty submissions without queuing while approval is pending", () => {
+    expect(shouldBlockPendingConfirmationSubmit("/goal pause --goal-id goal-1 --expected-version 1", true)).toBe(true);
+    expect(shouldBlockPendingConfirmationSubmit("hello", true)).toBe(true);
+    expect(shouldBlockPendingConfirmationSubmit("   ", true)).toBe(false);
+    expect(shouldBlockPendingConfirmationSubmit("hello", false)).toBe(false);
+  });
+
+  it("keeps pending approval guidance bounded and actionable", () => {
+    expect(approvalPendingAcknowledgement(80)).toBe("Approval pending · y approve · n reject · ctrl+a review");
+    expect(approvalPendingAcknowledgement(24).length).toBeLessThanOrEqual(24);
   });
 });
 

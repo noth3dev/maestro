@@ -167,6 +167,14 @@ export function compactConnectionRecoveryAcknowledgement(connection: TuiShellSta
   return fitPlain("ctrl+r retry · /help", width);
 }
 
+export function shouldBlockPendingConfirmationSubmit(text: string, pendingConfirmation: boolean): boolean {
+  return pendingConfirmation && text.trim() !== "";
+}
+
+export function approvalPendingAcknowledgement(width: number): string {
+  return fitPlain("Approval pending · y approve · n reject · ctrl+a review", width);
+}
+
 export function shouldBlockConcurrentTurnSubmit(
   text: string,
   working: boolean,
@@ -1060,6 +1068,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       if (shouldBlockProviderLoginInFlightSubmit(text, providerLoginInFlight)) {
         editor.setText(text);
         appendWarning("Provider login in progress · please wait");
+        render();
+        return;
+      }
+      if (shouldBlockPendingConfirmationSubmit(text, pendingConfirmation !== undefined)) {
+        editor.setText(text);
+        appendWarning(approvalPendingAcknowledgement(terminal.columns));
         render();
         return;
       }

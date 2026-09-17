@@ -2292,3 +2292,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - Critical write commands opened approval before validating required inputs; malformed emergency-stop requests consumed approval interaction before returning the missing `--expected-version` error.
 - Candidates: (1) synchronous four-key preflight, (2) branch-local confirmation after validation, (3) lazy continuation. Independent critiques ranked **1 > 2 > 3** and accepted #1.
 - RED failed **1/36**; GREEN added preflight while retaining branch validation. Focused tests passed **36/36**; separate § 0.3 review: **REVIEW: PASS**. Full parent revalidation and push are pending.
+
+
+## 2026-09-17 — UX loop pending critical approval ownership
+
+- A later non-empty submit could clear or overwrite the sole pending critical approval resolver, allowing an ordinary write to run while the first approval became orphaned.
+- Candidates: (1) submit-level pending-approval guard, (2) split write/confirmation guards, (3) FIFO confirmation queue. Independent critiques ranked **1 > 2 > 3** and accepted #1.
+- RED failed **2/58**; GREEN blocks and retains non-empty submissions with bounded approval guidance. Focused entry tests passed **58/58** and separate § 0.3 review returned **REVIEW: PASS**. Full revalidation and push are pending.
