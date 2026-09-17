@@ -87,7 +87,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "conversation create": ["--goal-id", "--model"],
   "conversation get": ["--conversation-id"],
   "conversation turn": ["--conversation-id", "--text"],
-  "conversation cancel": ["--conversation-id", "--project-id"],
+  "conversation cancel": ["--conversation-id"],
   "channel list": ["--goal-id"],
   "channel read": ["--goal-id", "--channel-kind", "--channel-id"],
   "channel post": ["--goal-id", "--channel-kind", "--channel-id", "--content", "--command-id"],

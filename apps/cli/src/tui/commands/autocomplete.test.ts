@@ -474,6 +474,12 @@ describe("command argument autocomplete", () => {
     expect(conversation?.getArgumentCompletions?.("get --p")).toEqual([]);
   });
 
+  it("does not suggest an ignored project scope for conversation cancellation", () => {
+    const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
+    expect(conversation?.getArgumentCompletions?.("cancel --")).toEqual([expect.objectContaining({ value: "--conversation-id " })]);
+    expect(conversation?.getArgumentCompletions?.("cancel --p")).toEqual([]);
+  });
+
   it("suggests full-access and evidence options", () => {
     const items = createCommandAutocompleteItems(createCommandRegistry());
     const capability = items.find((item) => item.name === "capability");
