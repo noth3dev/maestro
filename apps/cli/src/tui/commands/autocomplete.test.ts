@@ -340,6 +340,12 @@ describe("command argument autocomplete", () => {
     expect(plans?.getArgumentCompletions?.("revise --rea")).toEqual([expect.objectContaining({ value: "--reason " })]);
   });
 
+  it("suggests the Goal scope for improvement digest lists", () => {
+    const digests = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "improvement-digests");
+    expect(digests?.getArgumentCompletions?.("list --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(digests?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests the Goal scope for Encore Council lists", () => {
     const councils = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "encore-council");
     expect(councils?.getArgumentCompletions?.("list --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);

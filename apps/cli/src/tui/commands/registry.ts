@@ -80,6 +80,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],
   "concertmaster-report get": ["--goal-id"],
+  "improvement-digests list": ["--goal-id"],
   "conversation create": ["--project-id", "--goal-id", "--model"],
   "conversation get": ["--conversation-id", "--project-id"],
   "conversation turn": ["--conversation-id", "--project-id", "--text"],
