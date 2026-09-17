@@ -138,6 +138,12 @@ describe("command argument autocomplete", () => {
     expect(metronome?.getArgumentCompletions?.("challenge --find")).toEqual([expect.objectContaining({ value: "--finding-ids " })]);
   });
 
+  it("suggests the Goal scope for Metronome challenge listing", () => {
+    const challenges = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "metronome-challenges");
+    expect(challenges?.getArgumentCompletions?.("list --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(challenges?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests worker certification identity and payload options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("certify --")).toEqual(
