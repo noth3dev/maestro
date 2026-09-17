@@ -70,6 +70,12 @@ describe("command argument autocomplete", () => {
     expect(workers?.getArgumentCompletions?.("get --wor")).toEqual([expect.objectContaining({ value: "--worker-id " })]);
   });
 
+  it("suggests the required worker identity for the plural workers get alias", () => {
+    const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "workers");
+    expect(workers?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--worker-id " })]);
+    expect(workers?.getArgumentCompletions?.("get --wor")).toEqual([expect.objectContaining({ value: "--worker-id " })]);
+  });
+
   it("suggests the required worker identity for worker cancellation", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("cancel --")).toEqual([expect.objectContaining({ value: "--worker-id " })]);

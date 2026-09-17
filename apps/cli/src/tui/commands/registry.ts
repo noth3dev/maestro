@@ -59,6 +59,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "worker observe": ["--worker-id"],
   "worker list": ["--goal-id"],
   "workers list": ["--goal-id"],
+  "workers get": ["--worker-id"],
   "budget get": ["--goal-id"],
   "worker certify": ["--worker-id", "--certification-json"],
   "worker certify-conditional": ["--worker-id", "--kind", "--certification-json"],
