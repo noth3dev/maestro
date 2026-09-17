@@ -59,6 +59,13 @@ describe("command argument autocomplete", () => {
     }
   });
 
+  it("does not suggest the unsupported reason option for goal lifecycle actions", () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
+    for (const action of ["pause", "resume", "stop", "emergency-stop"]) {
+      expect(goal?.getArgumentCompletions?.(`${action} --rea`), action).toEqual([]);
+    }
+  });
+
   it("suggests the exact model option for conversations", () => {
     const conversation = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "conversation");
     expect(conversation?.getArgumentCompletions?.("create --m")).toEqual([expect.objectContaining({ value: "--model " })]);
