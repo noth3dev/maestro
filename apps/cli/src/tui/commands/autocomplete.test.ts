@@ -471,6 +471,16 @@ describe("command argument autocomplete", () => {
     expect(evidence?.getArgumentCompletions?.("capture --c")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "--content-base64 " }), expect.objectContaining({ value: "--correlation-id " })]));
   });
 
+  it("does not suggest ignored project scope for evidence actions", () => {
+    const evidence = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "evidence");
+    for (const action of ["capture", "list", "bundle"]) {
+      expect(evidence?.getArgumentCompletions?.(`${action} --p`), action).toEqual([]);
+    }
+    for (const action of ["list", "bundle"]) {
+      expect(evidence?.getArgumentCompletions?.(`${action} --`), action).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    }
+  });
+
   it("suggests worker message and git worker-advance actions", () => {
     const items = createCommandAutocompleteItems(createCommandRegistry());
     expect(items.find((item) => item.name === "worker")?.getArgumentCompletions?.("me")).toEqual([expect.objectContaining({ value: "message" })]);

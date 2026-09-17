@@ -93,9 +93,9 @@ const actionOptions: Record<string, readonly string[]> = {
   "channel post": ["--goal-id", "--channel-kind", "--channel-id", "--content", "--command-id"],
   "session attach": ["--project-id", "--project-index"],
   "capability select-full-access-mode": ["--goal-id", "--project-id", "--capability-kind", "--session-id", "--full-access-mode"],
-  "evidence capture": ["--goal-id", "--project-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
-  "evidence list": ["--goal-id", "--project-id"],
-  "evidence bundle": ["--goal-id", "--project-id"],
+  "evidence capture": ["--goal-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
+  "evidence list": ["--goal-id"],
+  "evidence bundle": ["--goal-id"],
   "worker message": ["--worker-id", "--project-id", "--message", "--command-id"],
   "git worker-advance": ["--worker-id", "--project-id", "--message", "--evidence-references", "--command-id"],
 };
