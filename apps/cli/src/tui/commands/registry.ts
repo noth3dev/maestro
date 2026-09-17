@@ -54,6 +54,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "metronome correct": ["--challenge-id", "--correction-request"],
   "metronome resolve": ["--challenge-id", "--reason", "--command-id"],
   "encore review": ["--goal-id", "--review-json", "--command-id"],
+  "encore-council list": ["--goal-id"],
   "metronome safe-pause": ["--goal-id", "--challenge-id", "--command-id"],
   "metronome-challenges list": ["--goal-id"],
   "worker get": ["--worker-id"],
