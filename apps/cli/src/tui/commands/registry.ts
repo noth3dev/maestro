@@ -56,6 +56,8 @@ const actionOptions: Record<string, readonly string[]> = {
   "budget get": ["--goal-id"],
   "worker certify": ["--worker-id", "--certification-json"],
   "certification certify": ["--worker-id", "--certification-json"],
+  "certifications list": ["--goal-id"],
+  "certification list": ["--goal-id"],
   "git goal-branch": ["--repository-path", "--branch-name", "--base-revision"],
   "worker accept": ["--worker-id", "--reason"],
   "events list": ["--after"],

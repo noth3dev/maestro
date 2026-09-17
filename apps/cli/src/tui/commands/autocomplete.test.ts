@@ -122,6 +122,16 @@ describe("command argument autocomplete", () => {
     expect(certification?.getArgumentCompletions?.("certify --cert")).toEqual([expect.objectContaining({ value: "--certification-json " })]);
   });
 
+  it("suggests Goal scope for plural and singular certification reads", () => {
+    const autocomplete = createCommandAutocompleteItems(createCommandRegistry());
+    const plural = autocomplete.find((item) => item.name === "certifications");
+    const singular = autocomplete.find((item) => item.name === "certification");
+    expect(plural?.getArgumentCompletions?.("list --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(plural?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(singular?.getArgumentCompletions?.("list --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(singular?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+  });
+
   it("suggests worker accept identity and reason options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("accept --")).toEqual(
