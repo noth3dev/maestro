@@ -2278,3 +2278,10 @@ The separately scoped Plan 9 work shipped the missing boundary without fabricati
 - The account-login provider chooser allowed global shortcuts to escape while selecting: Ctrl+G/E/R/K/A and Ctrl+/ ran global actions before the chooser branch, even though the chooser remained active.
 - Candidates: (1) narrow selecting-state background guard before global dispatch, (2) move the whole chooser branch earlier, (3) guard each action handler. Independent critiques ranked **1 > 2 > 3** and accepted #1.
 - RED added the shortcut/control matrix; GREEN consumes only recognized global shortcuts and preserves navigation/cancellation. Focused entry tests passed **56/56**. Separate § 0.3 review: **REVIEW: PASS**. Full revalidation and push are pending.
+
+
+## 2026-09-17 — UX loop Task Contract approval autocomplete
+
+- `/task-contract confirm` was visible at the goal-less draft approval boundary, but its required `--contract-id`, `--version`, and `--content-hash` options were absent from autocomplete, so `confirm --` returned no suggestions.
+- Candidates: (1) explicit confirm option map, (2) metadata-driven generation, (3) infer proof inputs or make them optional. Independent critiques ranked **1 > 2 > 3** and accepted #1.
+- RED failed **1/15**; GREEN added the single map entry. Focused autocomplete tests passed **15/15** and separate § 0.3 review returned **REVIEW: PASS**. Full revalidation and push are pending.
