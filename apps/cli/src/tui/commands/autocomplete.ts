@@ -225,6 +225,8 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
       const singleQuote = activeSingleQuotedValue(normalizedTextBeforeCursor);
       if (singleQuote?.isAttachment) return commandSuggestions;
       if (singleQuote !== undefined
+        && normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(singleQuote.start + 1).includes('"')) return commandSuggestions;
+      if (singleQuote !== undefined
         && !normalizedTextBeforeCursor.slice(singleQuote.start + 1).includes('"')
         && !normalizedSlash.lines[normalizedSlash.cursorLine]!.slice(singleQuote.start + 1).includes('"')
         && isPathShapedValue(singleQuote.value)) {

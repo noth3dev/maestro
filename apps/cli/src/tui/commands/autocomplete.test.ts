@@ -973,6 +973,22 @@ describe("command argument autocomplete", () => {
       { lines: [ordinaryAttachment], cursorLine: 0, cursorCol: ordinaryAttachment.length, force: true, signal },
     ]);
 
+    calls.length = 0;
+    const embeddedQuoteText = String.raw`/conversation turn --text 'hello "/foo`;
+    expect(await provider.getSuggestions([embeddedQuoteText], 0, embeddedQuoteText.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [embeddedQuoteText], cursorLine: 0, cursorCol: embeddedQuoteText.length, force: false, signal }]);
+
+    calls.length = 0;
+    const quotedPathWithDoubleQuote = String.raw`/git goal-branch --repository-path './foo"/bar`;
+    expect(await provider.getSuggestions([quotedPathWithDoubleQuote], 0, quotedPathWithDoubleQuote.length, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [quotedPathWithDoubleQuote], cursorLine: 0, cursorCol: quotedPathWithDoubleQuote.length, force: false, signal }]);
+
+    calls.length = 0;
+    const suffixDoubleQuote = String.raw`/git goal-branch --repository-path './foo"/bar`;
+    const suffixDoubleQuoteCursor = suffixDoubleQuote.indexOf('"');
+    expect(await provider.getSuggestions([suffixDoubleQuote], 0, suffixDoubleQuoteCursor, { signal, force: true })).toBeNull();
+    expect(calls).toEqual([{ lines: [suffixDoubleQuote], cursorLine: 0, cursorCol: suffixDoubleQuoteCursor, force: false, signal }]);
+
     const applyCalls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; item: { value: string; label: string }; prefix: string }> = [];
     const sentinel = { lines: ["attachment unchanged"], cursorLine: 7, cursorCol: 8 };
     const passthroughProvider = createSlashCommandAutocompleteProvider({
