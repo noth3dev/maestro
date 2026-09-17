@@ -50,6 +50,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "mission-bundle get": ["--council-id", "--department-id", "--plan-version", "--item-id"],
   "worker spawn": ["--council-id", "--department-id", "--worker-json", "--command-id"],
   "worker get": ["--worker-id"],
+  "worker cancel": ["--worker-id"],
   "worker accept": ["--worker-id", "--reason"],
   "events list": ["--after"],
   "models use": ["--model"],
