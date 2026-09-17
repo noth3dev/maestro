@@ -46,6 +46,8 @@ const actionOptions: Record<string, readonly string[]> = {
   "department-plan create": ["--council-id", "--department-id", "--plan-json", "--command-id"],
   "department-plan get": ["--council-id", "--department-id"],
   "department-plan revise": ["--council-id", "--department-id", "--expected-version", "--plan-json", "--reason", "--command-id"],
+  "mission-bundle create": ["--council-id", "--department-id", "--item-id", "--bundle-json", "--command-id"],
+  "mission-bundle get": ["--council-id", "--department-id", "--plan-version", "--item-id"],
   "models use": ["--model"],
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],
