@@ -82,6 +82,17 @@ describe("command argument autocomplete", () => {
     expect(workers?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
+  it("suggests worker certification identity and payload options", () => {
+    const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
+    expect(workers?.getArgumentCompletions?.("certify --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--worker-id " }),
+        expect.objectContaining({ value: "--certification-json " }),
+      ]),
+    );
+    expect(workers?.getArgumentCompletions?.("certify --cert")).toEqual([expect.objectContaining({ value: "--certification-json " })]);
+  });
+
   it("suggests worker accept identity and reason options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("accept --")).toEqual(
