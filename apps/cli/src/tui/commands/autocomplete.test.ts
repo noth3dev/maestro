@@ -1,8 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { createCommandRegistry } from "./registry.js";
+import { CommandRegistry, createCommandRegistry } from "./registry.js";
 import { createCommandAutocompleteItems } from "./autocomplete.js";
 
 describe("command argument autocomplete", () => {
+  it("derives options from action metadata supplied by the registry", () => {
+    const registry = new CommandRegistry([
+      {
+        name: "custom",
+        description: "custom command",
+        actions: [{ name: "run", kind: "write", description: "custom run", options: ["--from-metadata"] }],
+      },
+    ]);
+    const custom = createCommandAutocompleteItems(registry).find((item) => item.name === "custom");
+    expect(custom?.getArgumentCompletions?.("run --from")).toEqual([expect.objectContaining({ value: "--from-metadata " })]);
+  });
+
   it("suggests actions after a command and typed options after an action", () => {
     const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
     expect(goal).toBeDefined();
@@ -109,6 +121,12 @@ describe("command argument autocomplete", () => {
       ]),
     );
     expect(taskContract?.getArgumentCompletions?.("select-roles --outside")).toEqual([expect.objectContaining({ value: "--outside-evidence " })]);
+  });
+
+  it("suggests task contract launch options", () => {
+    const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
+    expect(taskContract?.getArgumentCompletions?.("launch --")).toEqual([expect.objectContaining({ value: "--contract-id " })]);
+    expect(taskContract?.getArgumentCompletions?.("launch --c")).toEqual([expect.objectContaining({ value: "--contract-id " })]);
   });
 
   it("suggests critical-action request options", () => {

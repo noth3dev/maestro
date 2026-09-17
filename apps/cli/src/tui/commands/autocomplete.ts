@@ -1,42 +1,7 @@
 import type { AutocompleteItem, SlashCommand } from "@earendil-works/pi-tui";
 import type { CommandRegistry } from "./registry.js";
 
-const options: Record<string, readonly string[]> = {
-  "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
-  "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
-  "goal create": ["--project-id", "--contract-id", "--command-id"],
-  "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
-  "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],
-  "task-contract select-roles": ["--contract-id", "--outside-evidence", "--preview-needed"],
-  "task-contract get": ["--contract-id"],
-  "task-contract confirm": ["--contract-id", "--version", "--content-hash"],
-  "goal get": ["--goal-id", "--project-id"],
-  "luthiery list": ["--registry"],
-  "projection read": ["--goal-id", "--department-id", "--group-id", "--head-id"],
-  "goal select": ["--goal-id"],
-  "goal transition": ["--goal-id", "--project-id", "--expected-version", "--to", "--command-id"],
-  "goal pause": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
-  "goal resume": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
-  "goal stop": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
-  "goal emergency-stop": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
-  "models use": ["--model"],
-  "model use": ["--model"],
-  "concertmaster-report generate": ["--goal-id", "--command-id"],
-  "conversation create": ["--project-id", "--goal-id", "--model"],
-  "conversation get": ["--conversation-id", "--project-id"],
-  "conversation turn": ["--conversation-id", "--project-id", "--text"],
-  "conversation cancel": ["--conversation-id", "--project-id"],
-  "channel list": ["--goal-id"],
-  "channel read": ["--goal-id", "--channel-kind", "--channel-id"],
-  "channel post": ["--goal-id", "--channel-kind", "--channel-id", "--content", "--command-id"],
-  "session attach": ["--project-id", "--project-index"],
-  "capability select-full-access-mode": ["--goal-id", "--project-id", "--capability-kind", "--session-id", "--full-access-mode"],
-  "evidence capture": ["--goal-id", "--project-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
-  "evidence list": ["--goal-id", "--project-id"],
-  "evidence bundle": ["--goal-id", "--project-id"],
-  "worker message": ["--worker-id", "--project-id", "--message", "--command-id"],
-  "git worker-advance": ["--worker-id", "--project-id", "--message", "--evidence-references", "--command-id"],
-};
+
 
 export function createCommandAutocompleteItems(registry: CommandRegistry): SlashCommand[] {
   const commands = registry.all().map((command) => ({
@@ -48,7 +13,8 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
       if (rest.length === 0 && !prefix.includes("--")) return command.actions
         .filter((candidate) => candidate.name.startsWith(action.toLowerCase()))
         .map((candidate) => ({ value: candidate.name, label: candidate.name, description: candidate.description }));
-      const actionOptions = options[`${command.name} ${action}`] ?? [];
+      const actionDefinition = command.actions.find((candidate) => candidate.name === action.toLowerCase());
+      const actionOptions = actionDefinition?.options ?? [];
       const optionPrefix = rest.at(-1) ?? "";
       return actionOptions
         .filter((option) => option.startsWith(optionPrefix))

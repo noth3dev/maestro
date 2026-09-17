@@ -3,6 +3,8 @@ export interface CommandAction {
   name: string;
   kind: CommandKind;
   description: string;
+  /** Action-specific option names used by the TUI autocomplete. */
+  options?: readonly string[];
   /** Explicitly marked when the action is executable without parser options. */
   requiresArguments?: boolean;
   /** Explicitly marked when the action needs an attached Goal context. */
@@ -15,6 +17,44 @@ export interface CommandDefinition {
   /** Local shell commands execute directly without a remote action. */
   actionless?: boolean;
 }
+
+const actionOptions: Record<string, readonly string[]> = {
+  "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
+  "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
+  "goal create": ["--project-id", "--contract-id", "--command-id"],
+  "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
+  "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],
+  "task-contract select-roles": ["--contract-id", "--outside-evidence", "--preview-needed"],
+  "task-contract launch": ["--contract-id"],
+  "task-contract get": ["--contract-id"],
+  "task-contract confirm": ["--contract-id", "--version", "--content-hash"],
+  "goal get": ["--goal-id", "--project-id"],
+  "luthiery list": ["--registry"],
+  "projection read": ["--goal-id", "--department-id", "--group-id", "--head-id"],
+  "goal select": ["--goal-id"],
+  "goal transition": ["--goal-id", "--project-id", "--expected-version", "--to", "--command-id"],
+  "goal pause": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
+  "goal resume": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
+  "goal stop": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
+  "goal emergency-stop": ["--goal-id", "--project-id", "--expected-version", "--reason", "--command-id"],
+  "models use": ["--model"],
+  "model use": ["--model"],
+  "concertmaster-report generate": ["--goal-id", "--command-id"],
+  "conversation create": ["--project-id", "--goal-id", "--model"],
+  "conversation get": ["--conversation-id", "--project-id"],
+  "conversation turn": ["--conversation-id", "--project-id", "--text"],
+  "conversation cancel": ["--conversation-id", "--project-id"],
+  "channel list": ["--goal-id"],
+  "channel read": ["--goal-id", "--channel-kind", "--channel-id"],
+  "channel post": ["--goal-id", "--channel-kind", "--channel-id", "--content", "--command-id"],
+  "session attach": ["--project-id", "--project-index"],
+  "capability select-full-access-mode": ["--goal-id", "--project-id", "--capability-kind", "--session-id", "--full-access-mode"],
+  "evidence capture": ["--goal-id", "--project-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
+  "evidence list": ["--goal-id", "--project-id"],
+  "evidence bundle": ["--goal-id", "--project-id"],
+  "worker message": ["--worker-id", "--project-id", "--message", "--command-id"],
+  "git worker-advance": ["--worker-id", "--project-id", "--message", "--evidence-references", "--command-id"],
+};
 
 type CommandActionDefinition = [string, CommandKind, (Pick<CommandAction, "requiresArguments" | "requiresGoal">)?];
 
@@ -274,7 +314,16 @@ const definitions: CommandDefinition[] = (
 ).map(([name, description, actions]) => ({
   name,
   description,
-  actions: actions.map(([action, kind, requirements]) => ({ name: action, kind, description: `${name} ${action}`, ...(requirements ?? {}) })),
+  actions: actions.map(([action, kind, requirements]) => {
+    const options = actionOptions[`${name} ${action}`];
+    return {
+      name: action,
+      kind,
+      description: `${name} ${action}`,
+      ...(options === undefined ? {} : { options }),
+      ...(requirements ?? {}),
+    };
+  }),
   actionless: actions.length === 0,
 }));
 
