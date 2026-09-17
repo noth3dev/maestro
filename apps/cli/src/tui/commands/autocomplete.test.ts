@@ -99,6 +99,18 @@ describe("command argument autocomplete", () => {
     expect(taskContract?.getArgumentCompletions?.("amend --expected-v")).toEqual([expect.objectContaining({ value: "--expected-version " })]);
   });
 
+  it("suggests task contract role-selection options", () => {
+    const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
+    expect(taskContract?.getArgumentCompletions?.("select-roles --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--contract-id " }),
+        expect.objectContaining({ value: "--outside-evidence " }),
+        expect.objectContaining({ value: "--preview-needed " }),
+      ]),
+    );
+    expect(taskContract?.getArgumentCompletions?.("select-roles --outside")).toEqual([expect.objectContaining({ value: "--outside-evidence " })]);
+  });
+
   it("suggests critical-action request options", () => {
     const criticalAction = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "critical-action");
     expect(criticalAction?.getArgumentCompletions?.("request --")).toEqual(

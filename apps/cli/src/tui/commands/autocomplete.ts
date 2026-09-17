@@ -7,6 +7,7 @@ const options: Record<string, readonly string[]> = {
   "goal create": ["--project-id", "--contract-id", "--command-id"],
   "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
   "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],
+  "task-contract select-roles": ["--contract-id", "--outside-evidence", "--preview-needed"],
   "task-contract get": ["--contract-id"],
   "task-contract confirm": ["--contract-id", "--version", "--content-hash"],
   "goal get": ["--goal-id", "--project-id"],
