@@ -39,6 +39,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "goal emergency-stop": ["--goal-id", "--project-id", "--expected-version", "--command-id"],
   "head activate": ["--goal-id", "--activation-json", "--command-id"],
   "council create": ["--goal-id", "--council-json", "--command-id"],
+  "council get": ["--council-id"],
   "models use": ["--model"],
   "model use": ["--model"],
   "concertmaster-report generate": ["--goal-id", "--command-id"],
