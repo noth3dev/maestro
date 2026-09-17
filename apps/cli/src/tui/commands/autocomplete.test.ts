@@ -100,6 +100,18 @@ describe("command argument autocomplete", () => {
     expect(git?.getArgumentCompletions?.("goal-branch --repo")).toEqual([expect.objectContaining({ value: "--repository-path " })]);
   });
 
+  it("suggests worker worktree identity, path, and idempotency inputs", () => {
+    const git = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "git");
+    expect(git?.getArgumentCompletions?.("worker-worktree --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--worker-id " }),
+        expect.objectContaining({ value: "--worktree-path " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(git?.getArgumentCompletions?.("worker-worktree --worke")).toEqual([expect.objectContaining({ value: "--worker-id " })]);
+  });
+
   it("suggests worker certification identity and payload options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("certify --")).toEqual(
