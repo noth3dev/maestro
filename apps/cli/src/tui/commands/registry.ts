@@ -21,6 +21,7 @@ export interface CommandDefinition {
 const actionOptions: Record<string, readonly string[]> = {
   "admin project-access": ["--operator-id", "--project-id", "--roles-json"],
   "critical-action request": ["--goal-id", "--action", "--target", "--policy-version", "--budget-effect-cents", "--command-id"],
+  "critical-action approve-and-run": ["--goal-id", "--action", "--target", "--version", "--budget-effect-cents", "--expires-at", "--command-id"],
   "goal create": ["--project-id", "--contract-id", "--command-id"],
   "task-contract create": ["--contract-id", "--substance-json", "--command-id"],
   "task-contract amend": ["--contract-id", "--expected-version", "--substance-json", "--command-id"],
