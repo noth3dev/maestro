@@ -16,8 +16,14 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
       const actionDefinition = command.actions.find((candidate) => candidate.name === action.toLowerCase());
       const actionOptions = actionDefinition?.options ?? [];
       const optionPrefix = rest.at(-1) ?? "";
+      const completedOptions = new Set(
+        rest.slice(0, -1).filter((token) => token.startsWith("--")).map((token) => {
+          const separator = token.indexOf("=");
+          return separator === -1 ? token : token.slice(0, separator);
+        }),
+      );
       return actionOptions
-        .filter((option) => option.startsWith(optionPrefix))
+        .filter((option) => !completedOptions.has(option) && option.startsWith(optionPrefix))
         .map((option) => ({ value: `${option} `, label: option, description: "option" }));
     },
   }));

@@ -662,4 +662,20 @@ describe("command argument autocomplete", () => {
     ]);
     expect(admin?.getArgumentCompletions?.("project-access --p")).toEqual([]);
   });
+
+  it("does not repeat completed options while completing the next option", () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
+    expect(goal?.getArgumentCompletions?.("pause --goal-id goal-1 --")).toEqual([
+      expect.objectContaining({ value: "--expected-version " }),
+      expect.objectContaining({ value: "--command-id " }),
+    ]);
+    expect(goal?.getArgumentCompletions?.("pause --goal-id=goal-1 --g")).toEqual([]);
+    expect(goal?.getArgumentCompletions?.("pause --goal-id")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+
+    const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
+    expect(taskContract?.getArgumentCompletions?.("select-roles --outside-evidence --")).toEqual([
+      expect.objectContaining({ value: "--contract-id " }),
+      expect.objectContaining({ value: "--preview-needed " }),
+    ]);
+  });
 });
