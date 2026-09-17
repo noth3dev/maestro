@@ -82,6 +82,18 @@ describe("command argument autocomplete", () => {
     expect(workers?.getArgumentCompletions?.("list --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
+  it("suggests goal branch repository and revision inputs", () => {
+    const git = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "git");
+    expect(git?.getArgumentCompletions?.("goal-branch --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--repository-path " }),
+        expect.objectContaining({ value: "--branch-name " }),
+        expect.objectContaining({ value: "--base-revision " }),
+      ]),
+    );
+    expect(git?.getArgumentCompletions?.("goal-branch --repo")).toEqual([expect.objectContaining({ value: "--repository-path " })]);
+  });
+
   it("suggests worker certification identity and payload options", () => {
     const workers = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "worker");
     expect(workers?.getArgumentCompletions?.("certify --")).toEqual(

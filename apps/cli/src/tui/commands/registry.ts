@@ -54,6 +54,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "worker observe": ["--worker-id"],
   "worker list": ["--goal-id"],
   "worker certify": ["--worker-id", "--certification-json"],
+  "git goal-branch": ["--repository-path", "--branch-name", "--base-revision"],
   "worker accept": ["--worker-id", "--reason"],
   "events list": ["--after"],
   "models use": ["--model"],
