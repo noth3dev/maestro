@@ -288,12 +288,16 @@ export function shouldConsumeAccountLoginBackgroundInput(
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
   if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
   const identity = identities[0]!;
-  const command = `/model use --model ${identity}`;
-  if (command.length <= width) return command;
+  const commandPrefix = "/model use --model";
+  const command = `${commandPrefix} ${identity}`;
   if (width <= 0) return "";
-  const lines: string[] = [];
-  for (let offset = 0; offset < identity.length; offset += width) lines.push(identity.slice(offset, offset + width));
-  return lines.join("\n");
+  if (command.length <= width) return command;
+  const wrap = (text: string): string[] => {
+    const lines: string[] = [];
+    for (let offset = 0; offset < text.length; offset += width) lines.push(text.slice(offset, offset + width));
+    return lines;
+  };
+  return [...wrap(commandPrefix), ...wrap(identity)].join("\n");
 }
 
 export function compactConversationAcknowledgement(

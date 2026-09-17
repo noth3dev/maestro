@@ -206,10 +206,18 @@ describe("account-login model handoff", () => {
 describe("compact model-list recovery", () => {
   it("shows a directly usable model selection command or truthful fallback", () => {
     expect(compactModelListAcknowledgement(["openai/gpt-5"], 40)).toBe("/model use --model openai/gpt-5");
-    expect(compactModelListAcknowledgement(["anthropic/claude-sonnet-4-20250514"], 40)).toBe("anthropic/claude-sonnet-4-20250514");
+    const wrappedIdentity = compactModelListAcknowledgement(["anthropic/claude-sonnet-4-20250514"], 40);
+    expect(wrappedIdentity.split("\n").every((line) => line.length <= 40)).toBe(true);
+    expect(wrappedIdentity).toBe("/model use --model\nanthropic/claude-sonnet-4-20250514");
+    expect(wrappedIdentity).toContain("/model use --model");
+    const narrow = compactModelListAcknowledgement(["openai-codex/gpt-5.6-luna"], 10);
+    expect(narrow.split("\n").every((line) => line.length <= 10)).toBe(true);
+    expect(narrow.replaceAll("\n", "")).toBe("/model use --modelopenai-codex/gpt-5.6-luna");
     const wrapped = compactModelListAcknowledgement(["provider/" + "m".repeat(50)], 40);
-    expect(wrapped.split("\n").every((line) => line.length <= 40)).toBe(true);
-    expect(wrapped.replaceAll("\n", "")).toBe("provider/" + "m".repeat(50));
+    const wrappedLines = wrapped.split("\n");
+    expect(wrappedLines.every((line) => line.length <= 40)).toBe(true);
+    expect(wrappedLines[0]).toBe("/model use --model");
+    expect(wrappedLines.slice(1).join("")).toBe("provider/" + "m".repeat(50));
     expect(compactModelListAcknowledgement(["openai/gpt-5"], 80)).toContain("openai/gpt-5");
     expect(compactModelListAcknowledgement([], 40)).toBe("No models available · retry /models list");
     expect(compactModelListAcknowledgement([], 40, "Model catalog unavailable")).toBe("Catalog unavailable · retry /models");
