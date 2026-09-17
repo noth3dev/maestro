@@ -2,6 +2,7 @@ import type { Workspace } from "../workspace.js";
 import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "../local-bootstrap.js";
 import type { OrganizationReadModel } from "../panels/organization-panel.js";
 import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
+import type { ConversationActivityEvent } from "@maestro/contracts";
 import { fitPlain, tuiTheme } from "../theme.js";
 
 export type AsyncState<T> = { kind: "loading" } | { kind: "empty" } | { kind: "error"; message: string } | { kind: "value"; value: T };
@@ -22,6 +23,9 @@ export interface TuiShellState {
   setupSteps?: readonly SetupStep[];
   mode?: "maestro" | "flashmob";
   working?: boolean;
+  workingSince?: number;
+  workingTick?: number;
+  conversationActivity?: Pick<ConversationActivityEvent, "phase" | "toolName" | "status">;
   connection:
     { kind: "connected" } | { kind: "connecting" } | { kind: "setup-required"; message: string } | { kind: "error"; message: string };
   goal: AsyncState<{ goalId: string; name: string; state: string }>;
@@ -166,7 +170,8 @@ function noProjectRecoveryAcknowledgement(width: number): string {
 function projectActionText(state: TuiShellState, width = 80): string {
   if (state.connection.kind !== "connected" || state.project?.kind !== "unavailable") return "";
   if (state.project.guidance === "No projects are available for this operator") return noProjectRecoveryAcknowledgement(width);
-  if (state.project.guidance?.startsWith("Project discovery unavailable:")) return fitPlain("Project discovery failed · ctrl+r retry", width);
+  if (state.project.guidance?.startsWith("Project discovery unavailable:"))
+    return fitPlain("Project discovery failed · ctrl+r retry", width);
   const match = state.project.guidance?.match(/\/session attach(?:\s+--project-index=\d+)?/);
   const command = match?.[0] ?? "/session attach";
   return command;
@@ -184,6 +189,38 @@ function hasPendingDecisionRows(state: TuiShellState): boolean {
   return pendingDecisionRows(state).length > 0;
 }
 
+const WORKING_SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+
+function workingElapsed(since: number | undefined): string | undefined {
+  if (since === undefined) return undefined;
+  const seconds = Math.max(0, Math.floor((Date.now() - since) / 1_000));
+  return `${seconds}s`;
+}
+
+function workingLabel(state: TuiShellState): string {
+  const activity = state.conversationActivity;
+  if (activity === undefined) {
+    const work = state.goal.kind === "value" ? `working on ${state.goal.value.name}` : "Concertmaster in progress";
+    const workers = state.workers.kind === "value" ? ` · ${workerText(state)}` : "";
+    return `${work}${workers}`;
+  }
+  const label =
+    activity.phase === "thinking"
+      ? "Thinking"
+      : activity.phase === "writing"
+        ? "Writing"
+        : activity.phase === "tool-call"
+          ? "Preparing tool"
+          : activity.phase === "executing"
+            ? "Executing"
+            : activity.phase === "tool-result"
+              ? "Checking result"
+              : activity.phase === "error"
+                ? "Recovering"
+                : "Working";
+  return activity.toolName === undefined ? label : `${label} ${activity.toolName}`;
+}
+
 export function renderInputPlaceholder(state: TuiShellState, width: number, compact = false): string {
   if (state.connection.kind === "setup-required") return setupRequiredGuidance(width, compact);
   if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state, width);
@@ -195,9 +232,17 @@ export function renderInputPlaceholder(state: TuiShellState, width: number, comp
     return fitPlain(`⏸ ${tier} · ${count} pending decision${count === 1 ? "" : "s"} · operator response required`, width);
   }
   if (state.working === true) {
-    const work = state.goal.kind === "value" ? `working on ${state.goal.value.name}` : "Concertmaster in progress";
-    const workers = state.workers.kind === "value" ? ` · ${workerText(state)}` : "";
-    return fitPlain(`${work}${workers} · esc stop`, width);
+    const phase = state.conversationActivity?.phase;
+    const activityStatus = state.conversationActivity?.status;
+    const indicator =
+      phase === "error" || activityStatus === "error" || activityStatus === "unknown"
+        ? "✗"
+        : phase === "tool-result" && activityStatus === "ok"
+          ? "✓"
+          : WORKING_SPINNER[(state.workingTick ?? 0) % WORKING_SPINNER.length];
+    const elapsed = workingElapsed(state.workingSince);
+    const parts = [indicator, workingLabel(state), ...(elapsed === undefined ? [] : [elapsed])];
+    return fitPlain(`${parts.join(" ")} · esc stop`, width);
   }
   return fitPlain("message to Concertmaster · Enter to send", width);
 }

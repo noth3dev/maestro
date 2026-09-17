@@ -16,21 +16,66 @@ import {
   OrganizationReadModelSchema,
   ConversationSchema,
   CreateConversationInputSchema,
+  ConversationActivityEventSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
-const capabilityAxes = ["reasoning", "coding", "verification", "instruction-fidelity", "tool-use", "long-context", "knowledge", "refusal-calibration"] as const;
+const capabilityAxes = [
+  "reasoning",
+  "coding",
+  "verification",
+  "instruction-fidelity",
+  "tool-use",
+  "long-context",
+  "knowledge",
+  "refusal-calibration",
+] as const;
 
 const organization = {
   groups: [{ groupId: "product", displayName: "Product Group" }],
-  departments: [{ departmentId: "product", groupId: "product", displayName: "Product Department", status: "sleeping", activeSessionId: null, goalContext: null }],
+  departments: [
+    {
+      departmentId: "product",
+      groupId: "product",
+      displayName: "Product Department",
+      status: "sleeping",
+      activeSessionId: null,
+      goalContext: null,
+    },
+  ],
 };
+
+describe("conversation activity HTTP contracts", () => {
+  it("accepts only safe transient activity fields", () => {
+    const event = {
+      activityId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01",
+      conversationId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02",
+      projectId,
+      turnId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03",
+      phase: "executing",
+      toolName: "readGoal",
+      status: "executing",
+      occurredAt: "2026-09-17T12:00:00.000Z",
+    } as const;
+    expect(ConversationActivityEventSchema.parse(event)).toEqual(event);
+    expect(ConversationActivityEventSchema.safeParse({ ...event, arguments: { secret: true } }).success).toBe(false);
+    expect(ConversationActivityEventSchema.safeParse({ ...event, toolName: "x".repeat(129) }).success).toBe(false);
+  });
+});
 
 describe("organization HTTP contracts", () => {
   it("round-trips the permanent organization read model without widening its wire shape", () => {
     expect(OrganizationReadModelSchema.parse(organization)).toEqual(organization);
-    expect(OrganizationReadModelSchema.safeParse({ ...organization, departments: [{ ...organization.departments[0], activeSessionId: "worker-1" }] }).success).toBe(false);
-    expect(OrganizationReadModelSchema.safeParse({ ...organization, departments: [{ ...organization.departments[0], unexpected: true }] }).success).toBe(false);
+    expect(
+      OrganizationReadModelSchema.safeParse({
+        ...organization,
+        departments: [{ ...organization.departments[0], activeSessionId: "worker-1" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      OrganizationReadModelSchema.safeParse({ ...organization, departments: [{ ...organization.departments[0], unexpected: true }] })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -187,8 +232,21 @@ describe("TaskDemand and Mission Bundle routing contracts", () => {
       explicitHeadUplift: 130,
     };
     expect(MissionBundleSubstanceSchema.parse({ ...substance, routingWorkInput }).routingWorkInput).toEqual(routingWorkInput);
-    expect(MissionBundleSubstanceSchema.safeParse({ ...substance, routingWorkInput: { ...routingWorkInput, extra: true } }).success).toBe(false);
-    expect(MissionBundleSubstanceSchema.safeParse({ ...substance, routingWorkInput: { ...routingWorkInput, workCharacter: { ...routingWorkInput.workCharacter, provenance: { ...routingWorkInput.workCharacter.provenance, headDecisionRef: "other-head" } } } }).success).toBe(false);
+    expect(MissionBundleSubstanceSchema.safeParse({ ...substance, routingWorkInput: { ...routingWorkInput, extra: true } }).success).toBe(
+      false,
+    );
+    expect(
+      MissionBundleSubstanceSchema.safeParse({
+        ...substance,
+        routingWorkInput: {
+          ...routingWorkInput,
+          workCharacter: {
+            ...routingWorkInput.workCharacter,
+            provenance: { ...routingWorkInput.workCharacter.provenance, headDecisionRef: "other-head" },
+          },
+        },
+      }).success,
+    ).toBe(false);
     expect(MissionBundleSubstanceSchema.safeParse({ ...substance, taskDemand: { ...taskDemand, provider: "openai" } }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, taskKinds: ["coding", "coding"] }).success).toBe(false);
     expect(TaskDemandSchema.safeParse({ ...taskDemand, requirements: { ...taskDemand.requirements, knowledge: undefined } }).success).toBe(
@@ -274,24 +332,55 @@ describe("Ensemble Router artifact wire contracts", () => {
       rationale: "selected",
       createdAt: "2026-09-08T12:00:00Z",
       pressureCalculation: { pressureFloor: 200 / 3, pressure: 100, explicitHeadUplift: 100 },
-            approvalIdentity: null,
+      approvalIdentity: null,
       taskKindRecipeVersions: { coding: 1 },
-      taskDemand: { schemaVersion: 1, taskKinds: ["coding"], requirements: Object.fromEntries(capabilityAxes.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])), provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
-      workCharacter: { schemaVersion: 1, risk: 40, reversibility: 120, verificationAttachment: 80, materialScale: 20, timePressure: 30, budgetHeadroom: 150, provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" } },
-      modelProfile: { modelRef: "provider/model", capability: { schemaVersion: 2, axes: Object.fromEntries(capabilityAxes.map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }])) }, providerFacts: facts, provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" } },
+      taskDemand: {
+        schemaVersion: 1,
+        taskKinds: ["coding"],
+        requirements: Object.fromEntries(capabilityAxes.map((axis) => [axis, { level: 80, rationale: "Head requirement" }])),
+        provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" },
+      },
+      workCharacter: {
+        schemaVersion: 1,
+        risk: 40,
+        reversibility: 120,
+        verificationAttachment: 80,
+        materialScale: 20,
+        timePressure: 30,
+        budgetHeadroom: 150,
+        provenance: { taskContractRef: "contract-1", headDecisionRef: "decision-1" },
+      },
+      modelProfile: {
+        modelRef: "provider/model",
+        capability: {
+          schemaVersion: 2,
+          axes: Object.fromEntries(
+            capabilityAxes.map((axis) => [axis, { status: "scored", score: 180, rationale: "review", evidence: ["review-1"] }]),
+          ),
+        },
+        providerFacts: facts,
+        provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-08" },
+      },
       operationalOverlaySnapshot: snapshot,
       approvalRef: null,
     };
     expect(RoutingEvidenceSchema.parse(evidence)).toEqual(evidence);
-    expect(RoutingEvidenceSchema.safeParse({ ...evidence, modelProfile: { ...evidence.modelProfile, capability: {}, providerFacts: {}, provenance: {} } }).success).toBe(false);
+    expect(
+      RoutingEvidenceSchema.safeParse({
+        ...evidence,
+        modelProfile: { ...evidence.modelProfile, capability: {}, providerFacts: {}, provenance: {} },
+      }).success,
+    ).toBe(false);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, operationalOverlaySnapshot: {} }).success).toBe(false);
-    expect(RoutingEvidenceSchema.safeParse({ ...evidence, pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } }).success).toBe(false);
+    expect(
+      RoutingEvidenceSchema.safeParse({ ...evidence, pressureCalculation: { pressureFloor: 1, pressure: 100, explicitHeadUplift: 100 } })
+        .success,
+    ).toBe(false);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, taskKindRecipeVersions: { coding: 999 } }).success).toBe(false);
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, createdAt: "now" }).success).toBe(false);
     const hostileCandidateRefs = ["candidate-1"] as string[];
     Object.defineProperty(hostileCandidateRefs, "extra", { enumerable: true, value: "unexpected" });
     expect(RoutingEvidenceSchema.safeParse({ ...evidence, candidateRefs: hostileCandidateRefs }).success).toBe(false);
-
   });
 
   it("fails closed on missing facts, forbidden identity fields, and unavailable bindings", () => {

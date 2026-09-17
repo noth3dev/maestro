@@ -1,13 +1,7 @@
 import type { InvocationUsage, ModelIdentity } from "@maestro/domain";
 export type { InvocationUsage, ModelIdentity } from "@maestro/domain";
 
-export type ProviderCapability =
-  | "text"
-  | "tool-calls"
-  | "streaming"
-  | "usage"
-  | "cancellation"
-  | "managed-subscription";
+export type ProviderCapability = "text" | "tool-calls" | "streaming" | "usage" | "cancellation" | "managed-subscription";
 
 export type ProviderAuthMode = "api-key" | "managed-subscription";
 export type ModelRole = "system" | "user" | "assistant" | "tool" | "developer-data";
@@ -46,7 +40,14 @@ export interface ModelToolResultMessage {
 export type ModelContentPart =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "tool-call"; readonly call: ModelToolCall }
-  | { readonly kind: "tool-result"; readonly toolCallId: string; readonly status: ToolResultStatus; readonly content: string; readonly origin: "host"; readonly trust: "untrusted-data" };
+  | {
+      readonly kind: "tool-result";
+      readonly toolCallId: string;
+      readonly status: ToolResultStatus;
+      readonly content: string;
+      readonly origin: "host";
+      readonly trust: "untrusted-data";
+    };
 
 export interface ModelMessage {
   readonly role: ModelRole;
@@ -54,11 +55,18 @@ export interface ModelMessage {
 }
 
 export type ModelStreamEvent =
+  | { readonly kind: "thinking-delta"; readonly cursor: number }
   | { readonly kind: "text-delta"; readonly cursor: number; readonly text: string }
   | { readonly kind: "tool-proposed"; readonly cursor: number; readonly call: ModelToolCall }
   | { readonly kind: "tool-validated"; readonly cursor: number; readonly callId: string; readonly toolName: string }
   | { readonly kind: "tool-executing"; readonly cursor: number; readonly callId: string; readonly toolName: string }
-  | { readonly kind: "tool-completed"; readonly cursor: number; readonly callId: string; readonly toolName: string; readonly status: ToolResultStatus }
+  | {
+      readonly kind: "tool-completed";
+      readonly cursor: number;
+      readonly callId: string;
+      readonly toolName: string;
+      readonly status: ToolResultStatus;
+    }
   | { readonly kind: "tool-rejected"; readonly cursor: number; readonly callId: string; readonly toolName: string; readonly reason: string }
   | { readonly kind: "usage"; readonly cursor: number; readonly usage: InvocationUsage }
   | { readonly kind: "provider-error"; readonly cursor: number; readonly code: string; readonly retryable: boolean }
@@ -266,7 +274,8 @@ export function parseModelRef(ref: string): ModelIdentity {
   const provider = ref.slice(0, separator);
   const id = ref.slice(separator + 1);
   if (id.includes("/")) throw new Error("Model reference must be provider-qualified");
-  if (!id || provider.trim() !== provider || id.trim() !== id || /\s/.test(provider) || /\s/.test(id)) throw new Error("Model reference must include a non-empty model id");
+  if (!id || provider.trim() !== provider || id.trim() !== id || /\s/.test(provider) || /\s/.test(id))
+    throw new Error("Model reference must include a non-empty model id");
   return { provider, id };
 }
 

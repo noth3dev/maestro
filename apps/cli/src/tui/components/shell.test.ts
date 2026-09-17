@@ -28,6 +28,49 @@ const state: TuiShellState = {
 const stripAnsi = (value: string): string => value.replace(/\u001b\[[0-9;]*m/g, "");
 
 describe("Maestro TUI shell", () => {
+  it("renders a Prime-style loader with truthful activity and elapsed state", () => {
+    const output = stripAnsi(
+      renderInputPlaceholder(
+        {
+          ...state,
+          working: true,
+          workingSince: Date.now() - 1_000,
+          workingTick: 1,
+          conversationActivity: { phase: "executing", toolName: "readGoal" },
+        },
+        120,
+      ),
+    );
+    expect(output).toContain("⠙");
+    expect(output).toContain("Executing readGoal");
+    expect(output).toContain("1s");
+    expect(output).toContain("esc stop");
+    const checked = stripAnsi(
+      renderInputPlaceholder(
+        {
+          ...state,
+          working: true,
+          workingSince: Date.now(),
+          conversationActivity: { phase: "tool-result", toolName: "readGoal", status: "ok" },
+        },
+        120,
+      ),
+    );
+    expect(checked).toContain("✓ Checking result readGoal");
+    const failed = stripAnsi(
+      renderInputPlaceholder(
+        {
+          ...state,
+          working: true,
+          workingSince: Date.now(),
+          conversationActivity: { phase: "tool-result", toolName: "readGoal", status: "error" },
+        },
+        120,
+      ),
+    );
+    expect(failed).toContain("✗ Checking result readGoal");
+  });
+
   it("uses Maestro branding only on the first splash frame", () => {
     const output = renderShell(state, 120, 30, { showSplash: true }).join("\n");
     expect(output).toContain("MAESTRO");
@@ -113,7 +156,10 @@ describe("Maestro TUI shell", () => {
   it("shows attach guidance instead of project-bound actions when project discovery is unresolved", () => {
     const unresolved = {
       ...state,
-      project: { kind: "unavailable", guidance: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2" },
+      project: {
+        kind: "unavailable",
+        guidance: "Multiple projects are available; choose one: /session attach --project-index=1 or /session attach --project-index=2",
+      },
     } as TuiShellState;
 
     for (const width of [40, 60, 80, 120]) {
@@ -305,7 +351,10 @@ describe("Maestro TUI shell", () => {
 
   it("gives setup-required operators a concrete restart path", () => {
     const setupRequired = { ...state, connection: { kind: "setup-required", message: "Control Plane is not configured" } } as TuiShellState;
-    for (const [width, height] of [[80, 24], [40, 15]] as const) {
+    for (const [width, height] of [
+      [80, 24],
+      [40, 15],
+    ] as const) {
       const frame = renderTuiLayout(setupRequired, width, height);
       const output = [...frame.status, ...frame.input, ...frame.hints].join("\n");
       expect(output).toContain("restart");

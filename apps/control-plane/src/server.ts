@@ -1,15 +1,9 @@
-import {
-  randomUUID,
-} from "node:crypto";
-import {
-  mapError,
-} from "./api-error.js";
+import { randomUUID } from "node:crypto";
+import { mapError } from "./api-error.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { AccountLoginRecord, AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import { PersonaProposalInputSchema, PersonaReadQuerySchema, PersonaInspectionSchema } from "@maestro/contracts";
 import type { PersonaInspectionService } from "./persona-inspection-service.js";
-
-
 
 import {
   CreateGoalInputSchema,
@@ -25,6 +19,7 @@ import {
   ConversationTurnResultSchema,
   ConversationEventQuerySchema,
   ConversationEventSchema,
+  ConversationActivityEventSchema,
   ModelCatalogEntrySchema,
   ProviderCredentialLoginInputSchema,
   ProviderCredentialBindingSchema,
@@ -84,7 +79,8 @@ import {
   MissionPersonaOverlaySchema,
   MissionBundleSchema,
   SpawnWorkerInputSchema,
-  WorkerSchema, QueuedWorkerAdmissionSchema,
+  WorkerSchema,
+  QueuedWorkerAdmissionSchema,
   WorkerObservationSchema,
   WorkerActionInputSchema,
   WorkerMessageInputSchema,
@@ -115,30 +111,18 @@ import {
   DepartmentAcceptanceSchema,
   CertifyWorkerInputSchema,
   CertificationSchema,
-  SettingsReadSchema, SettingsPreferencesUpdateSchema, SettingsModelPoolUpdateSchema, SettingsAuthorityDefaultsUpdateSchema,
+  SettingsReadSchema,
+  SettingsPreferencesUpdateSchema,
+  SettingsModelPoolUpdateSchema,
+  SettingsAuthorityDefaultsUpdateSchema,
 } from "@maestro/contracts";
-import {
-  DurableStoreUnavailableError,
-  GoalNotFoundError,
-  type GoalService,
-} from "./goal-service.js";
-import {
-  CriticalActionUnavailableError,
-  type CriticalActionService,
-} from "./critical-action-service.js";
-import {
-  type ReadStateService,
-} from "./read-state-service.js";
+import { DurableStoreUnavailableError, GoalNotFoundError, type GoalService } from "./goal-service.js";
+import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
+import { type ReadStateService } from "./read-state-service.js";
 import type { ProjectionService } from "./projection-service.js";
-import {
-  type TaskContractService,
-} from "./task-contract-service.js";
-import {
-  type HeadParticipationService,
-} from "./head-participation-service.js";
-import {
-  type CouncilService,
-} from "./council-service.js";
+import { type TaskContractService } from "./task-contract-service.js";
+import { type HeadParticipationService } from "./head-participation-service.js";
+import { type CouncilService } from "./council-service.js";
 
 export type { GoalService } from "./goal-service.js";
 export type { CriticalActionService } from "./critical-action-service.js";
@@ -149,41 +133,21 @@ export type { CapabilityApprovalService } from "./capability-approval-service.js
 export type { EvidenceCaptureService } from "./evidence-capture-service.js";
 export type { ConcertmasterReportService } from "./concertmaster-report-service.js";
 export type { PersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
-import {
-  type DepartmentPlanService,
-} from "./department-plan-service.js";
-import {
-  type CapabilityApprovalService,
-} from "./capability-approval-service.js";
-import {
-  type EvidenceCaptureService,
-} from "./evidence-capture-service.js";
+import { type DepartmentPlanService } from "./department-plan-service.js";
+import { type CapabilityApprovalService } from "./capability-approval-service.js";
+import { type EvidenceCaptureService } from "./evidence-capture-service.js";
 import type { ConcertmasterReportService } from "./concertmaster-report-service.js";
-import {
-  type MissionBundleService,
-} from "./mission-bundle-service.js";
-import {
-  type WorkerService,
-} from "./worker-service.js";
-import {
-  type ConversationService,
-} from "./conversation-service.js";
-import {
-  ModelGatewayClientError,
-} from "./model-gateway-client.js";
+import { type MissionBundleService } from "./mission-bundle-service.js";
+import { type WorkerService } from "./worker-service.js";
+import { type ConversationService } from "./conversation-service.js";
+import { ModelGatewayClientError } from "./model-gateway-client.js";
 
-import {
-  type GitIntegrationService,
-} from "./git-integration-service.js";
+import { type GitIntegrationService } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
 import type { PersonaGoalEvidenceService } from "./persona-goal-evidence-service.js";
 import type { MetronomeService } from "./metronome-service.js";
-import {
-  type EncoreService,
-} from "./encore-service.js";
-import {
-  type StoredDiscordSignal,
-} from "@maestro/persistence";
+import { type EncoreService } from "./encore-service.js";
+import { type StoredDiscordSignal } from "@maestro/persistence";
 
 import type { AuthenticatedDiscordSignal } from "@maestro/domain";
 import {
@@ -224,8 +188,20 @@ export interface InboxService {
 }
 
 export interface ChannelService {
-  get(input: { operatorId: string; projectId: string; goalId: string; selector: import("@maestro/domain").ChannelSelector }): Promise<import("@maestro/contracts").ChannelRead>;
-  post(input: { operatorId: string; projectId: string; goalId: string; selector: import("@maestro/domain").ChannelSelector; content: string; messageId: string }): Promise<import("@maestro/contracts").ChannelMessage>;
+  get(input: {
+    operatorId: string;
+    projectId: string;
+    goalId: string;
+    selector: import("@maestro/domain").ChannelSelector;
+  }): Promise<import("@maestro/contracts").ChannelRead>;
+  post(input: {
+    operatorId: string;
+    projectId: string;
+    goalId: string;
+    selector: import("@maestro/domain").ChannelSelector;
+    content: string;
+    messageId: string;
+  }): Promise<import("@maestro/contracts").ChannelMessage>;
 }
 
 export interface OrganizationService {
@@ -234,20 +210,44 @@ export interface OrganizationService {
 }
 
 export interface ProviderCredentialService {
-  bind(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic"; authMode: "api-key"; secret: string }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
+  bind(input: {
+    operatorId: string;
+    requestId: string;
+    providerId: "openai" | "anthropic";
+    authMode: "api-key";
+    secret: string;
+  }): Promise<import("@maestro/agent-runtime").GatewayCredentialBinding>;
   revoke(input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }): Promise<void>;
   list?(): Promise<readonly import("@maestro/contracts").SettingsProvider[]>;
-  startAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
-  accountLoginStatus?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
+  startAccountLogin?(input: {
+    operatorId: string;
+    requestId: string;
+    providerId: "openai-codex";
+  }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
+  accountLoginStatus?(input: {
+    operatorId: string;
+    requestId: string;
+    providerId: "openai-codex";
+    loginId: string;
+  }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
   cancelAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<void>;
   logoutAccount?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<void>;
 }
 
 export interface SettingsService {
   get(operatorId: string): Promise<import("@maestro/contracts").SettingsRead>;
-  updatePreferences(operatorId: string, patch: import("@maestro/contracts").SettingsPreferencesUpdate): Promise<import("@maestro/contracts").SettingsRead>;
-  updateModelPool(operatorId: string, patch: import("@maestro/contracts").SettingsModelPoolUpdate): Promise<import("@maestro/contracts").SettingsRead>;
-  updateAuthorityDefaults(operatorId: string, patch: import("@maestro/contracts").SettingsAuthorityDefaultsUpdate): Promise<import("@maestro/contracts").SettingsRead>;
+  updatePreferences(
+    operatorId: string,
+    patch: import("@maestro/contracts").SettingsPreferencesUpdate,
+  ): Promise<import("@maestro/contracts").SettingsRead>;
+  updateModelPool(
+    operatorId: string,
+    patch: import("@maestro/contracts").SettingsModelPoolUpdate,
+  ): Promise<import("@maestro/contracts").SettingsRead>;
+  updateAuthorityDefaults(
+    operatorId: string,
+    patch: import("@maestro/contracts").SettingsAuthorityDefaultsUpdate,
+  ): Promise<import("@maestro/contracts").SettingsRead>;
 }
 
 export interface OperatorAuthenticator {
@@ -263,7 +263,10 @@ export interface ProjectMembershipChecker {
 
 export interface ProjectAccessProvisioner {
   /** Grants a target operator exact standing project roles under an explicit admin policy. */
-  provisionProjectAccess(requesterOperatorId: string, input: import("@maestro/contracts").ProjectAccessProvisionInput): Promise<import("@maestro/contracts").ProjectAccessProvisionResult>;
+  provisionProjectAccess(
+    requesterOperatorId: string,
+    input: import("@maestro/contracts").ProjectAccessProvisionInput,
+  ): Promise<import("@maestro/contracts").ProjectAccessProvisionResult>;
 }
 
 export interface PollingScheduler {
@@ -294,7 +297,44 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function buildServer({ goalService, authenticator, eventService, criticalActionService, capabilityApprovalService, inboxService, evidenceCaptureService, personaGoalEvidenceService, concertmasterReportService, pollingScheduler = systemPollingScheduler, readStateService, taskContractService, headParticipationService, councilService, departmentPlanService, missionBundleService, workerService, gitIntegrationService, certificationService, metronomeService, encoreService, discordSignalService, https, projectMembership, projectAccess, projectDiscovery, organizationService, channelService, providerCredentials, accountLoginStore, accountLoginOwnerId, readinessCheck, conversationService, projectionService, settingsService, personaInspectionService }: {
+export function buildServer({
+  goalService,
+  authenticator,
+  eventService,
+  criticalActionService,
+  capabilityApprovalService,
+  inboxService,
+  evidenceCaptureService,
+  personaGoalEvidenceService,
+  concertmasterReportService,
+  pollingScheduler = systemPollingScheduler,
+  readStateService,
+  taskContractService,
+  headParticipationService,
+  councilService,
+  departmentPlanService,
+  missionBundleService,
+  workerService,
+  gitIntegrationService,
+  certificationService,
+  metronomeService,
+  encoreService,
+  discordSignalService,
+  https,
+  projectMembership,
+  projectAccess,
+  projectDiscovery,
+  organizationService,
+  channelService,
+  providerCredentials,
+  accountLoginStore,
+  accountLoginOwnerId,
+  readinessCheck,
+  conversationService,
+  projectionService,
+  settingsService,
+  personaInspectionService,
+}: {
   goalService: GoalService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
@@ -357,122 +397,318 @@ export function buildServer({ goalService, authenticator, eventService, critical
   const maxActiveStreams = 128;
   const loginOwnerId = accountLoginOwnerId ?? `control-plane-${randomUUID()}`;
   const loginOperationStaleAfterMs = 30_000;
-  const channels = channelService ?? {
-    get: async () => { throw new DurableStoreUnavailableError(); },
-    post: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies ChannelService;
-  const organizations = organizationService ?? {
-    listOrganization: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies OrganizationService;
-  const events = eventService ?? { listEvents: async () => { throw new DurableStoreUnavailableError(); } };
-  const projections = projectionService ?? {
-    read: async () => { throw new DurableStoreUnavailableError(); },
-    compose: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies ProjectionService;
-  const personaInspection = personaInspectionService ?? {
-    read: async () => { throw new DurableStoreUnavailableError(); },
-    propose: async () => { throw new DurableStoreUnavailableError(); },
-    edit: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies PersonaInspectionService;
+  const channels =
+    channelService ??
+    ({
+      get: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      post: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies ChannelService);
+  const organizations =
+    organizationService ??
+    ({
+      listOrganization: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies OrganizationService);
+  const events = eventService ?? {
+    listEvents: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+  };
+  const projections =
+    projectionService ??
+    ({
+      read: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      compose: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies ProjectionService);
+  const personaInspection =
+    personaInspectionService ??
+    ({
+      read: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      propose: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      edit: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies PersonaInspectionService);
   const readState = readStateService ?? {
-    listGoals: async () => { throw new DurableStoreUnavailableError(); },
-    getBudgetSummary: async () => { throw new DurableStoreUnavailableError(); },
-    getBillingSummary: async () => { throw new DurableStoreUnavailableError(); },
-    listMetronomeChallenges: async () => { throw new DurableStoreUnavailableError(); },
-    listEncoreCouncilRounds: async () => { throw new DurableStoreUnavailableError(); },
-    listCertifications: async () => { throw new DurableStoreUnavailableError(); },
-    getConcertmasterReport: async () => { throw new DurableStoreUnavailableError(); },
-    getEvidenceBundle: async () => { throw new DurableStoreUnavailableError(); },
-    getGitIntegrationState: async () => { throw new DurableStoreUnavailableError(); },
-    listWorkersForGoal: async () => { throw new DurableStoreUnavailableError(); },
-    listImprovementDigestsForGoal: async () => { throw new DurableStoreUnavailableError(); },
-    listArrangementsForGoal: async () => { throw new DurableStoreUnavailableError(); },
+    listGoals: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    getBudgetSummary: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    getBillingSummary: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    listMetronomeChallenges: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    listEncoreCouncilRounds: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    listCertifications: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    getConcertmasterReport: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    getEvidenceBundle: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    getGitIntegrationState: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    listWorkersForGoal: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    listImprovementDigestsForGoal: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+    listArrangementsForGoal: async () => {
+      throw new DurableStoreUnavailableError();
+    },
   };
   const criticalActions = criticalActionService ?? {
-    performCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
-    approveAndPerformCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
-    denyCriticalAction: async () => { throw new CriticalActionUnavailableError(); },
+    performCriticalAction: async () => {
+      throw new CriticalActionUnavailableError();
+    },
+    approveAndPerformCriticalAction: async () => {
+      throw new CriticalActionUnavailableError();
+    },
+    denyCriticalAction: async () => {
+      throw new CriticalActionUnavailableError();
+    },
   };
-  const inbox = inboxService ?? {
-    listPendingApprovals: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies InboxService;
-  const capabilityApprovals = capabilityApprovalService ?? {
-    selectFullAccessMode: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies Pick<CapabilityApprovalService, "selectFullAccessMode">;
-  const evidenceCapture = evidenceCaptureService ?? {
-    capture: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies EvidenceCaptureService;
-  const personaGoalEvidence = personaGoalEvidenceService ?? {
-    capture: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies PersonaGoalEvidenceService;
-  const concertmasterReports = concertmasterReportService ?? {
-    generate: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies ConcertmasterReportService;
-  const taskContracts = taskContractService ?? {
-    createTaskContract: async () => { throw new DurableStoreUnavailableError(); },
-    getTaskContract: async () => { throw new DurableStoreUnavailableError(); },
-    updateTaskContract: async () => { throw new DurableStoreUnavailableError(); },
-    selectOvertureRoles: async () => { throw new DurableStoreUnavailableError(); },
-    confirmTaskContract: async () => { throw new DurableStoreUnavailableError(); },
-    launchTaskContract: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies TaskContractService;
-  const headParticipations = headParticipationService ?? {
-    activate: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies HeadParticipationService;
-  const councils = councilService ?? {
-    create: async () => { throw new DurableStoreUnavailableError(); },
-    get: async () => { throw new DurableStoreUnavailableError(); },
-    submitBrief: async () => { throw new DurableStoreUnavailableError(); },
-    reveal: async () => { throw new DurableStoreUnavailableError(); },
-    decide: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies CouncilService;
-  const departmentPlans = departmentPlanService ?? {
-    create: async () => { throw new DurableStoreUnavailableError(); },
-    get: async () => { throw new DurableStoreUnavailableError(); },
-    revise: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies DepartmentPlanService;
-  const missionBundles = missionBundleService ?? {
-    create: async () => { throw new DurableStoreUnavailableError(); },
-    get: async () => { throw new DurableStoreUnavailableError(); },
-    issuePersonaOverlay: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies MissionBundleService;
-  const workers = workerService ?? {
-    spawn: async () => { throw new DurableStoreUnavailableError(); },
-    get: async () => { throw new DurableStoreUnavailableError(); },
-    observe: async () => { throw new DurableStoreUnavailableError(); },
-    sendMessage: async () => { throw new DurableStoreUnavailableError(); },
-    cancel: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies WorkerService;
-  const gitIntegrations = gitIntegrationService ?? {
-    createGoalBranch: async () => { throw new DurableStoreUnavailableError(); },
-    createDepartmentBranch: async () => { throw new DurableStoreUnavailableError(); },
-    createWorkerWorktree: async () => { throw new DurableStoreUnavailableError(); },
-    advanceWorker: async () => { throw new DurableStoreUnavailableError(); },
-    freezeGoalRevision: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies GitIntegrationService;
-  const certifications = certificationService ?? {
-    accept: async () => { throw new DurableStoreUnavailableError(); },
-    certify: async () => { throw new DurableStoreUnavailableError(); },
-    certifyConditional: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies CertificationService;
-  const metronome = metronomeService ?? {
-    scan: async () => { throw new DurableStoreUnavailableError(); },
-    raise: async () => { throw new DurableStoreUnavailableError(); },
-    requestCorrection: async () => { throw new DurableStoreUnavailableError(); },
-    requestSafePause: async () => { throw new DurableStoreUnavailableError(); },
-    resolve: async () => { throw new DurableStoreUnavailableError(); },
-    challengeWorkerOverlay: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies MetronomeService;
-  const encore = encoreService ?? { review: async () => { throw new DurableStoreUnavailableError(); } } satisfies EncoreService;
-  const discordSignal = discordSignalService ?? { record: async () => { throw new DurableStoreUnavailableError(); } } satisfies DiscordSignalService;
-  const conversations = conversationService ?? {
-    listModels: async () => { throw new DurableStoreUnavailableError(); },
-    create: async () => { throw new DurableStoreUnavailableError(); },
-    get: async () => { throw new DurableStoreUnavailableError(); },
-    turn: async () => { throw new DurableStoreUnavailableError(); },
-    cancel: async () => { throw new DurableStoreUnavailableError(); },
-    listEvents: async () => { throw new DurableStoreUnavailableError(); },
-  } satisfies ConversationService;
+  const inbox =
+    inboxService ??
+    ({
+      listPendingApprovals: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies InboxService);
+  const capabilityApprovals =
+    capabilityApprovalService ??
+    ({
+      selectFullAccessMode: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies Pick<CapabilityApprovalService, "selectFullAccessMode">);
+  const evidenceCapture =
+    evidenceCaptureService ??
+    ({
+      capture: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies EvidenceCaptureService);
+  const personaGoalEvidence =
+    personaGoalEvidenceService ??
+    ({
+      capture: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies PersonaGoalEvidenceService);
+  const concertmasterReports =
+    concertmasterReportService ??
+    ({
+      generate: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies ConcertmasterReportService);
+  const taskContracts =
+    taskContractService ??
+    ({
+      createTaskContract: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      getTaskContract: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      updateTaskContract: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      selectOvertureRoles: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      confirmTaskContract: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      launchTaskContract: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies TaskContractService);
+  const headParticipations =
+    headParticipationService ??
+    ({
+      activate: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies HeadParticipationService);
+  const councils =
+    councilService ??
+    ({
+      create: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      get: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      submitBrief: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      reveal: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      decide: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies CouncilService);
+  const departmentPlans =
+    departmentPlanService ??
+    ({
+      create: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      get: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      revise: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies DepartmentPlanService);
+  const missionBundles =
+    missionBundleService ??
+    ({
+      create: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      get: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      issuePersonaOverlay: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies MissionBundleService);
+  const workers =
+    workerService ??
+    ({
+      spawn: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      get: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      observe: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      sendMessage: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      cancel: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies WorkerService);
+  const gitIntegrations =
+    gitIntegrationService ??
+    ({
+      createGoalBranch: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      createDepartmentBranch: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      createWorkerWorktree: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      advanceWorker: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      freezeGoalRevision: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies GitIntegrationService);
+  const certifications =
+    certificationService ??
+    ({
+      accept: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      certify: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      certifyConditional: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies CertificationService);
+  const metronome =
+    metronomeService ??
+    ({
+      scan: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      raise: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      requestCorrection: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      requestSafePause: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      resolve: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      challengeWorkerOverlay: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies MetronomeService);
+  const encore =
+    encoreService ??
+    ({
+      review: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies EncoreService);
+  const discordSignal =
+    discordSignalService ??
+    ({
+      record: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies DiscordSignalService);
+  const conversations =
+    conversationService ??
+    ({
+      listModels: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      create: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      get: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      turn: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      cancel: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+      listEvents: async () => {
+        throw new DurableStoreUnavailableError();
+      },
+    } satisfies ConversationService);
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
   // Fastify waits for those connections before it invokes onClose.
   app.addHook("preClose", async () => {
@@ -528,7 +764,10 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const input = parse(CapabilitySessionSelectionInputSchema, request.body);
     const operatorContext = requestOperator(request as { operator?: OperatorContext });
-    const session = await capabilityApprovals.selectFullAccessMode({ ...input, goalId }, { actorId: operatorContext.operatorId, kind: "user", projectId: input.projectId, goalId, active: true });
+    const session = await capabilityApprovals.selectFullAccessMode(
+      { ...input, goalId },
+      { actorId: operatorContext.operatorId, kind: "user", projectId: input.projectId, goalId, active: true },
+    );
     return reply.status(200).send(CapabilitySessionSchema.parse({ ...session, selectedAt: session.selectedAt.toISOString() }));
   });
 
@@ -648,39 +887,103 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const input = parse(ProviderAccountLoginStartInputSchema, request.body);
     const header = request.headers["idempotency-key"];
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
-    await providerCredentials.logoutAccount({ operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId, requestId, providerId: input.providerId });
+    await providerCredentials.logoutAccount({
+      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
+      requestId,
+      providerId: input.providerId,
+    });
     return reply.status(200).send({ revoked: true });
   });
 
   app.post("/v1/provider-account-logins/status", async (request, reply) => {
     if (!providerCredentials?.accountLoginStatus || accountLoginStore === undefined) throw new DurableStoreUnavailableError();
-    const body = request.body && typeof request.body === "object" ? request.body as Record<string, unknown> : {};
+    const body = request.body && typeof request.body === "object" ? (request.body as Record<string, unknown>) : {};
     const input = parse(ProviderAccountLoginStatusSchema.pick({ providerId: true, loginId: true }), body);
     const header = request.headers["idempotency-key"];
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
     const record = await accountLoginStore.get(input.loginId, operatorId);
     if (record === undefined || record.providerId !== input.providerId) throw new Error("account login session is unknown");
-    if (record.state === "starting") return reply.status(200).send(ProviderAccountLoginStatusSchema.parse({ providerId: record.providerId, loginId: record.loginId, state: "pending" }));
-    if (record.state !== "pending" || record.providerLoginId === null) return reply.status(200).send(ProviderAccountLoginStatusSchema.parse({ providerId: record.providerId, loginId: record.loginId, state: record.state, ...(record.message === null ? {} : { message: record.message }) }));
-    const operationToken = await accountLoginStore.claimOperation(record.loginId, operatorId, "status", loginOwnerId, loginOperationStaleAfterMs);
+    if (record.state === "starting")
+      return reply
+        .status(200)
+        .send(ProviderAccountLoginStatusSchema.parse({ providerId: record.providerId, loginId: record.loginId, state: "pending" }));
+    if (record.state !== "pending" || record.providerLoginId === null)
+      return reply.status(200).send(
+        ProviderAccountLoginStatusSchema.parse({
+          providerId: record.providerId,
+          loginId: record.loginId,
+          state: record.state,
+          ...(record.message === null ? {} : { message: record.message }),
+        }),
+      );
+    const operationToken = await accountLoginStore.claimOperation(
+      record.loginId,
+      operatorId,
+      "status",
+      loginOwnerId,
+      loginOperationStaleAfterMs,
+    );
     if (operationToken === undefined) {
       const current = await accountLoginStore.get(record.loginId, operatorId);
       if (current === undefined) throw new Error("account login session is unknown");
-      if (current.state !== "pending" || current.providerLoginId === null) return reply.status(200).send(ProviderAccountLoginStatusSchema.parse({ providerId: current.providerId, loginId: current.loginId, state: current.state, ...(current.message === null ? {} : { message: current.message }) }));
-      return reply.status(409).send({ error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" } });
+      if (current.state !== "pending" || current.providerLoginId === null)
+        return reply.status(200).send(
+          ProviderAccountLoginStatusSchema.parse({
+            providerId: current.providerId,
+            loginId: current.loginId,
+            state: current.state,
+            ...(current.message === null ? {} : { message: current.message }),
+          }),
+        );
+      return reply.status(409).send({
+        error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" },
+      });
     }
     try {
       let result: import("@maestro/agent-runtime").GatewayAccountLoginStatusResult;
       try {
-        result = await providerCredentials.accountLoginStatus({ operatorId, requestId, providerId: input.providerId, loginId: record.providerLoginId });
+        result = await providerCredentials.accountLoginStatus({
+          operatorId,
+          requestId,
+          providerId: input.providerId,
+          loginId: record.providerLoginId,
+        });
       } catch (error) {
         if (!isLostGatewayLogin(error)) throw error;
-        const unknown = await accountLoginStore.updateState(record.loginId, operatorId, "unknown", "Gateway login session was lost during restart", loginOwnerId, operationToken);
-        return reply.status(200).send(ProviderAccountLoginStatusSchema.parse({ providerId: unknown.providerId, loginId: unknown.loginId, state: unknown.state, message: unknown.message }));
+        const unknown = await accountLoginStore.updateState(
+          record.loginId,
+          operatorId,
+          "unknown",
+          "Gateway login session was lost during restart",
+          loginOwnerId,
+          operationToken,
+        );
+        return reply.status(200).send(
+          ProviderAccountLoginStatusSchema.parse({
+            providerId: unknown.providerId,
+            loginId: unknown.loginId,
+            state: unknown.state,
+            message: unknown.message,
+          }),
+        );
       }
-      const updated = await accountLoginStore.updateState(record.loginId, operatorId, result.state, result.message, loginOwnerId, operationToken);
-      return reply.status(200).send(ProviderAccountLoginStatusSchema.parse({ providerId: updated.providerId, loginId: updated.loginId, state: updated.state, ...(updated.message === null ? {} : { message: updated.message }) }));
+      const updated = await accountLoginStore.updateState(
+        record.loginId,
+        operatorId,
+        result.state,
+        result.message,
+        loginOwnerId,
+        operationToken,
+      );
+      return reply.status(200).send(
+        ProviderAccountLoginStatusSchema.parse({
+          providerId: updated.providerId,
+          loginId: updated.loginId,
+          state: updated.state,
+          ...(updated.message === null ? {} : { message: updated.message }),
+        }),
+      );
     } finally {
       await accountLoginStore.releaseOperation(record.loginId, operatorId, loginOwnerId, operationToken).catch(() => undefined);
     }
@@ -694,21 +997,43 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
     const record = await accountLoginStore.get(input.loginId, operatorId);
     if (record === undefined || record.providerId !== input.providerId) throw new Error("account login session is unknown");
-    if (record.state !== "pending" || record.providerLoginId === null) return reply.status(200).send({ cancelled: record.state === "cancelled" });
-    const operationToken = await accountLoginStore.claimOperation(record.loginId, operatorId, "cancel", loginOwnerId, loginOperationStaleAfterMs);
+    if (record.state !== "pending" || record.providerLoginId === null)
+      return reply.status(200).send({ cancelled: record.state === "cancelled" });
+    const operationToken = await accountLoginStore.claimOperation(
+      record.loginId,
+      operatorId,
+      "cancel",
+      loginOwnerId,
+      loginOperationStaleAfterMs,
+    );
     if (operationToken === undefined) {
       const current = await accountLoginStore.get(record.loginId, operatorId);
       if (current === undefined) throw new Error("account login session is unknown");
-      if (current.state !== "pending" || current.providerLoginId === null) return reply.status(200).send({ cancelled: current.state === "cancelled" });
-      return reply.status(409).send({ error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" } });
+      if (current.state !== "pending" || current.providerLoginId === null)
+        return reply.status(200).send({ cancelled: current.state === "cancelled" });
+      return reply.status(409).send({
+        error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" },
+      });
     }
     try {
       try {
-        await providerCredentials.cancelAccountLogin({ operatorId, requestId, providerId: input.providerId, loginId: record.providerLoginId });
+        await providerCredentials.cancelAccountLogin({
+          operatorId,
+          requestId,
+          providerId: input.providerId,
+          loginId: record.providerLoginId,
+        });
         await accountLoginStore.updateState(record.loginId, operatorId, "cancelled", undefined, loginOwnerId, operationToken);
       } catch (error) {
         if (!isLostGatewayLogin(error)) throw error;
-        await accountLoginStore.updateState(record.loginId, operatorId, "unknown", "Gateway login session was lost during restart", loginOwnerId, operationToken);
+        await accountLoginStore.updateState(
+          record.loginId,
+          operatorId,
+          "unknown",
+          "Gateway login session was lost during restart",
+          loginOwnerId,
+          operationToken,
+        );
         return reply.status(200).send({ cancelled: false });
       }
       return reply.status(200).send({ cancelled: true });
@@ -816,7 +1141,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const departmentId = parseDepartmentId((request.params as { departmentId?: unknown }).departmentId);
     const input = parse(CreateDepartmentPlanInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const plan = await departmentPlans.create(councilId, departmentId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const plan = await departmentPlans.create(
+      councilId,
+      departmentId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(201).send(DepartmentPlanSchema.parse(plan));
   });
 
@@ -833,7 +1164,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const departmentId = parseDepartmentId((request.params as { departmentId?: unknown }).departmentId);
     const input = parse(ReviseDepartmentPlanInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const plan = await departmentPlans.revise(councilId, departmentId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const plan = await departmentPlans.revise(
+      councilId,
+      departmentId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(200).send(DepartmentPlanSchema.parse(plan));
   });
 
@@ -844,7 +1181,14 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const itemId = parseItemId(params.itemId);
     const input = parse(CreateMissionBundleInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const bundle = await missionBundles.create(councilId, departmentId, itemId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const bundle = await missionBundles.create(
+      councilId,
+      departmentId,
+      itemId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(201).send(MissionBundleSchema.parse(bundle));
   });
 
@@ -867,7 +1211,15 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const itemId = parseItemId(params.itemId);
     const input = parse(IssueMissionPersonaOverlayInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const overlay = await missionBundles.issuePersonaOverlay(councilId, departmentId, itemId, input.planVersion, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const overlay = await missionBundles.issuePersonaOverlay(
+      councilId,
+      departmentId,
+      itemId,
+      input.planVersion,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(201).send(MissionPersonaOverlaySchema.parse(overlay));
   });
 
@@ -877,7 +1229,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const departmentId = parseDepartmentId(params.departmentId);
     const input = parse(SpawnWorkerInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const worker = await workers.spawn(councilId, departmentId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const worker = await workers.spawn(
+      councilId,
+      departmentId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     if ("kind" in worker && worker.kind === "queued") return reply.status(202).send(QueuedWorkerAdmissionSchema.parse(worker));
     return reply.status(201).send(WorkerSchema.parse(worker));
   });
@@ -927,7 +1285,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const kind = parseCertificationKind((request.params as { kind?: unknown }).kind);
     const input = parse(CertifyWorkerInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await certifications.certifyConditional(workerId, kind, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const result = await certifications.certifyConditional(
+      workerId,
+      kind,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(201).send(CertificationSchema.parse(result));
   });
 
@@ -1000,7 +1364,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const input = parse(GoalIntegrationBranchInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await gitIntegrations.createGoalBranch(goalId, input, requestOperator(request as { operator?: OperatorContext }).operatorId, commandId);
+    const result = await gitIntegrations.createGoalBranch(
+      goalId,
+      input,
+      requestOperator(request as { operator?: OperatorContext }).operatorId,
+      commandId,
+    );
     return reply.status(201).send(GoalIntegrationBranchSchema.parse(result));
   });
 
@@ -1008,7 +1377,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const input = parse(DepartmentBranchInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await gitIntegrations.freezeGoalRevision(goalId, input.projectId, requestOperator(request as { operator?: OperatorContext }).operatorId, commandId);
+    const result = await gitIntegrations.freezeGoalRevision(
+      goalId,
+      input.projectId,
+      requestOperator(request as { operator?: OperatorContext }).operatorId,
+      commandId,
+    );
     return reply.status(201).send(GoalIntegrationRevisionSchema.parse(result));
   });
 
@@ -1036,7 +1410,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const workerId = parse(UuidSchema, (request.params as { workerId?: unknown }).workerId);
     const input = parse(WorkerIntegrationInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await gitIntegrations.advanceWorker(workerId, input, requestOperator(request as { operator?: OperatorContext }).operatorId, commandId);
+    const result = await gitIntegrations.advanceWorker(
+      workerId,
+      input,
+      requestOperator(request as { operator?: OperatorContext }).operatorId,
+      commandId,
+    );
     return reply.status(201).send(IntegrationCommitSchema.parse(result));
   });
 
@@ -1076,7 +1455,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const input = parse(GoalControlInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await goalService.emergencyStopGoal(goalId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const result = await goalService.emergencyStopGoal(
+      goalId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(200).send(GoalResultSchema.parse(result));
   });
 
@@ -1092,13 +1476,15 @@ export function buildServer({ goalService, authenticator, eventService, critical
     );
     if (decision.effect === "deny") throw new CriticalActionDeniedError(decision.reason);
     if (decision.effect === "require_approval") throw new CriticalActionRequiresApprovalError(decision.reason);
-    return reply.status(200).send(CriticalActionResultSchema.parse({
-      goalId,
-      effect: decision.effect,
-      reason: decision.reason,
-      classification: decision.classification,
-      ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
-    }));
+    return reply.status(200).send(
+      CriticalActionResultSchema.parse({
+        goalId,
+        effect: decision.effect,
+        reason: decision.reason,
+        classification: decision.classification,
+        ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
+      }),
+    );
   });
 
   app.post("/v1/goals/:goalId/critical-actions/approve-and-run", async (request, reply) => {
@@ -1113,13 +1499,15 @@ export function buildServer({ goalService, authenticator, eventService, critical
     );
     if (decision.effect === "deny") throw new CriticalActionDeniedError(decision.reason);
     if (decision.effect === "require_approval") throw new CriticalActionRequiresApprovalError(decision.reason);
-    return reply.status(200).send(CriticalActionResultSchema.parse({
-      goalId,
-      effect: decision.effect,
-      reason: decision.reason,
-      classification: decision.classification,
-      ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
-    }));
+    return reply.status(200).send(
+      CriticalActionResultSchema.parse({
+        goalId,
+        effect: decision.effect,
+        reason: decision.reason,
+        classification: decision.classification,
+        ...(decision.recordId === undefined ? {} : { recordId: decision.recordId }),
+      }),
+    );
   });
 
   app.post("/v1/goals/:goalId/critical-actions/deny", async (request, reply) => {
@@ -1148,7 +1536,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
     const input = parse(UpdateTaskContractInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    const result = await taskContracts.updateTaskContract(contractId, input, requestOperator(request as { operator?: OperatorContext }), commandId);
+    const result = await taskContracts.updateTaskContract(
+      contractId,
+      input,
+      requestOperator(request as { operator?: OperatorContext }),
+      commandId,
+    );
     return reply.status(200).send(TaskContractSchema.parse(result));
   });
 
@@ -1156,7 +1549,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
     const input = parse(OvertureSelectionInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    const roles = await taskContracts.selectOvertureRoles(contractId, input, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const roles = await taskContracts.selectOvertureRoles(
+      contractId,
+      input,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(200).send(OvertureRoleSelectionResultSchema.parse({ roles }));
   });
 
@@ -1172,7 +1570,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const contractId = parse(UuidSchema, (request.params as { contractId?: unknown }).contractId);
     const input = parse(TaskContractQuerySchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"] ?? contractId);
-    const result = await taskContracts.launchTaskContract(contractId, input.projectId, requestOperator(request as { operator?: OperatorContext }), commandId);
+    const result = await taskContracts.launchTaskContract(
+      contractId,
+      input.projectId,
+      requestOperator(request as { operator?: OperatorContext }),
+      commandId,
+    );
     return reply.status(200).send(TaskContractSchema.parse(result));
   });
 
@@ -1193,7 +1596,11 @@ export function buildServer({ goalService, authenticator, eventService, critical
   app.get("/v1/conversations/:conversationId", async (request, reply) => {
     const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
     const query = parse(GoalQuerySchema, request.query);
-    const conversation = await conversations.get(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    const conversation = await conversations.get(
+      conversationId,
+      query.projectId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(200).send(ConversationSchema.parse(conversation));
   });
 
@@ -1217,7 +1624,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
   app.get("/v1/conversations/:conversationId/events", async (request, reply) => {
     const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
     const query = parse(ConversationEventQuerySchema, request.query);
-    const events = await conversations.listEvents(conversationId, query.projectId, query.after, requestOperator(request as { operator?: OperatorContext }));
+    const events = await conversations.listEvents(
+      conversationId,
+      query.projectId,
+      query.after,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(200).send(events.map((event) => ConversationEventSchema.parse(event)));
   });
 
@@ -1243,29 +1655,50 @@ export function buildServer({ goalService, authenticator, eventService, critical
       if (heartbeatTimer !== undefined) pollingScheduler.clearInterval(heartbeatTimer);
       activeStreams.delete(terminate);
     };
-    const terminate = () => { if (closed) return; if (!reply.raw.writableEnded) reply.raw.end(); cleanup(); };
+    const terminate = () => {
+      if (closed) return;
+      if (!reply.raw.writableEnded) reply.raw.end();
+      cleanup();
+    };
     if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
-    request.raw.once("aborted", cleanup); reply.raw.once("close", cleanup); activeStreams.add(terminate);
+    request.raw.once("aborted", cleanup);
+    reply.raw.once("close", cleanup);
+    activeStreams.add(terminate);
     const write = (listed: import("@maestro/contracts").ConversationEvent[]) => {
       for (const event of listed) {
         if (closed || backpressured) return;
         const payload = `id: ${event.cursor}\nevent: conversation-event\ndata: ${JSON.stringify(ConversationEventSchema.parse(event))}\n\n`;
-        if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) { terminate(); return; }
+        if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) {
+          terminate();
+          return;
+        }
         cursor = event.cursor;
         if (!reply.raw.write(payload)) {
           backpressured = true;
           if (!drainListenerInstalled) {
             drainListenerInstalled = true;
-            reply.raw.once("drain", () => { drainListenerInstalled = false; if (closed) return; backpressured = false; void poll(); });
+            reply.raw.once("drain", () => {
+              drainListenerInstalled = false;
+              if (closed) return;
+              backpressured = false;
+              void poll();
+            });
           }
         }
       }
     };
     let initial: readonly import("@maestro/contracts").ConversationEvent[];
-    try { initial = await conversations.listEvents(conversationId, query.projectId, cursor, operator); }
-    catch { cleanup(); throw new DurableStoreUnavailableError(); }
+    try {
+      initial = await conversations.listEvents(conversationId, query.projectId, cursor, operator);
+    } catch {
+      cleanup();
+      throw new DurableStoreUnavailableError();
+    }
     if (closed) return reply;
-    reply.hijack(); reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" }); reply.raw.flushHeaders(); write([...initial]);
+    reply.hijack();
+    reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
+    reply.raw.flushHeaders();
+    write([...initial]);
     const poll = async () => {
       if (closed || polling || backpressured) return;
       polling = true;
@@ -1276,18 +1709,30 @@ export function buildServer({ goalService, authenticator, eventService, critical
         write([...listed].filter((event) => BigInt(event.cursor) > BigInt(cursor)));
       } catch {
         terminate();
-      } finally { polling = false; }
+      } finally {
+        polling = false;
+      }
     };
-    const pollTimer = pollingScheduler.setInterval(() => { void poll(); }, 250);
+    const pollTimer = pollingScheduler.setInterval(() => {
+      void poll();
+    }, 250);
     const writeHeartbeat = () => {
       if (closed || backpressured) return;
       const payload = ": heartbeat\n\n";
-      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) { terminate(); return; }
+      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) {
+        terminate();
+        return;
+      }
       if (!reply.raw.write(payload)) {
         backpressured = true;
         if (!drainListenerInstalled) {
           drainListenerInstalled = true;
-          reply.raw.once("drain", () => { drainListenerInstalled = false; if (closed) return; backpressured = false; void poll(); });
+          reply.raw.once("drain", () => {
+            drainListenerInstalled = false;
+            if (closed) return;
+            backpressured = false;
+            void poll();
+          });
         }
       }
     };
@@ -1296,12 +1741,74 @@ export function buildServer({ goalService, authenticator, eventService, critical
     return reply;
   });
 
+  app.get("/v1/conversations/:conversationId/activity/stream", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(GoalQuerySchema, request.query);
+    const operator = requestOperator(request as { operator?: OperatorContext });
+    if (activeStreams.size >= maxActiveStreams) throw new Error("SSE stream capacity reached");
+    let closed = false;
+    let ready = false;
+    const pending: import("@maestro/contracts").ConversationActivityEvent[] = [];
+    let unsubscribe: (() => void) | undefined;
+    let heartbeatTimer: ReturnType<typeof pollingScheduler.setInterval> | undefined = undefined;
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      unsubscribe?.();
+      if (heartbeatTimer !== undefined) pollingScheduler.clearInterval(heartbeatTimer);
+      activeStreams.delete(terminate);
+    };
+    const terminate = () => {
+      if (closed) return;
+      if (!reply.raw.writableEnded) reply.raw.end();
+      cleanup();
+    };
+    const writeFrame = (payload: string): void => {
+      if (closed) return;
+      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > 1_000_000 || !reply.raw.write(payload)) terminate();
+    };
+    const write = (event: import("@maestro/contracts").ConversationActivityEvent): void => {
+      if (closed) return;
+      if (!ready) {
+        if (pending.length < 32) pending.push(event);
+        return;
+      }
+      writeFrame(`event: conversation-activity\ndata: ${JSON.stringify(ConversationActivityEventSchema.parse(event))}\n\n`);
+    };
+    request.raw.once("aborted", cleanup);
+    reply.raw.once("close", cleanup);
+    activeStreams.add(terminate);
+    try {
+      if (conversations.subscribeActivity === undefined) throw new Error("conversation activity stream is unavailable");
+      unsubscribe = await conversations.subscribeActivity(conversationId, query.projectId, operator, write);
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
+    if (closed) {
+      unsubscribe?.();
+      return reply;
+    }
+    reply.hijack();
+    reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
+    reply.raw.flushHeaders();
+    ready = true;
+    for (const event of pending.splice(0)) write(event);
+    heartbeatTimer = pollingScheduler.setInterval(() => writeFrame(": heartbeat\n\n"), 15_000);
+    return reply;
+  });
+
   app.get("/v1/goals/:goalId/channels/:kind/:channelId", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const params = request.params as { kind?: unknown; channelId?: unknown };
     const selector = parse(ChannelSelectorSchema, { kind: params.kind, channelId: params.channelId });
     const query = parse(ChannelQuerySchema, request.query);
-    const result = await channels.get({ goalId, projectId: query.projectId, selector, operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId });
+    const result = await channels.get({
+      goalId,
+      projectId: query.projectId,
+      selector,
+      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
+    });
     return reply.status(200).send(ChannelReadSchema.parse(result));
   });
 
@@ -1311,7 +1818,13 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const selector = parse(ChannelSelectorSchema, { kind: params.kind, channelId: params.channelId });
     const input = parse(ChannelMessageInputSchema, request.body);
     const messageId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const result = await channels.post({ goalId, selector, ...input, messageId, operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId });
+    const result = await channels.post({
+      goalId,
+      selector,
+      ...input,
+      messageId,
+      operatorId: requestOperator(request as { operator?: OperatorContext }).operatorId,
+    });
     return reply.status(201).send(ChannelMessageSchema.parse(result));
   });
 
@@ -1363,7 +1876,12 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const input = parse(GoalQuerySchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
-    const report = await concertmasterReports.generate(goalId, input.projectId, commandId, requestOperator(request as { operator?: OperatorContext }));
+    const report = await concertmasterReports.generate(
+      goalId,
+      input.projectId,
+      commandId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
     return reply.status(201).send(ConcertmasterFinalReportSchema.parse(report));
   });
 
@@ -1393,7 +1911,9 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const query = parse(GoalQuerySchema, request.query);
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    return reply.send(ImprovementDigestListSchema.parse({ digests: await readState.listImprovementDigestsForGoal(goalId, query.projectId, operatorId) }));
+    return reply.send(
+      ImprovementDigestListSchema.parse({ digests: await readState.listImprovementDigestsForGoal(goalId, query.projectId, operatorId) }),
+    );
   });
   app.get("/v1/goals/:goalId/arrangements", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
@@ -1439,7 +1959,8 @@ export function buildServer({ goalService, authenticator, eventService, critical
     const reauthorize = async (): Promise<void> => {
       if (!streamOperator || streamSecret === undefined) throw new AuthenticationRequiredError();
       const authentication = await authenticator.authenticateBearerSecret(streamSecret);
-      if (authentication.outcome !== "authenticated" || authentication.operator.operatorId !== streamOperator.operatorId) throw new CredentialForbiddenError();
+      if (authentication.outcome !== "authenticated" || authentication.operator.operatorId !== streamOperator.operatorId)
+        throw new CredentialForbiddenError();
       await projectMembership?.assertProjectMembership(streamOperator.operatorId, projectId);
     };
     const cleanup = () => {
@@ -1468,12 +1989,20 @@ export function buildServer({ goalService, authenticator, eventService, critical
       backpressured = true;
       if (!drainListenerInstalled) {
         drainListenerInstalled = true;
-        reply.raw.once("drain", () => { drainListenerInstalled = false; if (closed) return; backpressured = false; void fetchAndWrite(); });
+        reply.raw.once("drain", () => {
+          drainListenerInstalled = false;
+          if (closed) return;
+          backpressured = false;
+          void fetchAndWrite();
+        });
       }
     };
     const writeFrame = (payload: string): boolean => {
       if (closed) return false;
-      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) { terminate(); return false; }
+      if (reply.raw.writableLength + Buffer.byteLength(payload, "utf8") > MAX_SSE_BUFFER_BYTES) {
+        terminate();
+        return false;
+      }
       if (!reply.raw.write(payload)) markBackpressure();
       return true;
     };
@@ -1498,13 +2027,19 @@ export function buildServer({ goalService, authenticator, eventService, critical
           if (!reply.raw.headersSent) reply.raw.writeHead(503, { "content-type": "application/json" });
           terminate();
         }
-      } finally { polling = false; }
+      } finally {
+        polling = false;
+      }
     };
 
     // Prove durable storage is available before committing the streaming response.
     let initial: import("@maestro/contracts").GoalEvent[];
-    try { initial = await events.listEvents(projectId, cursor); }
-    catch { cleanup(); throw new DurableStoreUnavailableError(); }
+    try {
+      initial = await events.listEvents(projectId, cursor);
+    } catch {
+      cleanup();
+      throw new DurableStoreUnavailableError();
+    }
     // A client may disconnect while the initial durable read is in flight.
     // In that case cleanup owns the response and this handler must not write.
     if (closed) return reply;

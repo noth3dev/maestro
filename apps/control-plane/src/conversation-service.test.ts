@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createPostgresConversationService } from "./conversation-service.js";
+import { createPostgresConversationService, modelActivity } from "./conversation-service.js";
 import type { ModelGatewayPort } from "@maestro/agent-runtime";
 import type { OperatorContext } from "@maestro/persistence";
 
@@ -9,6 +9,21 @@ const operator: OperatorContext = {
   operatorId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05",
   credentialId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06",
 };
+
+describe("conversation activity mapping", () => {
+  it("exposes phases without forwarding reasoning or tool arguments", () => {
+    const thinking = modelActivity({ kind: "thinking-delta", cursor: 1 });
+    expect(thinking).toEqual({ phase: "thinking" });
+    const proposed = modelActivity({
+      kind: "tool-proposed",
+      cursor: 2,
+      call: { id: "call-1", name: "readGoal", arguments: { state: "valid", value: { secret: "do-not-forward" } } },
+    });
+    expect(proposed).toEqual({ phase: "tool-call", toolName: "readGoal", status: "proposed" });
+    expect(JSON.stringify(proposed)).not.toContain("do-not-forward");
+    expect(modelActivity({ kind: "usage", cursor: 3, usage: { state: "unknown" } })).toBeUndefined();
+  });
+});
 
 class FakePool {
   cursor = 0;

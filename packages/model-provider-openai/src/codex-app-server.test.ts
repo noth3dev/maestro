@@ -4,7 +4,9 @@ import { resolveCodexAppServerCommand } from "../../../apps/cli/src/tui/local-bo
 import { CodexAppServerClient, createCodexAppServerPlugin, type CodexAppServerTransport } from "./codex-app-server.js";
 
 class SilentTransport implements CodexAppServerTransport {
-  onMessage(_listener: (message: unknown) => void): () => void { return () => {}; }
+  onMessage(_listener: (message: unknown) => void): () => void {
+    return () => {};
+  }
   send(_message: unknown): void {}
   async close(): Promise<void> {}
 }
@@ -13,34 +15,67 @@ class FakeTransport implements CodexAppServerTransport {
   readonly messages: unknown[] = [];
   private listener?: (message: unknown) => void;
   constructor(private readonly modelListMode: "normal" | "malformed-entry" | "error" = "normal") {}
-  onMessage(listener: (message: unknown) => void): () => void { this.listener = listener; return () => { this.listener = undefined; }; }
+  onMessage(listener: (message: unknown) => void): () => void {
+    this.listener = listener;
+    return () => {
+      this.listener = undefined;
+    };
+  }
   send(message: unknown): void {
     this.messages.push(message);
     const request = message as { id?: number; method?: string; params?: { cursor?: string | null } };
     if (request.method === "initialize") queueMicrotask(() => this.listener?.({ id: request.id, result: { userAgent: "codex-test" } }));
-    if (request.method === "account/login/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { type: "chatgpt", loginId: "login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" } }));
+    if (request.method === "account/login/start")
+      queueMicrotask(() =>
+        this.listener?.({
+          id: request.id,
+          result: { type: "chatgpt", loginId: "login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" },
+        }),
+      );
     if (request.method === "account/login/cancel") queueMicrotask(() => this.listener?.({ id: request.id, result: {} }));
-    if (request.method === "account/read") queueMicrotask(() => this.listener?.({ id: request.id, result: { account: { type: "chatgpt", email: "user@example.com", planType: "pro" } } }));
-    if (request.method === "model/list") queueMicrotask(() => {
-      if (this.modelListMode === "error") {
-        this.listener?.({ id: request.id, error: { message: "model listing unavailable" } });
-        return;
-      }
-      const result = this.modelListMode === "malformed-entry"
-        ? { data: [{}], nextCursor: null }
-        : request.params?.cursor === "page-2"
-          ? { data: [{ id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false }], nextCursor: null }
-          : { data: [{ id: "gpt-5.6-luna", model: "gpt-5.6-luna", displayName: "GPT-5.6-Luna", hidden: false }, { id: "hidden", model: "hidden", displayName: "Hidden", hidden: true }], nextCursor: "page-2" };
-      this.listener?.({ id: request.id, result });
-    });
-    if (request.method === "thread/start") queueMicrotask(() => this.listener?.({ id: request.id, result: { thread: { id: "thread-1" } } }));
-    if (request.method === "turn/start") queueMicrotask(() => {
-      this.listener?.({ id: request.id, result: { turn: { id: "turn-1", status: "inProgress" } } });
-      this.listener?.({ method: "item/agentMessage/delta", params: { threadId: "thread-1", turnId: "turn-1", delta: "Hello from Codex" } });
-      this.listener?.({ method: "turn/completed", params: { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } } });
-    });
+    if (request.method === "account/read")
+      queueMicrotask(() =>
+        this.listener?.({ id: request.id, result: { account: { type: "chatgpt", email: "user@example.com", planType: "pro" } } }),
+      );
+    if (request.method === "model/list")
+      queueMicrotask(() => {
+        if (this.modelListMode === "error") {
+          this.listener?.({ id: request.id, error: { message: "model listing unavailable" } });
+          return;
+        }
+        const result =
+          this.modelListMode === "malformed-entry"
+            ? { data: [{}], nextCursor: null }
+            : request.params?.cursor === "page-2"
+              ? { data: [{ id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false }], nextCursor: null }
+              : {
+                  data: [
+                    { id: "gpt-5.6-luna", model: "gpt-5.6-luna", displayName: "GPT-5.6-Luna", hidden: false },
+                    { id: "hidden", model: "hidden", displayName: "Hidden", hidden: true },
+                  ],
+                  nextCursor: "page-2",
+                };
+        this.listener?.({ id: request.id, result });
+      });
+    if (request.method === "thread/start")
+      queueMicrotask(() => this.listener?.({ id: request.id, result: { thread: { id: "thread-1" } } }));
+    if (request.method === "turn/start")
+      queueMicrotask(() => {
+        this.listener?.({ id: request.id, result: { turn: { id: "turn-1", status: "inProgress" } } });
+        this.listener?.({
+          method: "item/reasoning/summaryTextDelta",
+          params: { threadId: "thread-1", turnId: "turn-1", delta: "private reasoning" },
+        });
+        this.listener?.({
+          method: "item/agentMessage/delta",
+          params: { threadId: "thread-1", turnId: "turn-1", delta: "Hello from Codex" },
+        });
+        this.listener?.({ method: "turn/completed", params: { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } } });
+      });
   }
-  notify(message: unknown): void { this.listener?.(message); }
+  notify(message: unknown): void {
+    this.listener?.(message);
+  }
   async close(): Promise<void> {}
 }
 
@@ -121,10 +156,12 @@ describe("Codex app-server model catalog", () => {
       { id: "gpt-5.6-luna", displayName: "GPT-5.6-Luna" },
       { id: "gpt-5.5", displayName: "GPT-5.5" },
     ]);
-    expect(transport.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ method: "model/list", params: { includeHidden: false } }),
-      expect.objectContaining({ method: "model/list", params: { cursor: "page-2", includeHidden: false } }),
-    ]));
+    expect(transport.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: "model/list", params: { includeHidden: false } }),
+        expect.objectContaining({ method: "model/list", params: { cursor: "page-2", includeHidden: false } }),
+      ]),
+    );
     await client.close();
   });
 
@@ -174,11 +211,16 @@ describe("Codex app-server managed login", () => {
     const login = await client.startChatGptLogin();
 
     expect(login).toEqual({ providerId: "openai-codex", loginId: "login-1", authUrl: "https://chatgpt.com/oauth?state=opaque" });
-    expect(transport.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ method: "initialize", params: expect.objectContaining({ clientInfo: { name: "maestro", title: "Maestro", version: "test" } }) }),
-      { method: "initialized" },
-      { method: "account/login/start", id: expect.any(Number), params: { type: "chatgpt" } },
-    ]));
+    expect(transport.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          method: "initialize",
+          params: expect.objectContaining({ clientInfo: { name: "maestro", title: "Maestro", version: "test" } }),
+        }),
+        { method: "initialized" },
+        { method: "account/login/start", id: expect.any(Number), params: { type: "chatgpt" } },
+      ]),
+    );
     expect(JSON.stringify(transport.messages)).not.toContain("access_token");
     expect(JSON.stringify(transport.messages)).not.toContain("refresh_token");
 
@@ -191,7 +233,9 @@ describe("Codex app-server managed login", () => {
     const transport = new FakeTransport();
     const client = new CodexAppServerClient({ transport });
     await client.startChatGptLogin();
-    const initialize = transport.messages.find((message) => (message as { method?: string }).method === "initialize") as { params: { clientInfo: { name: string } } };
+    const initialize = transport.messages.find((message) => (message as { method?: string }).method === "initialize") as {
+      params: { clientInfo: { name: string } };
+    };
     expect(initialize.params.clientInfo.name).toBe("codex_cli_rs");
     await client.close();
   });
@@ -207,34 +251,79 @@ describe("Codex app-server managed login", () => {
   });
 });
 
-
 it("runs a text turn through the managed app-server and supports cancellation", async () => {
   const transport = new FakeTransport();
   const client = new CodexAppServerClient({ transport });
   transport.notify({ id: 99, result: {} }); // ignored response
+  const events: unknown[] = [];
   const resultPromise = client.runTextTurn({
-    model: "gpt-5.3-codex", requestId: "request-1", messages: [{ role: "user", content: [{ kind: "text", text: "hello" }] }], tools: [],
-    signal: new AbortController().signal, maxOutputTokens: 100,
+    model: "gpt-5.3-codex",
+    requestId: "request-1",
+    messages: [{ role: "user", content: [{ kind: "text", text: "hello" }] }],
+    tools: [],
+    signal: new AbortController().signal,
+    maxOutputTokens: 100,
+    emit: (event) => events.push(event),
   });
-  await expect(resultPromise).resolves.toMatchObject({ requestId: "request-1", model: { provider: "openai-codex", id: "gpt-5.3-codex" }, text: "Hello from Codex" });
+  await expect(resultPromise).resolves.toMatchObject({
+    requestId: "request-1",
+    model: { provider: "openai-codex", id: "gpt-5.3-codex" },
+    text: "Hello from Codex",
+  });
+  expect(events).toContainEqual({ kind: "thinking-delta", cursor: 1 });
+  expect(events).toContainEqual({ kind: "text-delta", cursor: "Hello from Codex".length, text: "Hello from Codex" });
+  expect(events.some((event) => JSON.stringify(event).includes("private reasoning"))).toBe(false);
   await client.close();
 });
-
 
 it("creates a managed-subscription provider with a text-only catalog", async () => {
   const transport = new FakeTransport();
   const client = new CodexAppServerClient({ transport });
   const plugin = (await import("./codex-app-server.js")).createCodexAppServerPlugin({ client, models: ["gpt-5.3-codex"] });
-  expect(plugin.listModels()).toEqual([expect.objectContaining({ identity: { provider: "openai-codex", id: "gpt-5.3-codex" }, authModes: ["managed-subscription"] })]);
-  const provider = await plugin.create({ model: { provider: "openai-codex", id: "gpt-5.3-codex" }, account: { providerId: "openai-codex", accountRef: "openai-codex-operator-1", authMode: "managed-subscription" }, dataPolicyHash: "policy" });
-  await expect(provider.turn({ requestId: "request-1", sessionId: "session-1", turnId: "turn-1", messages: [], tools: [], limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 100, maxInputBytes: 1000, maxResultBytes: 1000, providerTimeoutMs: 1000, wallTimeMs: 1000 }, signal: new AbortController().signal, emit: () => {} })).resolves.toMatchObject({ model: { provider: "openai-codex" } });
+  expect(plugin.listModels()).toEqual([
+    expect.objectContaining({ identity: { provider: "openai-codex", id: "gpt-5.3-codex" }, authModes: ["managed-subscription"] }),
+  ]);
+  const provider = await plugin.create({
+    model: { provider: "openai-codex", id: "gpt-5.3-codex" },
+    account: { providerId: "openai-codex", accountRef: "openai-codex-operator-1", authMode: "managed-subscription" },
+    dataPolicyHash: "policy",
+  });
+  await expect(
+    provider.turn({
+      requestId: "request-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      messages: [],
+      tools: [],
+      limits: {
+        maxModelTurns: 1,
+        maxToolCalls: 0,
+        maxChildCalls: 0,
+        maxOutputTokens: 100,
+        maxInputBytes: 1000,
+        maxResultBytes: 1000,
+        providerTimeoutMs: 1000,
+        wallTimeMs: 1000,
+      },
+      signal: new AbortController().signal,
+      emit: () => {},
+    }),
+  ).resolves.toMatchObject({ model: { provider: "openai-codex" } });
   await client.close();
 });
 
-
 it("speaks JSONL to a real shell-free app-server child process", async () => {
   const script = `if(process.env.TEST_API_KEY) process.exit(7); const rl=require("node:readline").createInterface({input:process.stdin}); rl.on("line", line => { const m=JSON.parse(line); if(m.method === "initialize") process.stdout.write(JSON.stringify({id:m.id,result:{}})+"\\n"); if(m.method === "account/login/start") process.stdout.write(JSON.stringify({id:m.id,result:{type:"chatgpt",loginId:"child-login",authUrl:"https://chatgpt.com/login"}})+"\\n"); });`;
-  const client = new CodexAppServerClient({ command: process.execPath, args: ["-e", script], env: { ...process.env, TEST_API_KEY: "must-not-cross" }, requestTimeoutMs: 2_000 });
-  await expect(client.startChatGptLogin()).resolves.toEqual({ providerId: "openai-codex", loginId: "child-login", authUrl: "https://chatgpt.com/login" });
+  const client = new CodexAppServerClient({
+    command: process.execPath,
+    args: ["-e", script],
+    env: { ...process.env, TEST_API_KEY: "must-not-cross" },
+    requestTimeoutMs: 2_000,
+  });
+  await expect(client.startChatGptLogin()).resolves.toEqual({
+    providerId: "openai-codex",
+    loginId: "child-login",
+    authUrl: "https://chatgpt.com/login",
+  });
   await client.close();
 });

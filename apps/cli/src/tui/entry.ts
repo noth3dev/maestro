@@ -10,7 +10,7 @@ import {
   matchesKey,
 } from "@earendil-works/pi-tui";
 import { ApiError, createApiClient, type ApiClient, type GoalEvent } from "@maestro/api-client";
-import type { ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestro/contracts";
+import type { ConversationActivityEvent, ConversationEvent, ModelCatalogEntry, TaskContract } from "@maestro/contracts";
 
 import { resolveRetryWorkspace } from "./retry-workspace.js";
 import { workspaceIdentity } from "./workspace.js";
@@ -28,6 +28,7 @@ import { priorTaskContractDraft, taskContractDraftForConversation } from "./conv
 import { animateAccentProgress } from "./flashmob-animation.js";
 import { reconnectWorkspaceProject } from "./project-reconnect.js";
 import { cancelConversationTurn } from "./conversation-cancellation.js";
+import { activityView, runConversationActivityStream } from "./conversation-activity.js";
 
 import { ensureLocalControlPlane } from "./local-control-plane.js";
 import { resolveLocalConnection } from "./local-bootstrap.js";
@@ -136,7 +137,8 @@ export function noModelSelectionMessage(): string {
 }
 
 export function compactProjectAttachmentNotice(projectDiscoveryNotice: string | undefined, width: number): string {
-  if (projectDiscoveryNotice === "No projects are available for this operator") return fitPlain("No project · admin provision · ctrl+r", width);
+  if (projectDiscoveryNotice === "No projects are available for this operator")
+    return fitPlain("No project · admin provision · ctrl+r", width);
   if (projectDiscoveryNotice?.startsWith("Project discovery unavailable:")) return fitPlain("Discovery failed · ctrl+r retry", width);
   const match = projectDiscoveryNotice?.match(/\/session attach(?:\s+--project-index=\d+)?/);
   const command = match?.[0] ?? "/session attach";
@@ -152,11 +154,7 @@ export function compactProviderLoginAcknowledgement(providerId: "openai" | "anth
 }
 
 export function compactTaskContractAcknowledgement(width: number): string {
-  return [
-    "Task contract ready · resize to review",
-    "/task-contract confirm",
-    "/task-contract launch",
-  ]
+  return ["Task contract ready · resize to review", "/task-contract confirm", "/task-contract launch"]
     .map((line) => fitPlain(line, width))
     .join("\n");
 }
@@ -184,10 +182,7 @@ export function shouldBlockConcurrentTurnSubmit(
   return text.trim() !== "" && !text.trim().startsWith("/") && (working || activeController !== undefined || submitInFlight);
 }
 
-export function isCurrentConversationTurnController(
-  controller: AbortController,
-  activeController: AbortController | undefined,
-): boolean {
+export function isCurrentConversationTurnController(controller: AbortController, activeController: AbortController | undefined): boolean {
   return activeController === controller;
 }
 
@@ -286,7 +281,11 @@ export function shouldConsumeAccountLoginBackgroundInput(
 }
 
 export function compactModelListAcknowledgement(identities: readonly string[], width: number, unavailableLabel?: string): string {
-  if (identities.length === 0) return fitPlain(unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models", width);
+  if (identities.length === 0)
+    return fitPlain(
+      unavailableLabel === undefined ? "No models available · retry /models list" : "Catalog unavailable · retry /models",
+      width,
+    );
   const identity = identities[0]!;
   const commandPrefix = "/model use --model";
   const command = `${commandPrefix} ${identity}`;
@@ -304,7 +303,11 @@ export function compactConversationAcknowledgement(
   conversation: Pick<ConversationTranscriptState, "assistantText" | "status" | "statusMessage">,
   width: number,
 ): string {
-  const content = (conversation.assistantText || conversation.statusMessage || (conversation.status === "streaming" ? "Waiting for response…" : conversation.status))
+  const content = (
+    conversation.assistantText ||
+    conversation.statusMessage ||
+    (conversation.status === "streaming" ? "Waiting for response…" : conversation.status)
+  )
     .replace(/\s+/g, " ")
     .trim();
   const label = conversation.status === "streaming" ? "Maestro · streaming" : `Maestro · ${conversation.status}`;
@@ -500,7 +503,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
   const sessionWorkspacePath = workspaceIdentity(workspace);
   const state = liveState;
   const syncProjectPresentation = (): void => {
-    state.project = project.kind === "attached" ? { kind: "attached" } : { kind: "unavailable", guidance: projectDiscoveryNotice ?? project.reason };
+    state.project =
+      project.kind === "attached" ? { kind: "attached" } : { kind: "unavailable", guidance: projectDiscoveryNotice ?? project.reason };
   };
   return await new Promise<number>((resolve) => {
     const editor = new SecretEditor(tui, editorTheme, { paddingX: 2, autocompleteMaxVisible: 6 });
@@ -525,7 +529,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             : compactReview !== undefined && terminal.rows < 16
               ? fitPlain(compactReview, width)
               : terminal.rows < 16 && state.connection.kind !== "connected"
-                ? compactConnectionRecoveryAcknowledgement(state.connection, width) ?? renderInputPlaceholder(state, width, terminal.rows < 16)
+                ? (compactConnectionRecoveryAcknowledgement(state.connection, width) ??
+                  renderInputPlaceholder(state, width, terminal.rows < 16))
                 : providerLoginInFlightProvider !== undefined && terminal.rows < 16
                   ? compactProviderLoginAcknowledgement(providerLoginInFlightProvider, width)
                   : compactModelList !== undefined && terminal.rows < 16
@@ -533,12 +538,12 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
                     : terminal.rows < 16 && project.kind !== "attached"
                       ? compactProjectAttachmentNotice(compactProjectNotice, width)
                       : compactTaskContractReview && terminal.rows < 16
-                      ? compactTaskContractAcknowledgement(width)
-                      : compactConversationResult !== undefined && terminal.rows < 16
-                        ? compactConversationResult
-                        : compactCommandResult !== undefined && terminal.rows < 16
-                          ? compactCommandResultAcknowledgement(compactCommandResult, width)
-                          : renderInputPlaceholder(state, width, terminal.rows < 16),
+                        ? compactTaskContractAcknowledgement(width)
+                        : compactConversationResult !== undefined && terminal.rows < 16
+                          ? compactConversationResult
+                          : compactCommandResult !== undefined && terminal.rows < 16
+                            ? compactCommandResultAcknowledgement(compactCommandResult, width)
+                            : renderInputPlaceholder(state, width, terminal.rows < 16),
         ),
       ];
     });
@@ -610,7 +615,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       const semanticLine: TranscriptLine = typeof line === "string" ? { kind: "system", text: line } : line;
       if (terminal.rows < 16) {
         compactConversationResult = undefined;
-        compactTaskContractReview = semanticLine.text.includes("/task-contract confirm") && semanticLine.text.includes("/task-contract launch");
+        compactTaskContractReview =
+          semanticLine.text.includes("/task-contract confirm") && semanticLine.text.includes("/task-contract launch");
         compactCommandResult = compactTaskContractReview ? undefined : semanticLine.text;
       }
       const next = addConversationMessage(conversation, "system", semanticLine.text, semanticLine.kind);
@@ -621,7 +627,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     const appendSuccess = (text: string): void => append({ kind: "success", text });
     const appendWarning = (text: string): void => append({ kind: "warning", text });
     const handoffToAvailableModel = async (loginLabel: string, isCurrent: () => boolean = () => true): Promise<void> => {
-      if (client === undefined || !shouldHandoffAfterProviderLogin(resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model), session?.conversationId)) return;
+      if (
+        client === undefined ||
+        !shouldHandoffAfterProviderLogin(resolveConfiguredModel(options.env.MAESTRO_MODEL, session?.model), session?.conversationId)
+      )
+        return;
       try {
         const models = await client.listModels();
         if (!isCurrent()) return;
@@ -648,7 +658,9 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       } catch (error) {
         if (!isCurrent()) return;
         const message = error instanceof Error ? error.message : "request failed";
-        appendWarning(`${loginLabel} complete, but model discovery failed: ${message}. Run /models list, then /model use --model provider/model.`);
+        appendWarning(
+          `${loginLabel} complete, but model discovery failed: ${message}. Run /models list, then /model use --model provider/model.`,
+        );
       }
     };
     const showDraftIfPresent = (content: string): void => {
@@ -765,6 +777,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
     };
 
     let conversationStreamController: AbortController | undefined;
+    let conversationActivityController: AbortController | undefined;
+    let workingLoaderTimer: ReturnType<typeof setInterval> | undefined;
     let conversationHydration: Promise<void> = Promise.resolve();
     let conversationHydrationGeneration = 0;
     const streamConversation = async (
@@ -820,6 +834,39 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       } catch (error) {
         if (!signal.aborted) appendError(`Conversation stream unavailable: ${error instanceof Error ? error.message : "unknown error"}`);
       }
+    };
+
+    const streamConversationActivity = async (
+      conversationId: string,
+      projectId: string,
+      controller: AbortController,
+      displayGeneration = conversationDisplayBoundary.capture(),
+    ): Promise<void> => {
+      if (client === undefined) return;
+      await runConversationActivityStream({
+        client,
+        conversationId,
+        projectId,
+        signal: controller.signal,
+        onEvent: (event: ConversationActivityEvent) => {
+          if (
+            controller.signal.aborted ||
+            !conversationDisplayBoundary.isCurrent(displayGeneration) ||
+            session?.conversationId !== conversationId ||
+            project.kind !== "attached" ||
+            project.projectId !== projectId
+          )
+            return;
+          state.conversationActivity = activityView(event);
+          render();
+        },
+        onReset: () => {
+          if (!controller.signal.aborted && conversationDisplayBoundary.isCurrent(displayGeneration)) {
+            delete state.conversationActivity;
+            render();
+          }
+        },
+      });
     };
 
     const hydrateConversation = async (conversationId: string | undefined, projectId: string, generation: number): Promise<void> => {
@@ -1143,6 +1190,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               conversationTurnBoundary.invalidate();
               conversationDisplayBoundary.clear();
               conversationStreamController?.abort();
+              conversationActivityController?.abort();
+              conversationActivityController = undefined;
               conversationStreamController = undefined;
               conversationHydrationGeneration += 1;
               conversationHydration = Promise.resolve();
@@ -1222,6 +1271,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             invalidateDashboardRefreshes();
             conversationTurnBoundary.invalidate();
             conversationStreamController?.abort();
+            conversationActivityController?.abort();
+            conversationActivityController = undefined;
             conversationStreamController = undefined;
             conversationHydrationGeneration += 1;
             conversationHydration = Promise.resolve();
@@ -1236,6 +1287,8 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
             invalidateDashboardRefreshes();
             conversationTurnBoundary.invalidate();
             conversationStreamController?.abort();
+            conversationActivityController?.abort();
+            conversationActivityController = undefined;
             conversationStreamController = undefined;
             conversationHydrationGeneration += 1;
             conversationHydration = Promise.resolve();
@@ -1267,7 +1320,11 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               session = current;
               syncModelState();
             } else if (client !== undefined) {
-              const discovered = await discoverWorkspaceProjectFromControlPlane({ workspacePath: sessionWorkspacePath, session: current, client });
+              const discovered = await discoverWorkspaceProjectFromControlPlane({
+                workspacePath: sessionWorkspacePath,
+                session: current,
+                client,
+              });
               if (discovered.kind !== "attached") {
                 appendWarning(discovered.reason);
                 return;
@@ -1477,12 +1534,26 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               render();
               const streamController = new AbortController();
               conversationStreamController?.abort();
+              conversationActivityController?.abort();
               conversationStreamController = streamController;
+              const activityController = new AbortController();
+              conversationActivityController = activityController;
               const displayGeneration = conversationDisplayBoundary.capture();
               void streamConversation(activeConversationId, project.projectId, streamController, displayGeneration);
+              void streamConversationActivity(activeConversationId, project.projectId, activityController, displayGeneration);
               const turnController = new AbortController();
               conversationTurnController = turnController;
               state.working = true;
+              state.workingSince = Date.now();
+              state.workingTick = 0;
+              delete state.conversationActivity;
+              if (workingLoaderTimer !== undefined) clearInterval(workingLoaderTimer);
+              workingLoaderTimer = setInterval(() => {
+                if (isCurrentConversationTurnController(turnController, conversationTurnController)) {
+                  state.workingTick = (state.workingTick ?? 0) + 1;
+                  render();
+                }
+              }, 120);
               render();
               try {
                 const result = await client.sendConversationTurn(
@@ -1524,7 +1595,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
               } finally {
                 if (isCurrentConversationTurnController(turnController, conversationTurnController)) {
                   conversationTurnController = undefined;
+                  conversationActivityController?.abort();
+                  conversationActivityController = undefined;
+                  if (workingLoaderTimer !== undefined) {
+                    clearInterval(workingLoaderTimer);
+                    workingLoaderTimer = undefined;
+                  }
                   state.working = false;
+                  delete state.workingSince;
+                  delete state.workingTick;
+                  delete state.conversationActivity;
                   render();
                 }
               }
@@ -1581,14 +1661,16 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
       activityController?.abort();
       conversationTurnController?.abort();
       conversationStreamController?.abort();
+      conversationActivityController?.abort();
+      if (workingLoaderTimer !== undefined) clearInterval(workingLoaderTimer);
       accountLoginController?.abort();
       if (accountLoginId !== undefined && client !== undefined) void client.cancelAccountLogin(accountLoginId).catch(() => undefined);
       flashmobAnimationId += 1;
       tui.stop();
       resolve(0);
     };
-    const cancelActiveConversation = (): boolean =>
-      cancelConversationTurn({
+    const cancelActiveConversation = (): boolean => {
+      const cancelled = cancelConversationTurn({
         controller: conversationTurnController,
         client,
         projectId: project.kind === "attached" ? project.projectId : undefined,
@@ -1596,6 +1678,22 @@ export async function startInteractiveTui(options: InteractiveTuiOptions): Promi
         onWarning: appendWarning,
         onError: appendError,
       });
+      if (!cancelled) return false;
+      conversationTurnBoundary.invalidate();
+      conversationTurnController = undefined;
+      conversationActivityController?.abort();
+      conversationActivityController = undefined;
+      if (workingLoaderTimer !== undefined) {
+        clearInterval(workingLoaderTimer);
+        workingLoaderTimer = undefined;
+      }
+      state.working = false;
+      delete state.workingSince;
+      delete state.workingTick;
+      delete state.conversationActivity;
+      render();
+      return true;
+    };
 
     tui.addInputListener((data) => {
       if (

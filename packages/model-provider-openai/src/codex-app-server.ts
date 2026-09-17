@@ -1,6 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
-import type { ModelMessage, ModelProviderPort, ModelStreamEvent, ModelTurnRequest, ProviderDataPolicy, ProviderModelRequest, ProviderPlugin, ModelCatalogEntry } from "@maestro/agent-runtime";
+import type {
+  ModelMessage,
+  ModelProviderPort,
+  ModelStreamEvent,
+  ModelTurnRequest,
+  ProviderDataPolicy,
+  ProviderModelRequest,
+  ProviderPlugin,
+  ModelCatalogEntry,
+} from "@maestro/agent-runtime";
 
 export interface CodexAppServerTransport {
   send(message: unknown): void;
@@ -32,12 +41,24 @@ export type CodexLoginStatus =
 
 export class CodexAppServerError extends Error {
   readonly name = "CodexAppServerError";
-  constructor(readonly code: "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response" | "account_login_session_unknown", message: string, readonly detail?: string) { super(message); }
+  constructor(
+    readonly code:
+      "provider_auth" | "provider_unavailable" | "provider_cancelled" | "provider_malformed_response" | "account_login_session_unknown",
+    message: string,
+    readonly detail?: string,
+  ) {
+    super(message);
+  }
 }
 
 class CodexAppServerTransportError extends Error {
   readonly name = "CodexAppServerTransportError";
-  constructor(readonly kind: "spawn" | "transport", message: string) { super(message); }
+  constructor(
+    readonly kind: "spawn" | "transport",
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 export interface CodexAccountSummary {
@@ -63,6 +84,22 @@ function requiredString(value: unknown, field: string): string {
   return value;
 }
 
+function codexToolName(item: Record<string, unknown>): string | undefined {
+  if (item.type === "commandExecution") return "command";
+  if (item.type === "mcpToolCall" || item.type === "dynamicToolCall" || item.type === "collabAgentToolCall") {
+    const value = item.tool;
+    return typeof value === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(value) ? value : "tool";
+  }
+  return undefined;
+}
+
+function codexToolStatus(item: Record<string, unknown>): "ok" | "error" | "unknown" {
+  const status = item.status;
+  if (status === "completed" || status === "succeeded" || status === "success") return "ok";
+  if (status === "failed" || status === "errored" || status === "error") return "error";
+  return "unknown";
+}
+
 function validateAuthUrl(value: unknown): string {
   const authUrl = requiredString(value, "authUrl");
   let parsed: URL;
@@ -80,7 +117,12 @@ function validateAuthUrl(value: unknown): string {
 function redactChildEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env };
   for (const key of Object.keys(childEnv)) {
-    if (/(?:API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET|PRIVATE_KEY|PASSWORD|PASSWD|CODEX_TOKEN|MAESTRO_SECRET|MAESTRO_API_TOKEN|MAESTRO_MODEL_GATEWAY_TOKEN)$/i.test(key)) delete childEnv[key];
+    if (
+      /(?:API_KEY|ACCESS_TOKEN|REFRESH_TOKEN|CLIENT_SECRET|PRIVATE_KEY|PASSWORD|PASSWD|CODEX_TOKEN|MAESTRO_SECRET|MAESTRO_API_TOKEN|MAESTRO_MODEL_GATEWAY_TOKEN)$/i.test(
+        key,
+      )
+    )
+      delete childEnv[key];
   }
   return childEnv;
 }
@@ -110,7 +152,10 @@ class StdioTransport implements CodexAppServerTransport {
     });
     this.child.once("exit", (code, signal) => {
       if (!this.child.killed) {
-        const failure = new CodexAppServerTransportError("transport", `Codex app-server transport disconnected (${code ?? signal ?? "unknown"})`);
+        const failure = new CodexAppServerTransportError(
+          "transport",
+          `Codex app-server transport disconnected (${code ?? signal ?? "unknown"})`,
+        );
         for (const listener of this.errorListeners) listener(failure);
       }
     });
@@ -140,7 +185,10 @@ export class CodexAppServerClient {
   private readonly transport: CodexAppServerTransport;
   private readonly requestTimeoutMs: number;
   private readonly clientInfo: NonNullable<CodexAppServerOptions["clientInfo"]>;
-  private readonly pending = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >();
   private readonly logins = new Map<string, CodexLoginStatus>();
   private readonly notificationListeners = new Set<(message: JsonRpcNotification) => void>();
   private readonly activeTurns = new Map<string, { threadId: string; turnId: string }>();
@@ -152,7 +200,8 @@ export class CodexAppServerClient {
   private readonly unsubscribeError: (() => void) | undefined;
 
   constructor(options: CodexAppServerOptions = {}) {
-    this.transport = options.transport ?? new StdioTransport(options.command ?? "codex", options.args ?? ["app-server"], options.env ?? process.env);
+    this.transport =
+      options.transport ?? new StdioTransport(options.command ?? "codex", options.args ?? ["app-server"], options.env ?? process.env);
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
     this.clientInfo = options.clientInfo ?? { name: "codex_cli_rs", title: "Maestro", version: "development" };
     this.unsubscribe = this.transport.onMessage((message) => this.handleMessage(message));
@@ -162,9 +211,7 @@ export class CodexAppServerClient {
       // failure from a later transport disconnect. Reuse one error object for
       // pending and subsequent requests so both paths report the same cause.
       if (this.transportError !== undefined) return;
-      const detail = error instanceof CodexAppServerTransportError
-        ? error.message
-        : "Codex app-server transport failed";
+      const detail = error instanceof CodexAppServerTransportError ? error.message : "Codex app-server transport failed";
       this.transportError = new CodexAppServerError("provider_unavailable", "Codex app-server is unavailable", detail);
       this.failPending(this.transportError);
     });
@@ -183,25 +230,58 @@ export class CodexAppServerClient {
     readonly signal: AbortSignal;
     readonly maxOutputTokens: number;
     readonly emit?: (event: ModelStreamEvent) => void;
-  }): Promise<{ requestId: string; model: { provider: "openai-codex"; id: string }; text: string; toolCalls: readonly []; stopReason: "end_turn" | "cancelled"; usage: { state: "unknown" } }> {
+  }): Promise<{
+    requestId: string;
+    model: { provider: "openai-codex"; id: string };
+    text: string;
+    toolCalls: readonly [];
+    stopReason: "end_turn" | "cancelled";
+    usage: { state: "unknown" };
+  }> {
     if (input.tools.length > 0) throw new CodexAppServerError("provider_unavailable", "Codex app-server tool bridge is not enabled");
     if (input.signal.aborted) throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
     const account = await this.accountRead();
     if (account.authMode !== "chatgpt") throw new CodexAppServerError("provider_auth", "ChatGPT account authentication is required");
-    const threadResult = await this.requestRaw("thread/start", { model: input.model, approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }, personality: "none" });
+    const threadResult = await this.requestRaw("thread/start", {
+      model: input.model,
+      approvalPolicy: "never",
+      sandboxPolicy: { type: "readOnly" },
+      personality: "none",
+    });
     const thread = isRecord(threadResult) && isRecord(threadResult.thread) ? threadResult.thread : undefined;
     const threadId = requiredString(thread?.id, "thread.id");
-    const transcript = input.messages.map((message) => {
-      const text = message.content.filter((part): part is Extract<ModelMessage["content"][number], { kind: "text" }> => part.kind === "text").map((part) => part.text).join("\n");
-      return `${message.role}: ${text}`;
-    }).join("\n\n");
+    const transcript = input.messages
+      .map((message) => {
+        const text = message.content
+          .filter((part): part is Extract<ModelMessage["content"][number], { kind: "text" }> => part.kind === "text")
+          .map((part) => part.text)
+          .join("\n");
+        return `${message.role}: ${text}`;
+      })
+      .join("\n\n");
     let cleanup = () => {};
     let activeTurnId: string | undefined;
     const notifications = new Promise<{ text: string; status: "completed" | "interrupted" }>((resolve, reject) => {
       let text = "";
+      let thinkingCursor = 0;
       const unsubscribe = this.onNotification((notification) => {
         const params = notification.params;
         if (!isRecord(params) || (params.threadId !== threadId && (!isRecord(params.turn) || params.turn.id !== activeTurnId))) return;
+        if (
+          (notification.method === "item/reasoning/summaryTextDelta" || notification.method === "item/reasoning/textDelta") &&
+          typeof params.delta === "string"
+        ) {
+          input.emit?.({ kind: "thinking-delta", cursor: ++thinkingCursor });
+        }
+        if ((notification.method === "item/started" || notification.method === "item/completed") && isRecord(params.item)) {
+          const toolName = codexToolName(params.item);
+          const callId = typeof params.item.id === "string" ? params.item.id : undefined;
+          if (toolName !== undefined && callId !== undefined) {
+            if (notification.method === "item/started")
+              input.emit?.({ kind: "tool-executing", cursor: ++thinkingCursor, callId, toolName });
+            else input.emit?.({ kind: "tool-completed", cursor: ++thinkingCursor, callId, toolName, status: codexToolStatus(params.item) });
+          }
+        }
         if (notification.method === "item/agentMessage/delta" && typeof params.delta === "string") {
           text += params.delta;
           input.emit?.({ kind: "text-delta", cursor: text.length, text: params.delta });
@@ -210,32 +290,54 @@ export class CodexAppServerClient {
         const status = params.turn.status;
         if (status === "completed") {
           if (!text && Array.isArray(params.turn.items)) {
-            text = params.turn.items.filter((item): item is Record<string, unknown> => isRecord(item) && item.type === "agentMessage" && typeof item.text === "string").map((item) => item.text as string).join("");
+            text = params.turn.items
+              .filter(
+                (item): item is Record<string, unknown> => isRecord(item) && item.type === "agentMessage" && typeof item.text === "string",
+              )
+              .map((item) => item.text as string)
+              .join("");
           }
           resolve({ text, status });
         } else if (status === "interrupted") resolve({ text, status });
         else if (status === "failed") reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn failed"));
       });
-      void this.requestRaw("turn/start", { threadId, input: [{ type: "text", text: transcript }], model: input.model, approvalPolicy: "never", sandboxPolicy: { type: "readOnly" }, maxOutputTokens: input.maxOutputTokens }).then((turnResult) => {
-        const turn = isRecord(turnResult) && isRecord(turnResult.turn) ? turnResult.turn : undefined;
-        const turnId = requiredString(turn?.id, "turn.id");
-        activeTurnId = turnId;
-        this.activeTurns.set(input.requestId, { threadId, turnId });
-        if (input.signal.aborted) void this.requestRaw("turn/interrupt", { threadId, turnId }).catch(() => undefined);
-      }).catch((error: unknown) => reject(error instanceof Error ? error : new Error("Codex app-server turn failed")));
+      void this.requestRaw("turn/start", {
+        threadId,
+        input: [{ type: "text", text: transcript }],
+        model: input.model,
+        approvalPolicy: "never",
+        sandboxPolicy: { type: "readOnly" },
+        maxOutputTokens: input.maxOutputTokens,
+      })
+        .then((turnResult) => {
+          const turn = isRecord(turnResult) && isRecord(turnResult.turn) ? turnResult.turn : undefined;
+          const turnId = requiredString(turn?.id, "turn.id");
+          activeTurnId = turnId;
+          this.activeTurns.set(input.requestId, { threadId, turnId });
+          if (input.signal.aborted) void this.requestRaw("turn/interrupt", { threadId, turnId }).catch(() => undefined);
+        })
+        .catch((error: unknown) => reject(error instanceof Error ? error : new Error("Codex app-server turn failed")));
       const onAbort = () => {
         const active = this.activeTurns.get(input.requestId);
         if (active) void this.requestRaw("turn/interrupt", active).catch(() => undefined);
         reject(new CodexAppServerError("provider_cancelled", "Codex request cancelled"));
       };
       input.signal.addEventListener("abort", onAbort, { once: true });
-      cleanup = () => { unsubscribe(); input.signal.removeEventListener("abort", onAbort); };
+      cleanup = () => {
+        unsubscribe();
+        input.signal.removeEventListener("abort", onAbort);
+      };
     });
     notifications.then(cleanup, cleanup).catch(() => undefined);
     let outcome: { text: string; status: "completed" | "interrupted" };
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
-      const deadline = new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn timed out")), this.requestTimeoutMs); });
+      const deadline = new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new CodexAppServerError("provider_unavailable", "Codex app-server turn timed out")),
+          this.requestTimeoutMs,
+        );
+      });
       outcome = await Promise.race([notifications, deadline]);
     } catch (error) {
       if (error instanceof CodexAppServerError && error.message.includes("timed out")) {
@@ -243,9 +345,19 @@ export class CodexAppServerClient {
         if (active) void this.requestRaw("turn/interrupt", active).catch(() => undefined);
       }
       throw error;
-    } finally { if (timeout !== undefined) clearTimeout(timeout); this.activeTurns.delete(input.requestId); }
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+      this.activeTurns.delete(input.requestId);
+    }
     if (outcome.status === "interrupted") throw new CodexAppServerError("provider_cancelled", "Codex request cancelled");
-    return { requestId: input.requestId, model: { provider: "openai-codex", id: input.model }, text: outcome.text, toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+    return {
+      requestId: input.requestId,
+      model: { provider: "openai-codex", id: input.model },
+      text: outcome.text,
+      toolCalls: [],
+      stopReason: "end_turn",
+      usage: { state: "unknown" },
+    };
   }
 
   async cancelTurn(requestId: string): Promise<"requested" | "unsupported"> {
@@ -285,13 +397,19 @@ export class CodexAppServerClient {
       const seenCursors = new Set<string>();
       let cursor: string | undefined;
       for (let page = 0; page < 100; page += 1) {
-        const result = await this.requestRaw("model/list", cursor === undefined ? { includeHidden: false } : { cursor, includeHidden: false });
-        if (!isRecord(result) || !Array.isArray(result.data)) throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model catalog");
+        const result = await this.requestRaw(
+          "model/list",
+          cursor === undefined ? { includeHidden: false } : { cursor, includeHidden: false },
+        );
+        if (!isRecord(result) || !Array.isArray(result.data))
+          throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model catalog");
         for (const entry of result.data) {
-          if (!isRecord(entry)) throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model entry");
+          if (!isRecord(entry))
+            throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model entry");
           if (entry.hidden === true) continue;
           const rawId = typeof entry.model === "string" && entry.model.trim() !== "" ? entry.model : entry.id;
-          if (typeof rawId !== "string" || rawId.trim() === "") throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned a model without an id");
+          if (typeof rawId !== "string" || rawId.trim() === "")
+            throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned a model without an id");
           const id = rawId.trim();
           if (seenIds.has(id)) continue;
           seenIds.add(id);
@@ -300,7 +418,8 @@ export class CodexAppServerClient {
         }
         const nextCursor = result.nextCursor;
         if (nextCursor === null || nextCursor === undefined) return models;
-        if (typeof nextCursor !== "string" || nextCursor.trim() === "" || seenCursors.has(nextCursor)) throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model catalog cursor");
+        if (typeof nextCursor !== "string" || nextCursor.trim() === "" || seenCursors.has(nextCursor))
+          throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned an invalid model catalog cursor");
         seenCursors.add(nextCursor);
         cursor = nextCursor;
       }
@@ -311,13 +430,21 @@ export class CodexAppServerClient {
     }
   }
 
-
   async accountRead(): Promise<CodexAccountSummary> {
     await this.ensureInitialized();
     const result = await this.requestRaw("account/read", { refreshToken: false });
     const account = isRecord(result) && isRecord(result.account) ? result.account : undefined;
     const type = account?.type;
-    const authMode = type === "chatgpt" ? "chatgpt" : type === "apiKey" ? "apikey" : type === "personalAccessToken" ? "personalAccessToken" : account === undefined ? "null" : "unknown";
+    const authMode =
+      type === "chatgpt"
+        ? "chatgpt"
+        : type === "apiKey"
+          ? "apikey"
+          : type === "personalAccessToken"
+            ? "personalAccessToken"
+            : account === undefined
+              ? "null"
+              : "unknown";
     return {
       authMode,
       ...(typeof account?.email === "string" ? { email: account.email } : {}),
@@ -374,7 +501,8 @@ export class CodexAppServerClient {
       pending.reject(error);
     }
     this.pending.clear();
-    for (const [loginId, status] of this.logins) if (status.state === "pending") this.logins.set(loginId, { loginId, state: "failed", message: "Codex app-server is unavailable" });
+    for (const [loginId, status] of this.logins)
+      if (status.state === "pending") this.logins.set(loginId, { loginId, state: "failed", message: "Codex app-server is unavailable" });
   }
 
   private handleMessage(message: unknown): void {
@@ -385,7 +513,8 @@ export class CodexAppServerClient {
       this.pending.delete(message.id);
       clearTimeout(pending.timer);
       const response = message as JsonRpcResponse;
-      if (isRecord(response.error)) pending.reject(new Error(typeof response.error.message === "string" ? response.error.message : "Codex app-server request failed"));
+      if (isRecord(response.error))
+        pending.reject(new Error(typeof response.error.message === "string" ? response.error.message : "Codex app-server request failed"));
       else pending.resolve(response.result);
       return;
     }
@@ -396,10 +525,17 @@ export class CodexAppServerClient {
     const loginId = notification.params.loginId;
     if (typeof loginId !== "string") return;
     if (notification.params.success === true) this.logins.set(loginId, { loginId, state: "succeeded" });
-    else this.logins.set(loginId, { loginId, state: "failed", message: typeof notification.params.error === "string" && notification.params.error ? notification.params.error : "Codex account login failed" });
+    else
+      this.logins.set(loginId, {
+        loginId,
+        state: "failed",
+        message:
+          typeof notification.params.error === "string" && notification.params.error
+            ? notification.params.error
+            : "Codex account login failed",
+      });
   }
 }
-
 
 const codexDataPolicy: ProviderDataPolicy = {
   allowedDataClasses: ["public", "workspace"],
@@ -409,9 +545,13 @@ const codexDataPolicy: ProviderDataPolicy = {
 };
 
 class CodexAppServerProvider implements ModelProviderPort {
-  readonly capabilities = new Set(["text", "cancellation", "managed-subscription"] as const);
+  readonly capabilities = new Set(["text", "streaming", "cancellation", "managed-subscription"] as const);
 
-  constructor(readonly identity: { provider: "openai-codex"; id: string }, readonly accountRef: string, private readonly client: CodexAppServerClient) {}
+  constructor(
+    readonly identity: { provider: "openai-codex"; id: string },
+    readonly accountRef: string,
+    private readonly client: CodexAppServerClient,
+  ) {}
 
   async turn(request: ModelTurnRequest) {
     return this.client.runTextTurn({
@@ -442,7 +582,13 @@ export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions)
   const dynamic = options.models === undefined;
   let models = dynamic ? [] : [...options.models];
   let refreshFlight: Promise<void> | undefined;
-  const catalog = (): readonly ModelCatalogEntry[] => models.map((id) => ({ identity: { provider: "openai-codex", id }, capabilities: new Set(["text", "cancellation", "managed-subscription"] as const), authModes: ["managed-subscription"], dataPolicy: codexDataPolicy }));
+  const catalog = (): readonly ModelCatalogEntry[] =>
+    models.map((id) => ({
+      identity: { provider: "openai-codex", id },
+      capabilities: new Set(["text", "streaming", "cancellation", "managed-subscription"] as const),
+      authModes: ["managed-subscription"],
+      dataPolicy: codexDataPolicy,
+    }));
   const refreshModels = async (): Promise<void> => {
     if (!dynamic) return;
     if (refreshFlight !== undefined) return refreshFlight;
@@ -459,14 +605,24 @@ export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions)
   return {
     id: "openai-codex",
     authModes: ["managed-subscription"],
-    capabilities: new Set(["text", "cancellation", "managed-subscription"] as const),
+    capabilities: new Set(["text", "streaming", "cancellation", "managed-subscription"] as const),
     dataPolicy: codexDataPolicy,
     listModels: catalog,
     ...(dynamic ? { refreshModels } : {}),
     async create(request: ProviderModelRequest): Promise<ModelProviderPort> {
-      if (request.model.provider !== "openai-codex" || request.account.providerId !== "openai-codex" || request.account.authMode !== "managed-subscription") throw new CodexAppServerError("provider_auth", "Codex managed account binding mismatch");
-      if (!models.includes(request.model.id)) throw new CodexAppServerError("provider_malformed_response", "Codex model is not in the configured catalog");
-      return new CodexAppServerProvider(request.model as { provider: "openai-codex"; id: string }, request.account.accountRef, options.client);
+      if (
+        request.model.provider !== "openai-codex" ||
+        request.account.providerId !== "openai-codex" ||
+        request.account.authMode !== "managed-subscription"
+      )
+        throw new CodexAppServerError("provider_auth", "Codex managed account binding mismatch");
+      if (!models.includes(request.model.id))
+        throw new CodexAppServerError("provider_malformed_response", "Codex model is not in the configured catalog");
+      return new CodexAppServerProvider(
+        request.model as { provider: "openai-codex"; id: string },
+        request.account.accountRef,
+        options.client,
+      );
     },
   };
 }

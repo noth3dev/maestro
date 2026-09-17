@@ -4,6 +4,8 @@ import type { TaskContractService } from "./task-contract-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 import {
   UuidSchema,
+  ConversationActivityEventSchema,
+  type ConversationActivityEvent,
   type Conversation,
   type ConversationEvent,
   type ConversationTurnInput,
@@ -41,6 +43,13 @@ export interface ConversationService {
   ): Promise<ConversationTurnResult>;
   cancel(conversationId: string, projectId: string, operator: OperatorContext): Promise<Conversation>;
   listEvents(conversationId: string, projectId: string, after: string, operator: OperatorContext): Promise<readonly ConversationEvent[]>;
+  /** Best-effort, non-replayable live activity. Payloads exclude reasoning text, tool arguments, and tool output. */
+  subscribeActivity?(
+    conversationId: string,
+    projectId: string,
+    operator: OperatorContext,
+    listener: (event: ConversationActivityEvent) => void,
+  ): Promise<() => void>;
   /** Rebuilds in-memory runtime handles for active conversations after a process restart. */
   recover?(): Promise<{ recovered: number; markedUnknown: number }>;
   close?(): Promise<void>;
@@ -135,6 +144,39 @@ function now(): string {
   return new Date().toISOString();
 }
 
+function safeActivityToolName(name: string): string {
+  return /^[A-Za-z0-9._:-]{1,128}$/.test(name) ? name : "tool";
+}
+
+export function modelActivity(
+  event: import("@maestro/agent-runtime").ModelStreamEvent,
+): { phase: ConversationActivityEvent["phase"]; toolName?: string; status?: ConversationActivityEvent["status"] } | undefined {
+  switch (event.kind) {
+    case "thinking-delta":
+      return { phase: "thinking" };
+    case "text-delta":
+      return event.text === "" ? undefined : { phase: "writing" };
+    case "tool-proposed":
+      return { phase: "tool-call", toolName: safeActivityToolName(event.call.name), status: "proposed" };
+    case "tool-validated":
+      return { phase: "tool-call", toolName: safeActivityToolName(event.toolName), status: "validated" };
+    case "tool-executing":
+      return { phase: "executing", toolName: safeActivityToolName(event.toolName), status: "executing" };
+    case "tool-completed":
+      return { phase: "tool-result", toolName: safeActivityToolName(event.toolName), status: event.status };
+    case "tool-rejected":
+      return { phase: "error", toolName: safeActivityToolName(event.toolName), status: "error" };
+    case "provider-error":
+      return { phase: "error" };
+    case "terminal":
+      return event.status === "failed" || event.status === "unknown"
+        ? { phase: "error", status: event.status === "failed" ? "error" : "unknown" }
+        : { phase: "waiting", ...(event.status === "cancelled" ? { status: "cancelled" } : {}) };
+    case "usage":
+      return undefined;
+  }
+}
+
 export function createPostgresConversationService(options: {
   pool: Pool;
   gateway: ModelGatewayPort;
@@ -146,6 +188,32 @@ export function createPostgresConversationService(options: {
   taskContractService?: TaskContractService;
 }): ConversationService {
   const runtimes = new Map<string, RuntimeHandle>();
+  const activitySubscribers = new Map<string, Set<(event: ConversationActivityEvent) => void>>();
+  const activityKey = (conversationId: string, projectId: string): string => `${conversationId}:${projectId}`;
+  const publishActivity = (
+    conversationId: string,
+    projectId: string,
+    turnId: string,
+    event: import("@maestro/agent-runtime").ModelStreamEvent,
+  ): void => {
+    const mapped = modelActivity(event);
+    if (mapped === undefined) return;
+    const activity = ConversationActivityEventSchema.parse({
+      activityId: randomUUID(),
+      conversationId,
+      projectId,
+      turnId,
+      ...mapped,
+      occurredAt: now(),
+    });
+    for (const listener of activitySubscribers.get(activityKey(conversationId, projectId)) ?? []) {
+      try {
+        listener(activity);
+      } catch {
+        /* a disconnected SSE client must not affect the turn */
+      }
+    }
+  };
   // The provider's final text is not authoritative draft state. Keep the
   // durable tool result keyed by the root conversation id so clients can
   // review it even when the provider replies with a summary such as "Draft created".
@@ -253,7 +321,10 @@ export function createPostgresConversationService(options: {
       binding: row.binding,
       tools,
       initialMessages,
-      onModelEvent: (event) => queueTextDelta(stream, row.conversation_id, row.project_id, event),
+      onModelEvent: (event) => {
+        queueTextDelta(stream, row.conversation_id, row.project_id, event);
+        if (stream.turnId !== undefined) publishActivity(row.conversation_id, row.project_id, stream.turnId, event);
+      },
     });
     const spawned = await runtime.spawn({
       name: `conversation-${row.conversation_id}`,
@@ -389,7 +460,10 @@ export function createPostgresConversationService(options: {
         gateway: options.gateway,
         binding: binding!,
         tools,
-        onModelEvent: (event) => queueTextDelta(stream, conversationId, input.projectId, event),
+        onModelEvent: (event) => {
+          queueTextDelta(stream, conversationId, input.projectId, event);
+          if (stream.turnId !== undefined) publishActivity(conversationId, input.projectId, stream.turnId, event);
+        },
       });
       let spawned: Awaited<ReturnType<typeof runtime.spawn>>;
       try {
@@ -620,6 +694,11 @@ export function createPostgresConversationService(options: {
         throw error;
       }
       resultClient.release();
+      publishActivity(conversationId, input.projectId, turnId, {
+        kind: "terminal",
+        cursor: 0,
+        status: status === "succeeded" ? "succeeded" : status === "failed" ? "failed" : status === "cancelled" ? "cancelled" : "unknown",
+      });
       handle.stream.turnId = undefined;
       handle.stream.requestId = undefined;
       return {
@@ -718,6 +797,17 @@ export function createPostgresConversationService(options: {
         occurredAt: new Date(row.occurred_at).toISOString(),
       }));
     },
+    async subscribeActivity(conversationId, projectId, operator, listener) {
+      await read(conversationId, projectId, operator.operatorId);
+      const key = activityKey(conversationId, projectId);
+      const listeners = activitySubscribers.get(key) ?? new Set<(event: ConversationActivityEvent) => void>();
+      listeners.add(listener);
+      activitySubscribers.set(key, listeners);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) activitySubscribers.delete(key);
+      };
+    },
     async recover() {
       const rows = await options.pool.query<ConversationRow>(
         "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE status IN ('active', 'running') ORDER BY created_at ASC",
@@ -791,6 +881,7 @@ export function createPostgresConversationService(options: {
         }),
       );
       runtimes.clear();
+      activitySubscribers.clear();
     },
   };
 }

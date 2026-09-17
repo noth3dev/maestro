@@ -5,24 +5,62 @@ import { createMaestroAgentRuntime, ToolRegistry } from "./agent-runtime.js";
 import { createIpPythonTool, deriveIpPythonToolCallCommandId } from "./ipython-tool.js";
 
 const identity: ModelIdentity = { provider: "fake", id: "model-a" };
-const binding: GatewayBinding = { bindingId: "binding-1", gatewayInstanceId: "gateway-1", provider: identity, account: { providerId: "fake", accountRef: "account-1", authMode: "api-key" }, dataPolicyHash: "policy-1" };
-const grant = { grantId: "grant-1", allowedTools: ["readGoal"], allowedSkills: [], modelPolicy: ["fake/model-a"], pathScope: [], outboundDataClasses: ["public"], remaining: { modelTurns: 3, toolCalls: 2, childCalls: 0, outputTokens: 128, wallTimeMs: 10_000, retryCount: 0 } } as const;
+const binding: GatewayBinding = {
+  bindingId: "binding-1",
+  gatewayInstanceId: "gateway-1",
+  provider: identity,
+  account: { providerId: "fake", accountRef: "account-1", authMode: "api-key" },
+  dataPolicyHash: "policy-1",
+};
+const grant = {
+  grantId: "grant-1",
+  allowedTools: ["readGoal"],
+  allowedSkills: [],
+  modelPolicy: ["fake/model-a"],
+  pathScope: [],
+  outboundDataClasses: ["public"],
+  remaining: { modelTurns: 3, toolCalls: 2, childCalls: 0, outputTokens: 128, wallTimeMs: 10_000, retryCount: 0 },
+} as const;
 
 function gateway(): ModelGatewayPort & { calls: number } {
   let calls = 0;
   return {
-    get calls() { return calls; },
-    async listModels() { return []; },
-    async admit() { return binding; },
+    get calls() {
+      return calls;
+    },
+    async listModels() {
+      return [];
+    },
+    async admit() {
+      return binding;
+    },
     async turn(request): Promise<ModelTurnResult> {
       calls += 1;
       if (calls === 1) {
-        return { requestId: request.requestId, model: identity, text: "", toolCalls: [{ id: "call-1", name: "readGoal", arguments: { state: "valid", value: { goalId: "wrong-goal" } } }], stopReason: "tool_use", usage: { state: "available", totalTokens: 5 } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "",
+          toolCalls: [{ id: "call-1", name: "readGoal", arguments: { state: "valid", value: { goalId: "wrong-goal" } } }],
+          stopReason: "tool_use",
+          usage: { state: "available", totalTokens: 5 },
+        };
       }
-      return { requestId: request.requestId, model: identity, text: "Goal is healthy", toolCalls: [], stopReason: "end_turn", usage: { state: "available", totalTokens: 9 } };
+      return {
+        requestId: request.requestId,
+        model: identity,
+        text: "Goal is healthy",
+        toolCalls: [],
+        stopReason: "end_turn",
+        usage: { state: "available", totalTokens: 9 },
+      };
     },
-    async cancel() { return { state: "confirmed" as const }; },
-    async recover() { return "reconnected" as const; },
+    async cancel() {
+      return { state: "confirmed" as const };
+    },
+    async recover() {
+      return "reconnected" as const;
+    },
     async close() {},
   };
 }
@@ -32,19 +70,45 @@ describe("native Maestro agent runtime", () => {
     const requests: unknown[] = [];
     let calls = 0;
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request): Promise<ModelTurnResult> {
         calls += 1;
-        if (calls === 1) return { requestId: request.requestId, model: identity, text: "", toolCalls: [{ id: "ipython-call-1", name: "ipython", arguments: { state: "valid", value: { code: "print('ok')" } } }], stopReason: "tool_use", usage: { state: "unknown" } };
-        return { requestId: request.requestId, model: identity, text: "done", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        if (calls === 1)
+          return {
+            requestId: request.requestId,
+            model: identity,
+            text: "",
+            toolCalls: [{ id: "ipython-call-1", name: "ipython", arguments: { state: "valid", value: { code: "print('ok')" } } }],
+            stopReason: "tool_use",
+            usage: { state: "unknown" },
+          };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "done",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
     const sessions = {
-      async execute(request: unknown) { requests.push(request); return { state: "ok" as const, dataClass: "workspace" as const, content: "ok" }; },
+      async execute(request: unknown) {
+        requests.push(request);
+        return { state: "ok" as const, dataClass: "workspace" as const, content: "ok" };
+      },
       async interrupt() {},
       async close() {},
     };
@@ -52,10 +116,25 @@ describe("native Maestro agent runtime", () => {
     tools.register(createIpPythonTool({ sessions }));
     const ipythonGrant = { ...grant, allowedTools: ["ipython"], outboundDataClasses: ["workspace"], pathScope: ["/workspace"] } as const;
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools });
-    const spawned = await runtime.spawn({ name: "worker", modelPolicy: ["fake/model-a"], idempotencyKey: "worker-admission-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1", authorityPolicyVersion: 1, controlEpoch: "epoch-1", budgetEffectCents: 0 }, grant: ipythonGrant });
+    const spawned = await runtime.spawn({
+      name: "worker",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "worker-admission-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+        authorityPolicyVersion: 1,
+        controlEpoch: "epoch-1",
+        budgetEffectCents: 0,
+      },
+      grant: ipythonGrant,
+    });
     await runtime.prompt(spawned.execution, "run the Python tool");
 
-    const request = requests[0] as { binding: { commandId: string; admissionCommandId?: string; toolCallId: string }; };
+    const request = requests[0] as { binding: { commandId: string; admissionCommandId?: string; toolCallId: string } };
     const expected = deriveIpPythonToolCallCommandId("worker-admission-1", `${spawned.invocation}-turn-1`, "ipython-call-1");
     expect(request.binding.commandId).toBe(expected);
     expect(request.binding.admissionCommandId).toBe("worker-admission-1");
@@ -63,45 +142,185 @@ describe("native Maestro agent runtime", () => {
   });
   it("executes only registered tools with host-owned context and bounded continuation", async () => {
     const modelGateway = gateway();
-    const execute = vi.fn(async (args: unknown, context: { projectId: string; goalId: string }) => ({ status: "ok" as const, content: JSON.stringify({ projectId: context.projectId, goalId: context.goalId, args }) }));
+    const execute = vi.fn(async (args: unknown, context: { projectId: string; goalId: string }) => ({
+      status: "ok" as const,
+      content: JSON.stringify({ projectId: context.projectId, goalId: context.goalId, args }),
+    }));
     const tools = new ToolRegistry();
-    tools.register({ name: "readGoal", version: "1", description: "Read Goal", inputSchema: { parse: (value: unknown) => value }, outputSchema: { parse: (value: unknown) => value }, modelInputSchema: { type: "object" }, allowsParallel: false, outboundDataClass: "public", execute });
+    tools.register({
+      name: "readGoal",
+      version: "1",
+      description: "Read Goal",
+      inputSchema: { parse: (value: unknown) => value },
+      outputSchema: { parse: (value: unknown) => value },
+      modelInputSchema: { type: "object" },
+      allowsParallel: false,
+      outboundDataClass: "public",
+      execute,
+    });
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools });
-    const spawned = await runtime.spawn({ name: "controller", modelPolicy: ["fake/model-a"], idempotencyKey: "root-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const spawned = await runtime.spawn({
+      name: "controller",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "root-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
     await runtime.prompt(spawned.execution, "show the Goal");
 
-    expect(execute).toHaveBeenCalledWith({ goalId: "wrong-goal" }, expect.objectContaining({ operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", commandId: "root-1", toolCallId: "call-1", sessionId: expect.stringContaining("session-") }));
+    expect(execute).toHaveBeenCalledWith(
+      { goalId: "wrong-goal" },
+      expect.objectContaining({
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        commandId: "root-1",
+        toolCallId: "call-1",
+        sessionId: expect.stringContaining("session-"),
+      }),
+    );
     expect(modelGateway.calls).toBe(2);
-    expect((await runtime.getInvocationStatus(spawned.invocation))).toBe("succeeded");
-    expect((await runtime.getModelIdentity(spawned.execution))).toEqual(identity);
-    expect((await runtime.observe(spawned.execution))).toEqual(expect.arrayContaining([expect.objectContaining({ invocation: spawned.invocation, status: "succeeded", answer: { state: "available", text: "Goal is healthy" } })] as InvocationObservation[]));
+    expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
+    expect(await runtime.getModelIdentity(spawned.execution)).toEqual(identity);
+    expect(await runtime.observe(spawned.execution)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          invocation: spawned.invocation,
+          status: "succeeded",
+          answer: { state: "available", text: "Goal is healthy" },
+        }),
+      ] as InvocationObservation[]),
+    );
   });
 
-
+  it("emits safe tool lifecycle events around host execution", async () => {
+    const events: Array<{ kind: string; callId?: string; toolName?: string }> = [];
+    let calls = 0;
+    const modelGateway: ModelGatewayPort = {
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
+      async turn(request): Promise<ModelTurnResult> {
+        calls += 1;
+        if (calls === 1)
+          return {
+            requestId: request.requestId,
+            model: identity,
+            text: "",
+            toolCalls: [{ id: "call-1", name: "readGoal", arguments: { state: "valid", value: {} } }],
+            stopReason: "tool_use",
+            usage: { state: "unknown" },
+          };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "done",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
+      },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
+      async close() {},
+    };
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "readGoal",
+      version: "1",
+      description: "Read Goal",
+      inputSchema: { parse: (value: unknown) => value },
+      outputSchema: { parse: (value: unknown) => value },
+      modelInputSchema: { type: "object" },
+      allowsParallel: false,
+      outboundDataClass: "public",
+      async execute() {
+        return { status: "ok" as const, content: "ok" };
+      },
+    });
+    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools, onModelEvent: (event) => events.push(event) });
+    const spawned = await runtime.spawn({
+      name: "controller",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "lifecycle-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
+    await runtime.prompt(spawned.execution, "run the tool");
+    expect(events.map((event) => event.kind)).toEqual(["tool-proposed", "tool-validated", "tool-executing", "tool-completed"]);
+    expect(events).toEqual(expect.not.arrayContaining([expect.objectContaining({ arguments: expect.anything() })]));
+  });
 
   it("keeps confirmed cancellation terminal when the provider resolves after abort", async () => {
     let resolveTurn: ((result: ModelTurnResult) => void) | undefined;
     let cancelCalled = false;
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request): Promise<ModelTurnResult> {
         return new Promise((resolve) => {
           resolveTurn = resolve;
           request.signal.addEventListener("abort", () => undefined, { once: true });
         });
       },
-      async cancel() { cancelCalled = true; return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        cancelCalled = true;
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
-    const spawned = await runtime.spawn({ name: "controller", modelPolicy: ["fake/model-a"], idempotencyKey: "cancel-race-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const spawned = await runtime.spawn({
+      name: "controller",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "cancel-race-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
     const prompt = runtime.prompt(spawned.execution, "hello");
     await Promise.resolve();
     await expect(runtime.cancel(spawned.invocation)).resolves.toEqual({ cancelled: true });
     expect(cancelCalled).toBe(true);
-    resolveTurn?.({ requestId: "late", model: identity, text: "late success", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } });
+    resolveTurn?.({
+      requestId: "late",
+      model: identity,
+      text: "late success",
+      toolCalls: [],
+      stopReason: "end_turn",
+      usage: { state: "unknown" },
+    });
     await prompt;
 
     await expect(runtime.getInvocationStatus(spawned.invocation)).resolves.toBe("cancelled");
@@ -110,18 +329,50 @@ describe("native Maestro agent runtime", () => {
   it("forwards provider stream events with the host-owned turn identity", async () => {
     const events: Array<{ turnId: string; kind: string }> = [];
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request): Promise<ModelTurnResult> {
         request.emit({ kind: "text-delta", cursor: 1, text: "Hello" });
-        return { requestId: request.requestId, model: identity, text: "Hello", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "Hello",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
-    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry(), onModelEvent: (event, turnId) => events.push({ turnId, kind: event.kind }) });
-    const spawned = await runtime.spawn({ name: "controller", modelPolicy: ["fake/model-a"], idempotencyKey: "stream-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const runtime = createMaestroAgentRuntime({
+      gateway: modelGateway,
+      binding,
+      tools: new ToolRegistry(),
+      onModelEvent: (event, turnId) => events.push({ turnId, kind: event.kind }),
+    });
+    const spawned = await runtime.spawn({
+      name: "controller",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "stream-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
     await runtime.prompt(spawned.execution, "hello");
 
     expect(events).toEqual([{ turnId: expect.stringContaining(`${spawned.invocation}-turn-1`), kind: "text-delta" }]);
@@ -131,19 +382,46 @@ describe("native Maestro agent runtime", () => {
     const requests: Array<readonly { role: string }[]> = [];
     let calls = 0;
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request): Promise<ModelTurnResult> {
         requests.push(request.messages.map((message) => ({ role: message.role })));
         calls += 1;
-        return { requestId: request.requestId, model: identity, text: calls === 1 ? "first answer" : "second answer", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: calls === 1 ? "first answer" : "second answer",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
-    const spawned = await runtime.spawn({ name: "conversation", modelPolicy: ["fake/model-a"], idempotencyKey: "history-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const spawned = await runtime.spawn({
+      name: "conversation",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "history-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
 
     await runtime.prompt(spawned.execution, "first question");
     await runtime.prompt(spawned.execution, "second question");
@@ -154,41 +432,97 @@ describe("native Maestro agent runtime", () => {
 
   it("accumulates streamed text when the provider result omits full text", async () => {
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request): Promise<ModelTurnResult> {
         request.emit({ kind: "text-delta", cursor: 1, text: "Hello " });
         request.emit({ kind: "text-delta", cursor: 2, text: "world" });
-        return { requestId: request.requestId, model: identity, text: "", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
-    const spawned = await runtime.spawn({ name: "controller", modelPolicy: ["fake/model-a"], idempotencyKey: "stream-aggregate-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const spawned = await runtime.spawn({
+      name: "controller",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "stream-aggregate-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
     await runtime.prompt(spawned.execution, "hello");
 
-    await expect(runtime.observe(spawned.execution)).resolves.toEqual(expect.arrayContaining([
-      expect.objectContaining({ invocation: spawned.invocation, answer: { state: "available", text: "Hello world" } }),
-    ] as InvocationObservation[]));
+    await expect(runtime.observe(spawned.execution)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ invocation: spawned.invocation, answer: { state: "available", text: "Hello world" } }),
+      ] as InvocationObservation[]),
+    );
   });
 
   it("fails closed when cumulative streamed output exceeds the turn bound", async () => {
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request): Promise<ModelTurnResult> {
         request.emit({ kind: "text-delta", cursor: 1, text: "a".repeat(60_000) });
         request.emit({ kind: "text-delta", cursor: 2, text: "b".repeat(10_000) });
-        return { requestId: request.requestId, model: identity, text: "provider result", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "provider result",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
-    const spawned = await runtime.spawn({ name: "bounded", modelPolicy: ["fake/model-a"], idempotencyKey: "bounded-output-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const spawned = await runtime.spawn({
+      name: "bounded",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "bounded-output-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
 
     await runtime.prompt(spawned.execution, "hello");
     const observation = (await runtime.observe(spawned.execution)).find((item) => item.invocation === spawned.invocation);
@@ -200,38 +534,99 @@ describe("native Maestro agent runtime", () => {
 
   it("fails closed when a child widens any non-tool grant or changes Goal identity", async () => {
     const runtime = createMaestroAgentRuntime({ gateway: gateway(), binding, tools: new ToolRegistry() });
-    const parentContext = { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1", accountRef: "account-1", authorityPolicyVersion: 2, controlEpoch: "epoch-1", budgetEffectCents: 0 };
-    const parentGrant = { ...grant, grantId: "parent-grant", allowedSkills: ["skill-a"], pathScope: ["repo"], outboundDataClasses: ["public", "workspace"], remaining: { ...grant.remaining, childCalls: 2, modelTurns: 3, toolCalls: 2, outputTokens: 128, wallTimeMs: 10_000, retryCount: 1 } };
-    const root = await runtime.spawn({ name: "parent", modelPolicy: ["fake/model-a"], idempotencyKey: "parent-1", context: parentContext, grant: parentGrant });
-
-    await expect(runtime.spawn({
-      name: "child",
-      parent: root.execution,
-      prompt: "child prompt",
+    const parentContext = {
+      operatorId: "operator-1",
+      projectId: "project-1",
+      goalId: "goal-1",
+      missionBundleId: "bundle-1",
+      policyVersion: "policy-1",
+      accountRef: "account-1",
+      authorityPolicyVersion: 2,
+      controlEpoch: "epoch-1",
+      budgetEffectCents: 0,
+    };
+    const parentGrant = {
+      ...grant,
+      grantId: "parent-grant",
+      allowedSkills: ["skill-a"],
+      pathScope: ["repo"],
+      outboundDataClasses: ["public", "workspace"],
+      remaining: { ...grant.remaining, childCalls: 2, modelTurns: 3, toolCalls: 2, outputTokens: 128, wallTimeMs: 10_000, retryCount: 1 },
+    };
+    const root = await runtime.spawn({
+      name: "parent",
       modelPolicy: ["fake/model-a"],
-      idempotencyKey: "child-1",
-      context: { ...parentContext, goalId: "goal-2" },
-      grant: {
-        ...parentGrant,
-        grantId: "child-grant",
-        parentGrantId: parentGrant.grantId,
-        allowedSkills: ["skill-a", "skill-b"],
-        pathScope: ["repo", "outside-repo"],
-        outboundDataClasses: ["public", "workspace", "secret"],
-        remaining: { ...parentGrant.remaining, modelTurns: 4, toolCalls: 2, childCalls: 1, outputTokens: 129, wallTimeMs: 10_001, retryCount: 2 },
-      },
-    })).rejects.toThrow("child grant widens parent capability");
+      idempotencyKey: "parent-1",
+      context: parentContext,
+      grant: parentGrant,
+    });
+
+    await expect(
+      runtime.spawn({
+        name: "child",
+        parent: root.execution,
+        prompt: "child prompt",
+        modelPolicy: ["fake/model-a"],
+        idempotencyKey: "child-1",
+        context: { ...parentContext, goalId: "goal-2" },
+        grant: {
+          ...parentGrant,
+          grantId: "child-grant",
+          parentGrantId: parentGrant.grantId,
+          allowedSkills: ["skill-a", "skill-b"],
+          pathScope: ["repo", "outside-repo"],
+          outboundDataClasses: ["public", "workspace", "secret"],
+          remaining: {
+            ...parentGrant.remaining,
+            modelTurns: 4,
+            toolCalls: 2,
+            childCalls: 1,
+            outputTokens: 129,
+            wallTimeMs: 10_001,
+            retryCount: 2,
+          },
+        },
+      }),
+    ).rejects.toThrow("child grant widens parent capability");
   });
 
   it("rejects an invalid or out-of-scope tool without invoking its executor", async () => {
     const modelGateway = gateway();
+    const events: string[] = [];
     const execute = vi.fn();
     const tools = new ToolRegistry();
-    tools.register({ name: "readGoal", version: "1", description: "Read Goal", inputSchema: { parse: () => { throw new Error("invalid"); } }, outputSchema: { parse: (value: unknown) => value }, modelInputSchema: {}, allowsParallel: false, outboundDataClass: "public", execute });
-    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools });
-    const spawned = await runtime.spawn({ name: "controller", modelPolicy: ["fake/model-a"], idempotencyKey: "root-2", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant: { ...grant, allowedTools: [] } });
+    tools.register({
+      name: "readGoal",
+      version: "1",
+      description: "Read Goal",
+      inputSchema: {
+        parse: () => {
+          throw new Error("invalid");
+        },
+      },
+      outputSchema: { parse: (value: unknown) => value },
+      modelInputSchema: {},
+      allowsParallel: false,
+      outboundDataClass: "public",
+      execute,
+    });
+    const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools, onModelEvent: (event) => events.push(event.kind) });
+    const spawned = await runtime.spawn({
+      name: "controller",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "root-2",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant: { ...grant, allowedTools: [] },
+    });
     await runtime.prompt(spawned.execution, "show the Goal");
     expect(execute).not.toHaveBeenCalled();
+    expect(events).toEqual(["tool-proposed", "tool-rejected"]);
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("failed");
   });
 
@@ -249,19 +644,56 @@ describe("native Maestro agent runtime", () => {
     // real defect this test reproduces and pins closed.
     let received: TurnLimits | undefined;
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request) {
         received = request.limits;
-        return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "ok",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
-    const oversizedGrant = { ...grant, remaining: { ...grant.remaining, modelTurns: 500, toolCalls: 5_000, childCalls: 500, outputTokens: 5_000_000, wallTimeMs: 3 * 24 * 60 * 60 * 1000 } };
+    const oversizedGrant = {
+      ...grant,
+      remaining: {
+        ...grant.remaining,
+        modelTurns: 500,
+        toolCalls: 5_000,
+        childCalls: 500,
+        outputTokens: 5_000_000,
+        wallTimeMs: 3 * 24 * 60 * 60 * 1000,
+      },
+    };
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry() });
-    const spawned = await runtime.spawn({ name: "oversized-grant", modelPolicy: ["fake/model-a"], idempotencyKey: "oversized-grant-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant: oversizedGrant });
+    const spawned = await runtime.spawn({
+      name: "oversized-grant",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "oversized-grant-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant: oversizedGrant,
+    });
     await runtime.prompt(spawned.execution, "return a bounded result");
 
     expect(received).toBeDefined();
@@ -284,19 +716,49 @@ describe("native Maestro agent runtime", () => {
     // reproduces and pins closed.
     let receivedMessageCount: number | undefined;
     const modelGateway: ModelGatewayPort = {
-      async listModels() { return []; },
-      async admit() { return binding; },
+      async listModels() {
+        return [];
+      },
+      async admit() {
+        return binding;
+      },
       async turn(request) {
         receivedMessageCount = request.messages.length;
-        return { requestId: request.requestId, model: identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+        return {
+          requestId: request.requestId,
+          model: identity,
+          text: "ok",
+          toolCalls: [],
+          stopReason: "end_turn",
+          usage: { state: "unknown" },
+        };
       },
-      async cancel() { return { state: "confirmed" as const }; },
-      async recover() { return "reconnected" as const; },
+      async cancel() {
+        return { state: "confirmed" as const };
+      },
+      async recover() {
+        return "reconnected" as const;
+      },
       async close() {},
     };
-    const longHistory = Array.from({ length: 200 }, (_, index) => ({ role: "user" as const, content: [{ kind: "text" as const, text: `message ${index}` }] }));
+    const longHistory = Array.from({ length: 200 }, (_, index) => ({
+      role: "user" as const,
+      content: [{ kind: "text" as const, text: `message ${index}` }],
+    }));
     const runtime = createMaestroAgentRuntime({ gateway: modelGateway, binding, tools: new ToolRegistry(), initialMessages: longHistory });
-    const spawned = await runtime.spawn({ name: "long-conversation", modelPolicy: ["fake/model-a"], idempotencyKey: "long-conversation-1", context: { operatorId: "operator-1", projectId: "project-1", goalId: "goal-1", missionBundleId: "bundle-1", policyVersion: "policy-1" }, grant });
+    const spawned = await runtime.spawn({
+      name: "long-conversation",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "long-conversation-1",
+      context: {
+        operatorId: "operator-1",
+        projectId: "project-1",
+        goalId: "goal-1",
+        missionBundleId: "bundle-1",
+        policyVersion: "policy-1",
+      },
+      grant,
+    });
     await runtime.prompt(spawned.execution, "continue the conversation");
 
     expect(receivedMessageCount).toBeDefined();
