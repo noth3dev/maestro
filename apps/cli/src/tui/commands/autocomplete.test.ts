@@ -527,6 +527,16 @@ describe("command argument autocomplete", () => {
     expect(items.find((item) => item.name === "git")?.getArgumentCompletions?.("worker-")).toEqual(expect.arrayContaining([expect.objectContaining({ value: "worker-advance" })]));
   });
 
+  it("does not suggest ignored project scope for worker message or Git worker advance", () => {
+    const items = createCommandAutocompleteItems(createCommandRegistry());
+    const worker = items.find((item) => item.name === "worker");
+    const git = items.find((item) => item.name === "git");
+    expect(worker?.getArgumentCompletions?.("message --").map((item) => item.value)).toEqual(["--worker-id ", "--message ", "--command-id "]);
+    expect(worker?.getArgumentCompletions?.("message --p")).toEqual([]);
+    expect(git?.getArgumentCompletions?.("worker-advance --").map((item) => item.value)).toEqual(["--worker-id ", "--message ", "--evidence-references ", "--command-id "]);
+    expect(git?.getArgumentCompletions?.("worker-advance --p")).toEqual([]);
+  });
+
   it("suggests the required contract id for task contract reads", () => {
     const taskContract = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "task-contract");
     expect(taskContract?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--contract-id " })]);

@@ -96,8 +96,8 @@ const actionOptions: Record<string, readonly string[]> = {
   "evidence capture": ["--goal-id", "--correlation-id", "--command-id", "--kind", "--media-type", "--content-base64"],
   "evidence list": ["--goal-id"],
   "evidence bundle": ["--goal-id"],
-  "worker message": ["--worker-id", "--project-id", "--message", "--command-id"],
-  "git worker-advance": ["--worker-id", "--project-id", "--message", "--evidence-references", "--command-id"],
+  "worker message": ["--worker-id", "--message", "--command-id"],
+  "git worker-advance": ["--worker-id", "--message", "--evidence-references", "--command-id"],
 };
 
 type CommandActionDefinition = [string, CommandKind, (Pick<CommandAction, "requiresArguments" | "requiresGoal">)?];
