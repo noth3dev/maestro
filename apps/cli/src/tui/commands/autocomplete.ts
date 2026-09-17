@@ -50,6 +50,35 @@ function slashArgumentText(lines: string[], cursorLine: number, cursorCol: numbe
   return trimmedText.startsWith("/") && /[ \t]/.test(trimmedText) ? textBeforeCursor : undefined;
 }
 
+function currentSlashToken(textBeforeCursor: string): { start: number; value: string } {
+  const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
+  return { start: lastSpace + 1, value: textBeforeCursor.slice(lastSpace + 1) };
+}
+
+function autocompleteOptionToken(token: string): { value: string; quote?: "\"" | "'" } | undefined {
+  const quote = token[0];
+  const isQuoted = quote === "\"" || quote === "'";
+  const value = isQuoted
+    ? token.endsWith(quote) && token.length > 1 ? token.slice(1, -1) : token.slice(1)
+    : token;
+  if (!value.startsWith("--")) return undefined;
+  return isQuoted ? { value, quote } : { value };
+}
+
+function hasUnescapedQuote(text: string, quote: "\"" | "'"): boolean {
+  if (quote === "'") return text.includes(quote);
+  let backslashCount = 0;
+  for (const char of text) {
+    if (char === "\\") {
+      backslashCount += 1;
+      continue;
+    }
+    if (char === quote && backslashCount % 2 === 0) return true;
+    backslashCount = 0;
+  }
+  return false;
+}
+
 function slashOptionPrefix(
   lines: string[],
   cursorLine: number,
@@ -61,10 +90,10 @@ function slashOptionPrefix(
   const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
   const trimmedText = textBeforeCursor.trimStart();
   if (!trimmedText.startsWith("/") || !/[ \t]/.test(trimmedText)) return undefined;
-  const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
-  const currentToken = textBeforeCursor.slice(lastSpace + 1);
-  if (currentToken === "" && prefix.endsWith(" ")) return "";
-  return currentToken.startsWith("--") && prefix.endsWith(currentToken) ? currentToken : undefined;
+  const currentToken = currentSlashToken(textBeforeCursor);
+  if (currentToken.value === "" && prefix.endsWith(" ")) return "";
+  const optionToken = autocompleteOptionToken(currentToken.value);
+  return optionToken !== undefined && prefix.endsWith(currentToken.value) ? currentToken.value : undefined;
 }
 
 function scanAutocompleteArgumentTokens(text: string): string[] {
@@ -323,6 +352,34 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
         return { ...syntheticResult, lines: mappedLines };
       }
 
+      const optionContext = currentSlashToken(textBeforeCursor);
+      const quotedOption = autocompleteOptionToken(optionContext.value);
+      if (lines.length === 1
+        && cursorLine === 0
+        && slashArgumentText(lines, cursorLine, cursorCol) !== undefined
+        && quotedOption?.quote !== undefined
+        && prefix.endsWith(optionContext.value)
+        && item.value.startsWith(`${quotedOption.quote}--`)
+        && item.value.endsWith(`${quotedOption.quote} `)) {
+        const afterCursor = lines[cursorLine]?.slice(cursorCol) ?? "";
+        const hasClosingQuoteInSuffix = !afterCursor.startsWith(quotedOption.quote)
+          && hasUnescapedQuote(afterCursor, quotedOption.quote);
+        const adjustedAfterCursor = afterCursor.startsWith(quotedOption.quote) ? afterCursor.slice(1) : afterCursor;
+        const itemValue = item.value.trimEnd();
+        const replacementValue = hasClosingQuoteInSuffix
+          ? `${quotedOption.quote}${itemValue.slice(1, -1)}`
+          : itemValue;
+        const separator = hasClosingQuoteInSuffix || /^[ \t]/.test(adjustedAfterCursor) ? "" : " ";
+        const replacement = `${replacementValue}${separator}`;
+        const newLines = [...lines];
+        newLines[cursorLine] = `${textBeforeCursor.slice(0, optionContext.start)}${replacement}${adjustedAfterCursor}`;
+        return {
+          lines: newLines,
+          cursorLine,
+          cursorCol: optionContext.start + replacement.length,
+        };
+      }
+
       const normalizedSlash = normalizeSlashContext(lines, cursorLine, cursorCol);
       const beforePrefix = textBeforeCursor.slice(0, Math.max(0, textBeforeCursor.length - prefix.length));
       const trimmedTextBeforeCursor = textBeforeCursor.trimStart();
@@ -395,16 +452,32 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
         .map((candidate) => ({ value: `${candidate.name} `, label: candidate.name, description: candidate.description }));
       const actionDefinition = command.actions.find((candidate) => candidate.name === action.toLowerCase());
       const actionOptions = actionDefinition?.options ?? [];
-      const optionPrefix = rest.at(-1) ?? "";
-      const completedOptions = new Set(
-        rest.slice(0, -1).filter((token) => token.startsWith("--")).map((token) => {
-          const separator = token.indexOf("=");
-          return separator === -1 ? token : token.slice(0, separator);
-        }),
-      );
+      const rawOptionPrefix = rest.at(-1) ?? "";
+      const optionPrefixToken = autocompleteOptionToken(rawOptionPrefix);
+      const previousOptionToken = autocompleteOptionToken(rest.at(-2) ?? "");
+      const isQuotedOptionValue = optionPrefixToken?.quote !== undefined
+        && previousOptionToken !== undefined
+        && previousOptionToken.value.indexOf("=") === -1;
+      if (isQuotedOptionValue) return [];
+      const optionPrefix = optionPrefixToken?.value ?? rawOptionPrefix;
+      const completedOptions = new Set<string>();
+      for (let index = 0; index < rest.length - 1; index += 1) {
+        const optionToken = autocompleteOptionToken(rest[index]!);
+        if (optionToken === undefined) continue;
+        const separator = optionToken.value.indexOf("=");
+        completedOptions.add(separator === -1 ? optionToken.value : optionToken.value.slice(0, separator));
+        const nextToken = rest[index + 1];
+        if (separator === -1 && nextToken !== undefined && autocompleteOptionToken(nextToken)?.quote !== undefined) index += 1;
+      }
       return actionOptions
         .filter((option) => !completedOptions.has(option) && option.startsWith(optionPrefix))
-        .map((option) => ({ value: `${option} `, label: option, description: "option" }));
+        .map((option) => ({
+          value: optionPrefixToken?.quote === undefined
+            ? `${option} `
+            : `${optionPrefixToken.quote}${option}${optionPrefixToken.quote} `,
+          label: option,
+          description: "option",
+        }));
     },
   }));
   const models = commands.find((command) => command.name === "models");

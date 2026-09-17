@@ -819,6 +819,151 @@ describe("command argument autocomplete", () => {
     }
   });
 
+  it("matches parser-supported quoted option names without opening value tokens", async () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((command) => command.name === "goal");
+    expect(goal).toBeDefined();
+    if (goal === undefined) throw new Error("expected goal command");
+    for (const [quote, expected] of [["\"", "\"--goal-id\" "], ["'", "'--goal-id' "]] as const) {
+      expect(goal.getArgumentCompletions(`select ${quote}--g`).map((item) => item.value)).toContain(expected);
+      expect(goal.getArgumentCompletions(`select ${quote}--goal-id${quote} `).map((item) => item.value)).not.toContain(expected);
+    }
+    const worker = createCommandAutocompleteItems(createCommandRegistry()).find((command) => command.name === "worker");
+    expect(worker).toBeDefined();
+    if (worker === undefined) throw new Error("expected worker command");
+    expect(worker.getArgumentCompletions('message --message "please use --command-id later" --').map((item) => item.value)).toContain("--command-id ");
+    expect(worker.getArgumentCompletions('message --message="please use --command-id later" --').map((item) => item.value)).toContain("--command-id ");
+    for (const quote of ['"', "'"] as const) {
+      expect(worker.getArgumentCompletions(`message --message ${quote}--c`).map((item) => item.value)).toEqual([]);
+    }
+
+    const custom = new CommandRegistry([{
+      name: "custom",
+      description: "custom command",
+      actions: [{ name: "run", kind: "read", description: "run custom", options: ["--flag"] }],
+    }]);
+    const customItems = createCommandAutocompleteItems(custom).find((command) => command.name === "custom");
+    expect(customItems?.getArgumentCompletions('run "--f').map((item) => item.value)).toContain('"--flag" ');
+
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    for (const quote of ['"', "'"] as const) {
+      const line = `/goal select ${quote}--g`;
+      const suggestions = await provider.getSuggestions([line], 0, line.length, { force: false, signal: new AbortController().signal });
+      const item = suggestions?.items.find((candidate) => candidate.value === `${quote}--goal-id${quote} `);
+      expect(item).toBeDefined();
+      expect(suggestions).toBeDefined();
+      if (item === undefined || suggestions === undefined) throw new Error("expected quoted option completion");
+      const expectedLine = `/goal select ${quote}--goal-id${quote} `;
+      expect(provider.applyCompletion([line], 0, line.length, item, suggestions.prefix)).toMatchObject({
+        lines: [expectedLine],
+        cursorLine: 0,
+        cursorCol: expectedLine.length,
+      });
+
+      const suffixLine = `/goal select ${quote}--g${quote} suffix`;
+      const suffixCursor = suffixLine.indexOf(`${quote} suffix`);
+      const suffixSuggestions = await provider.getSuggestions([suffixLine], 0, suffixCursor, { force: false, signal: new AbortController().signal });
+      const suffixItem = suffixSuggestions?.items.find((candidate) => candidate.value === `${quote}--goal-id${quote} `);
+      expect(suffixItem).toBeDefined();
+      expect(suffixSuggestions).toBeDefined();
+      if (suffixItem === undefined || suffixSuggestions === undefined) throw new Error("expected quoted option suffix completion");
+      const expectedSuffixLine = `/goal select ${quote}--goal-id${quote} suffix`;
+      expect(provider.applyCompletion([suffixLine], 0, suffixCursor, suffixItem, suffixSuggestions.prefix)).toMatchObject({
+        lines: [expectedSuffixLine],
+        cursorLine: 0,
+        cursorCol: expectedSuffixLine.indexOf(" suffix"),
+      });
+
+      const interiorSuffixLine = `/goal select ${quote}--g suffix${quote}`;
+      const interiorSuffixCursor = interiorSuffixLine.indexOf(" suffix");
+      const interiorSuffixSuggestions = await provider.getSuggestions([interiorSuffixLine], 0, interiorSuffixCursor, { force: false, signal: new AbortController().signal });
+      const interiorSuffixItem = interiorSuffixSuggestions?.items.find((candidate) => candidate.value === `${quote}--goal-id${quote} `);
+      expect(interiorSuffixItem).toBeDefined();
+      expect(interiorSuffixSuggestions).toBeDefined();
+      if (interiorSuffixItem === undefined || interiorSuffixSuggestions === undefined) throw new Error("expected quoted option interior suffix completion");
+      const expectedInteriorSuffixLine = `/goal select ${quote}--goal-id suffix${quote}`;
+      expect(provider.applyCompletion([interiorSuffixLine], 0, interiorSuffixCursor, interiorSuffixItem, interiorSuffixSuggestions.prefix)).toMatchObject({
+        lines: [expectedInteriorSuffixLine],
+        cursorLine: 0,
+        cursorCol: expectedInteriorSuffixLine.indexOf(" suffix"),
+      });
+
+      if (quote === '"') {
+        const escapedSuffixLine = String.raw`/goal select "--g\"tail`;
+        const escapedSuffixCursor = escapedSuffixLine.indexOf(String.raw`\"tail`);
+        const escapedSuffixSuggestions = await provider.getSuggestions([escapedSuffixLine], 0, escapedSuffixCursor, { force: false, signal: new AbortController().signal });
+        const escapedSuffixItem = escapedSuffixSuggestions?.items.find((candidate) => candidate.value === '"--goal-id" ');
+        expect(escapedSuffixItem).toBeDefined();
+        expect(escapedSuffixSuggestions).toBeDefined();
+        if (escapedSuffixItem === undefined || escapedSuffixSuggestions === undefined) throw new Error("expected escaped quoted option suffix completion");
+        const expectedEscapedSuffixLine = String.raw`/goal select "--goal-id" \"tail`;
+        expect(provider.applyCompletion([escapedSuffixLine], 0, escapedSuffixCursor, escapedSuffixItem, escapedSuffixSuggestions.prefix)).toMatchObject({
+          lines: [expectedEscapedSuffixLine],
+          cursorLine: 0,
+          cursorCol: expectedEscapedSuffixLine.indexOf(String.raw`\"tail`),
+        });
+      }
+
+      const closedLine = `/goal select ${quote}--goal-id${quote}`;
+      const closedSuggestions = await provider.getSuggestions([closedLine], 0, closedLine.length, { force: false, signal: new AbortController().signal });
+      const closedItem = closedSuggestions?.items.find((candidate) => candidate.value === `${quote}--goal-id${quote} `);
+      expect(closedItem).toBeDefined();
+      expect(closedSuggestions).toBeDefined();
+      if (closedItem === undefined || closedSuggestions === undefined) throw new Error("expected closed quoted option completion");
+      expect(provider.applyCompletion([closedLine], 0, closedLine.length, closedItem, closedSuggestions.prefix)).toMatchObject({
+        lines: [`${closedLine} `],
+        cursorLine: 0,
+        cursorCol: closedLine.length + 1,
+      });
+    }
+    const tabLine = '/goal select\t"--g';
+    const tabSuggestions = await provider.getSuggestions([tabLine], 0, tabLine.length, { force: false, signal: new AbortController().signal });
+    const tabItem = tabSuggestions?.items.find((candidate) => candidate.value === '"--goal-id" ');
+    expect(tabItem).toBeDefined();
+    expect(tabSuggestions).toBeDefined();
+    if (tabItem === undefined || tabSuggestions === undefined) throw new Error("expected tab-separated quoted option completion");
+    expect(provider.applyCompletion([tabLine], 0, tabLine.length, tabItem, tabSuggestions.prefix)).toMatchObject({
+      lines: ['/goal select\t"--goal-id" '],
+      cursorLine: 0,
+      cursorCol: 25,
+    });
+
+    const tabSuffixLine = '/goal select\t"--g"\tsuffix';
+    const tabSuffixCursor = tabSuffixLine.indexOf('"\tsuffix');
+    const tabSuffixSuggestions = await provider.getSuggestions([tabSuffixLine], 0, tabSuffixCursor, { force: false, signal: new AbortController().signal });
+    const tabSuffixItem = tabSuffixSuggestions?.items.find((candidate) => candidate.value === '"--goal-id" ');
+    expect(tabSuffixItem).toBeDefined();
+    expect(tabSuffixSuggestions).toBeDefined();
+    if (tabSuffixItem === undefined || tabSuffixSuggestions === undefined) throw new Error("expected tab-separated quoted option suffix completion");
+    const expectedTabSuffixLine = '/goal select\t"--goal-id"\tsuffix';
+    expect(provider.applyCompletion([tabSuffixLine], 0, tabSuffixCursor, tabSuffixItem, tabSuffixSuggestions.prefix)).toMatchObject({
+      lines: [expectedTabSuffixLine],
+      cursorLine: 0,
+      cursorCol: expectedTabSuffixLine.indexOf("\tsuffix"),
+    });
+
+    const passthroughCalls: Array<{ lines: string[]; cursorLine: number; cursorCol: number; item: AutocompleteItem; prefix: string }> = [];
+    const sentinel = { lines: ["unchanged"], cursorLine: 2, cursorCol: 3 };
+    const customProvider = createSlashCommandAutocompleteProvider({
+      getSuggestions: async () => null,
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        passthroughCalls.push({ lines, cursorLine, cursorCol, item, prefix });
+        return sentinel;
+      },
+    });
+    const nonSlash = ['hello "--g'];
+    const nonSlashItem = { value: '"--goal-id" ', label: "--goal-id" };
+    expect(customProvider.applyCompletion(nonSlash, 0, nonSlash[0]!.length, nonSlashItem, '"--g')).toBe(sentinel);
+    expect(passthroughCalls).toEqual([{
+      lines: nonSlash,
+      cursorLine: 0,
+      cursorCol: nonSlash[0]!.length,
+      item: nonSlashItem,
+      prefix: '"--g',
+    }]);
+  });
+
   it("routes explicit Tab at the slash command root before path fallback", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
