@@ -22,6 +22,12 @@ describe("command argument autocomplete", () => {
     expect(goal?.getArgumentCompletions?.("select --g")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
   });
 
+  it("does not suggest an ignored project scope for goal reads", () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "goal");
+    expect(goal?.getArgumentCompletions?.("get --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
+    expect(goal?.getArgumentCompletions?.("get --p")).toEqual([]);
+  });
+
   it("keeps the singular model alias discoverable", () => {
     expect(createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "model")).toBeDefined();
   });

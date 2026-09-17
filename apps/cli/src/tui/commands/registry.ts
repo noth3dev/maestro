@@ -31,7 +31,7 @@ const actionOptions: Record<string, readonly string[]> = {
   "task-contract launch": ["--contract-id"],
   "task-contract get": ["--contract-id"],
   "task-contract confirm": ["--contract-id", "--version", "--content-hash"],
-  "goal get": ["--goal-id", "--project-id"],
+  "goal get": ["--goal-id"],
   "luthiery list": ["--registry"],
   "projection read": ["--goal-id", "--department-id", "--group-id", "--head-id"],
   "goal select": ["--goal-id"],
