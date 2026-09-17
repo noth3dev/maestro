@@ -729,6 +729,96 @@ describe("command argument autocomplete", () => {
     expect(createCommandAutocompleteItems(modelsOnly).filter((item) => item.name === "model")).toHaveLength(1);
   });
 
+  it("matches parser-supported quoted action tokens without changing value scanning", async () => {
+    const goal = createCommandAutocompleteItems(createCommandRegistry()).find((command) => command.name === "goal");
+    expect(goal).toBeDefined();
+    if (goal === undefined) throw new Error("expected goal command");
+    for (const action of ['"select"', "'select'"]) {
+      expect(goal.getArgumentCompletions(`${action} --g`).map((item) => item.value)).toContain("--goal-id ");
+    }
+    const worker = createCommandAutocompleteItems(createCommandRegistry()).find((command) => command.name === "worker");
+    expect(worker).toBeDefined();
+    if (worker === undefined) throw new Error("expected worker command");
+    expect(worker.getArgumentCompletions('message --message "--command-id" --').map((item) => item.value)).toContain("--command-id ");
+
+    const customAction = new CommandRegistry([{
+      name: "custom",
+      description: "custom command",
+      actions: [{ name: "run", kind: "read", description: "run custom", options: ["--flag"] }],
+    }]);
+    const custom = createCommandAutocompleteItems(customAction).find((command) => command.name === "custom");
+    expect(custom?.getArgumentCompletions("'run' --f").map((item) => item.value)).toContain("--flag ");
+
+    const applyCalls: Array<{ item: AutocompleteItem; prefix: string }> = [];
+    const multilineProvider = createSlashCommandAutocompleteProvider({
+      getSuggestions: async () => null,
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        applyCalls.push({ item, prefix });
+        return { lines, cursorLine, cursorCol };
+      },
+    });
+    const multilineItem = { value: "select ", label: "select" };
+    multilineProvider.applyCompletion(["/goal \"se", "tail"], 0, 9, multilineItem, '"se');
+    expect(applyCalls).toEqual([{ item: multilineItem, prefix: '"se' }]);
+
+    const provider = createSlashCommandAutocompleteProvider(
+      new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),
+    );
+    for (const [quote, suffix] of [["\"", "\" trailing"], ["'", "' trailing"]] as const) {
+      const line = `/goal ${quote}se${suffix}`;
+      const cursorCol = line.indexOf(suffix);
+      const suggestions = await provider.getSuggestions([line], 0, cursorCol, { force: false, signal: new AbortController().signal });
+      const item = suggestions?.items.find((candidate) => candidate.value === "select ");
+      expect(item).toBeDefined();
+      expect(suggestions).toBeDefined();
+      if (item === undefined || suggestions === undefined) throw new Error("expected quoted action completion");
+      expect(provider.applyCompletion([line], 0, cursorCol, item, suggestions.prefix)).toMatchObject({
+        lines: [`/goal ${quote}select${quote} trailing`],
+        cursorLine: 0,
+        cursorCol: 14,
+      });
+    }
+    const completeLine = '/goal "select"';
+    const completeSuggestions = await provider.getSuggestions([completeLine], 0, completeLine.length, { force: false, signal: new AbortController().signal });
+    const completeItem = completeSuggestions?.items.find((candidate) => candidate.value === "select ");
+    expect(completeItem).toBeDefined();
+    expect(completeSuggestions).toBeDefined();
+    if (completeItem === undefined || completeSuggestions === undefined) throw new Error("expected closed quoted action completion");
+    expect(provider.applyCompletion([completeLine], 0, completeLine.length, completeItem, completeSuggestions.prefix)).toMatchObject({
+      lines: ['/goal "select" '],
+      cursorLine: 0,
+      cursorCol: 15,
+    });
+
+    const plainLine = "/goal select ";
+    const plainSuggestions = await provider.getSuggestions([plainLine], 0, plainLine.length, { force: false, signal: new AbortController().signal });
+    const plainItem = plainSuggestions?.items.find((candidate) => candidate.value === "--goal-id ");
+    expect(plainItem).toBeDefined();
+    expect(plainSuggestions).toBeDefined();
+    if (plainItem === undefined || plainSuggestions === undefined) throw new Error("expected plain-action option completion");
+    const expectedPlainLine = "/goal select --goal-id ";
+    expect(provider.applyCompletion([plainLine], 0, plainLine.length, plainItem, plainSuggestions.prefix)).toMatchObject({
+      lines: [expectedPlainLine],
+      cursorLine: 0,
+      cursorCol: expectedPlainLine.length,
+    });
+
+    for (const quote of ['"', "'"] as const) {
+      const optionLine = `/goal ${quote}select${quote} `;
+      const optionSuggestions = await provider.getSuggestions([optionLine], 0, optionLine.length, { force: false, signal: new AbortController().signal });
+      const optionItem = optionSuggestions?.items.find((candidate) => candidate.value === "--goal-id ");
+      expect(optionItem).toBeDefined();
+      expect(optionSuggestions).toBeDefined();
+      if (optionItem === undefined || optionSuggestions === undefined) throw new Error("expected quoted-action option completion");
+      const expectedOptionLine = `/goal ${quote}select${quote} --goal-id `;
+      expect(provider.applyCompletion([optionLine], 0, optionLine.length, optionItem, optionSuggestions.prefix)).toMatchObject({
+        lines: [expectedOptionLine],
+        cursorLine: 0,
+        cursorCol: expectedOptionLine.length,
+      });
+    }
+  });
+
   it("routes explicit Tab at the slash command root before path fallback", async () => {
     const provider = createSlashCommandAutocompleteProvider(
       new CombinedAutocompleteProvider(createCommandAutocompleteItems(createCommandRegistry()), process.cwd()),

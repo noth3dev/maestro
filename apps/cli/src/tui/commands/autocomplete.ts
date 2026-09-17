@@ -63,6 +63,7 @@ function slashOptionPrefix(
   if (!trimmedText.startsWith("/") || !/[ \t]/.test(trimmedText)) return undefined;
   const lastSpace = Math.max(textBeforeCursor.lastIndexOf(" "), textBeforeCursor.lastIndexOf("\t"));
   const currentToken = textBeforeCursor.slice(lastSpace + 1);
+  if (currentToken === "" && prefix.endsWith(" ")) return "";
   return currentToken.startsWith("--") && prefix.endsWith(currentToken) ? currentToken : undefined;
 }
 
@@ -110,6 +111,37 @@ function scanAutocompleteArgumentTokens(text: string): string[] {
   }
   if (tokenStarted || /\s$/.test(text)) tokens.push(current);
   return tokens;
+}
+
+function autocompleteActionToken(token: string): string {
+  const quote = token[0];
+  if ((quote === "\"" || quote === "'") && token.length > 1) {
+    return token.endsWith(quote) ? token.slice(1, -1) : token.slice(1);
+  }
+  return token;
+}
+
+function quotedActionContext(textBeforeCursor: string): { start: number; quote: "\"" | "'" } | undefined {
+  const trimmedText = textBeforeCursor.trimStart();
+  if (!trimmedText.startsWith("/")) return undefined;
+  const leadingOffset = textBeforeCursor.length - trimmedText.length;
+  const commandSeparator = trimmedText.search(/[ \t]/);
+  if (commandSeparator === -1) return undefined;
+  let actionStart = leadingOffset + commandSeparator;
+  while (actionStart < textBeforeCursor.length && /[ \t]/.test(textBeforeCursor[actionStart]!)) actionStart += 1;
+  const quote = textBeforeCursor[actionStart];
+  if (quote !== "\"" && quote !== "'") return undefined;
+  let escaped = false;
+  for (let index = actionStart + 1; index < textBeforeCursor.length; index += 1) {
+    const character = textBeforeCursor[index]!;
+    if (quote === "\"" && character === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if (character === quote && !escaped) return { start: actionStart, quote };
+    escaped = false;
+  }
+  return { start: actionStart, quote };
 }
 
 function isPathShapedValue(value: string): boolean {
@@ -314,6 +346,31 @@ export function createSlashCommandAutocompleteProvider(provider: AutocompletePro
         );
       }
 
+      const actionContext = quotedActionContext(textBeforeCursor);
+      const rawActionPrefix = actionContext === undefined ? undefined : textBeforeCursor.slice(actionContext.start);
+      if (lines.length === 1
+        && cursorLine === 0
+        && actionContext !== undefined
+        && rawActionPrefix !== undefined
+        && !prefix.includes("--")
+        && prefix.endsWith(rawActionPrefix)
+        && !item.value.startsWith("--")
+        && item.value.endsWith(" ")
+        && !isPathShapedValue(item.value)) {
+        const actionValue = item.value.trimEnd();
+        const afterCursor = lines[cursorLine]?.slice(cursorCol) ?? "";
+        const adjustedAfterCursor = afterCursor.startsWith(actionContext.quote) ? afterCursor.slice(1) : afterCursor;
+        const separator = adjustedAfterCursor.startsWith(" ") ? "" : " ";
+        const replacement = `${actionContext.quote}${actionValue}${actionContext.quote}${separator}`;
+        const newLines = [...lines];
+        newLines[cursorLine] = `${textBeforeCursor.slice(0, actionContext.start)}${replacement}${adjustedAfterCursor}`;
+        return {
+          lines: newLines,
+          cursorLine,
+          cursorCol: actionContext.start + replacement.length,
+        };
+      }
+
       const optionPrefix = slashOptionPrefix(lines, cursorLine, cursorCol, item, prefix);
       return provider.applyCompletion(lines, cursorLine, cursorCol, item, optionPrefix ?? prefix);
     },
@@ -331,7 +388,8 @@ export function createCommandAutocompleteItems(registry: CommandRegistry): Slash
     description: command.description,
     getArgumentCompletions(argumentPrefix: string): AutocompleteItem[] {
       const prefix = argumentPrefix.trimStart();
-      const [action = "", ...rest] = scanAutocompleteArgumentTokens(prefix);
+      const [rawAction = "", ...rest] = scanAutocompleteArgumentTokens(prefix);
+      const action = autocompleteActionToken(rawAction);
       if (rest.length === 0 && !prefix.includes("--")) return command.actions
         .filter((candidate) => candidate.name.startsWith(action.toLowerCase()))
         .map((candidate) => ({ value: `${candidate.name} `, label: candidate.name, description: candidate.description }));
