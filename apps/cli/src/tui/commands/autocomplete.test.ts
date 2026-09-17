@@ -142,6 +142,18 @@ describe("command argument autocomplete", () => {
     expect(git?.getArgumentCompletions?.("department-branch --coun")).toEqual([expect.objectContaining({ value: "--council-id " })]);
   });
 
+  it("suggests Encore review Goal, payload, and idempotency inputs", () => {
+    const encore = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "encore");
+    expect(encore?.getArgumentCompletions?.("review --")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "--goal-id " }),
+        expect.objectContaining({ value: "--review-json " }),
+        expect.objectContaining({ value: "--command-id " }),
+      ]),
+    );
+    expect(encore?.getArgumentCompletions?.("review --rev")).toEqual([expect.objectContaining({ value: "--review-json " })]);
+  });
+
   it("suggests the Goal scope for Metronome scans", () => {
     const metronome = createCommandAutocompleteItems(createCommandRegistry()).find((item) => item.name === "metronome");
     expect(metronome?.getArgumentCompletions?.("scan --")).toEqual([expect.objectContaining({ value: "--goal-id " })]);
