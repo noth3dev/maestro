@@ -64,9 +64,19 @@ describe("sidebar nav badges", () => {
     const section = renderNavSection(NAV_ROWS, "home", { inbox: "(3)" });
     expect(section.title).toBe("views");
     expect(section.rows.find((row) => row.id === "inbox")?.label).toBe("inbox (3)");
-    expect(section.rows.find((row) => row.id === "home")?.label).toBe("home");
+    expect(section.rows.find((row) => row.id === "home")?.label).toBe("search");
     const cleared = renderNavSection(NAV_ROWS, "home", {});
     expect(cleared.rows.find((row) => row.id === "inbox")?.label).toBe("inbox");
+  });
+
+  it("renders renamed rows plus badges untruncated at full width", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [renderNavSection(NAV_ROWS, "billing", { inbox: "(3)", billing: "(62%)" })]);
+    for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
+    const text = plain(lines.join("\n"));
+    expect(text).toContain("search");
+    expect(text).toContain("evidence log");
+    expect(text).toContain("inbox (3)");
+    expect(text).toContain("billing (62%)");
   });
 
   it("keeps badged rows within the fixed width", () => {

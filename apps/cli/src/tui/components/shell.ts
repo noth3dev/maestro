@@ -78,6 +78,22 @@ export function pendingCount(state: TuiShellState): number {
   return state.approvals.kind === "value" ? state.approvals.value : 0;
 }
 
+/**
+ * Nav-row badges derived from live state, recomputed every render.
+ * Billing shows a rounded spend percent only when a positive ceiling is
+ * known; loading, empty, error, and zero-ceiling states show no badge,
+ * never a bare zero.
+ */
+export function sidebarNavBadges(state: TuiShellState): Record<string, string> {
+  const badges: Record<string, string> = {};
+  const pending = pendingCount(state);
+  if (pending > 0) badges.inbox = `(${pending})`;
+  if (state.budget.kind === "value" && state.budget.value.ceilingCents > 0) {
+    badges.billing = `(${Math.round((state.budget.value.spentCents / state.budget.value.ceilingCents) * 100)}%)`;
+  }
+  return badges;
+}
+
 function budgetText(state: Pick<TuiShellState, "budget">): string {
   if (state.budget.kind !== "value") return stateText(state.budget, String);
   const spent = (state.budget.value.spentCents / 100).toFixed(2);

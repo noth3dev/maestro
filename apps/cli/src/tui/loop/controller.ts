@@ -14,7 +14,7 @@ import {
   sidebarChannelSyncAction,
 } from "../components/sidebar-channels.js";
 import { createClickRegion } from "../components/mouse.js";
-import { pendingCount, renderStatusSection, toSidebarStatus } from "../components/shell.js";
+import { renderStatusSection, sidebarNavBadges, toSidebarStatus } from "../components/shell.js";
 import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
@@ -328,7 +328,6 @@ export class TuiController {
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, this.footer]);
     const sidebarLines = (width: number) => {
-      const pending = pendingCount(state);
       const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
       // Render-time tag sync (the dynamic-region precedent in view.ts
       // buildInputLabel): a goal change clears the old roster and fires one
@@ -346,7 +345,7 @@ export class TuiController {
       const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
       return renderSidebar(width, [
         ...renderStatusSection(toSidebarStatus(state), width),
-        renderNavSection(NAV_ROWS, this.sidebarFocus, pending > 0 ? { inbox: `(${pending})` } : {}),
+        renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state)),
         ...(channelSection === undefined ? [] : [channelSection]),
         ...(goalSection === undefined ? [] : [goalSection]),
         renderFooterSection(),

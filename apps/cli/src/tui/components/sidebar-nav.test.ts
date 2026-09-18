@@ -17,7 +17,12 @@ const stripAnsi = (value: string): string => value.replace(/\u001b\[[0-9;]*m/g, 
 describe("sidebar nav rows", () => {
   it("exposes only mapped read navigation", () => {
     expect(NAV_ROWS.map((row) => row.id)).toEqual(["home", "inbox", "channel", "evlog", "billing", "luthiery"]);
+    expect(NAV_ROWS.map((row) => row.label)).toEqual(["search", "inbox", "channel", "evidence log", "billing", "luthiery"]);
     for (const row of NAV_ROWS) expect(row.label.length).toBeGreaterThan(0);
+  });
+
+  it("renders exactly six selectable nav rows", () => {
+    expect(NAV_ROWS.length).toBe(6);
   });
 });
 
@@ -40,7 +45,7 @@ describe("moveSidebarFocus", () => {
 });
 
 describe("resolveSidebarNavClick", () => {
-  const lines = ["──────────────────────────", " sidebar", " models", "  home", "  inbox", "  channel", "──────────────────────────"];
+  const lines = ["──────────────────────────", " sidebar", " models", "  search", "  inbox", "  channel", "──────────────────────────"];
 
   it("maps label hits to row ids and ignores chrome", () => {
     expect(resolveSidebarNavClick(lines, 3, 3)).toBe("home");
@@ -51,6 +56,16 @@ describe("resolveSidebarNavClick", () => {
     expect(resolveSidebarNavClick(lines, 3, 6)).toBeUndefined();
     expect(resolveSidebarNavClick(lines, 3, -1)).toBeUndefined();
     expect(resolveSidebarNavClick(lines, 3, 99)).toBeUndefined();
+  });
+
+  it("never matches a channel name containing a nav label", () => {
+    expect(resolveSidebarNavClick(["  #research (5)"], 3, 0)).toBeUndefined();
+    expect(resolveSidebarNavClick(["  billing disputes"], 3, 0)).toBe("billing");
+  });
+
+  it("ignores truncated labels instead of guessing", () => {
+    expect(resolveSidebarNavClick(["  searc"], 3, 0)).toBeUndefined();
+    expect(resolveSidebarNavClick(["  evidence lo"], 3, 0)).toBeUndefined();
   });
 });
 

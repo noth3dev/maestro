@@ -11,6 +11,7 @@ import {
   renderStatusSection,
   renderTuiFooter,
   renderTuiLayout,
+  sidebarNavBadges,
   toSidebarStatus,
   type SetupStep,
   type TuiShellState,
@@ -495,5 +496,23 @@ describe("sidebar status section", () => {
     ).toBe(1);
     expect(pendingCount({ ...state, approvals: { kind: "value", value: 4 } })).toBe(4);
     expect(pendingCount(state)).toBe(0);
+  });
+
+  it("badges inbox count plus rounded budget percent, never a bare zero", () => {
+    const budgeted = {
+      ...state,
+      pendingDecisions: [{ identity: "effect-1", tier: "You", action: "deploy", actor: "worker-1" }],
+      budget: { kind: "value", value: { spentCents: 18600, ceilingCents: 30000 } } as const,
+    };
+    expect(sidebarNavBadges(budgeted)).toEqual({ inbox: "(1)", billing: "(62%)" });
+    const overspent = {
+      ...state,
+      budget: { kind: "value", value: { spentCents: 31000, ceilingCents: 30000 } } as const,
+    };
+    expect(sidebarNavBadges(overspent)).toEqual({ billing: "(103%)" });
+    expect(sidebarNavBadges(state)).toEqual({});
+    expect(sidebarNavBadges({ ...state, budget: { kind: "loading" } })).toEqual({});
+    expect(sidebarNavBadges({ ...state, budget: { kind: "error", message: "boom" } })).toEqual({});
+    expect(sidebarNavBadges({ ...state, budget: { kind: "value", value: { spentCents: 100, ceilingCents: 0 } } })).toEqual({});
   });
 });

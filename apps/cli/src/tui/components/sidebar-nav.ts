@@ -11,10 +11,12 @@ export interface SidebarNavRow {
 }
 
 export const NAV_ROWS: readonly SidebarNavRow[] = [
-  { id: "home", label: "home", action: { kind: "home" } },
+  // Labels follow the web mockup navigation vocabulary (docs/assets/design/mockup.html);
+  // ids stay stable because focus, resolvers, and tests key on them.
+  { id: "home", label: "search", action: { kind: "home" } },
   { id: "inbox", label: "inbox", action: { kind: "inbox" } },
   { id: "channel", label: "channel", action: { kind: "submit", text: "/channel list" } },
-  { id: "evlog", label: "evlog", action: { kind: "submit", text: "/events list" } },
+  { id: "evlog", label: "evidence log", action: { kind: "submit", text: "/events list" } },
   { id: "billing", label: "billing", action: { kind: "submit", text: "/billing get" } },
   { id: "luthiery", label: "luthiery", action: { kind: "submit", text: "/luthiery list" } },
 ];
@@ -38,16 +40,22 @@ function stripAnsi(value: string): string {
   return value.replace(/\u001b\[[0-9;]*m/g, "");
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
- * Map a click to a nav row by label content, never by fixed offsets.
- * Truncated labels and chrome rows resolve to undefined (no-op).
+ * Map a click to a nav row by whole-label match, never by fixed offsets.
+ * Word boundaries keep channel names containing a label (for example the
+ * research channel versus search) and truncated labels resolving to
+ * undefined (no-op).
  */
 export function resolveSidebarNavClick(lines: readonly string[], x: number, y: number): string | undefined {
   if (!Number.isInteger(y) || y < 0 || y >= lines.length) return undefined;
   const text = stripAnsi(lines[y] ?? "");
   if (!Number.isInteger(x) || x < 0 || x >= text.length) return undefined;
   for (const row of NAV_ROWS) {
-    if (text.includes(row.label)) return row.id;
+    if (new RegExp(`\\b${escapeRegExp(row.label)}\\b`).test(text)) return row.id;
   }
   return undefined;
 }
