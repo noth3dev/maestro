@@ -7,8 +7,7 @@ import {
 } from "../confirmation.js";
 import { compactReviewAcknowledgement } from "../entry-helpers.js";
 import { renderApprovalDialog } from "./approval-dialog.js";
-import { withClickRegion } from "./mouse.js";
-import { createDynamicRegion } from "./regions.js";
+import { createClickRegion } from "./mouse.js";
 
 export type ApprovalDialogAction =
   | { kind: "resolve"; decision: "approved" | "cancelled" }
@@ -162,15 +161,9 @@ export function createApprovalClickRegion(options: {
   lines: (width: number) => readonly string[];
   onAction: (action: ApprovalDialogAction) => void;
 }): Component {
-  let lastWidth = 0;
-  const inner = createDynamicRegion((width) => {
-    lastWidth = width;
-    return [...options.lines(width)];
-  });
-  return withClickRegion(inner, (event) => {
-    if (lastWidth <= 0) return;
-    const action = resolveApprovalClickAction(options.lines(lastWidth), event.x, event.y);
-    if (action === undefined) return;
-    options.onAction(action);
+  return createClickRegion({
+    lines: options.lines,
+    resolve: (lines, x, y) => resolveApprovalClickAction(lines, x, y),
+    onAction: options.onAction,
   });
 }

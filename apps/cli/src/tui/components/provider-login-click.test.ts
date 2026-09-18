@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Text, TuiAltScreen, VStack, type Terminal } from "@earendil-works/pi-tui";
+import { Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
 import { renderProviderLoginDialog } from "./provider-login-dialog.js";
 import {
   applyProviderLoginAction,
@@ -7,6 +7,7 @@ import {
   resolveProviderLoginClick,
   type ProviderLoginClickHost,
 } from "./provider-login-click.js";
+import { sendClick, StubTerminal } from "./stub-terminal.js";
 
 function rowWhere(lines: readonly string[], needle: string): number {
   return lines.findIndex((line) => line.includes(needle));
@@ -118,45 +119,6 @@ describe("provider login shared actions", () => {
   });
 });
 
-const ESC = String.fromCharCode(27);
-
-class StubTerminal implements Terminal {
-  columns = 80;
-  rows = 24;
-  kittyProtocolActive = false;
-  private inputHandler?: (data: string) => void;
-
-  start(onInput: (data: string) => void): void {
-    this.inputHandler = onInput;
-  }
-
-  stop(): void {}
-
-  async drainInput(): Promise<void> {}
-
-  write(): void {}
-
-  moveBy(): void {}
-
-  hideCursor(): void {}
-
-  showCursor(): void {}
-
-  clearLine(): void {}
-
-  clearFromCursor(): void {}
-
-  clearScreen(): void {}
-
-  setTitle(): void {}
-
-  setProgress(): void {}
-
-  send(data: string): void {
-    this.inputHandler?.(data);
-  }
-}
-
 describe("provider login click region", () => {
   const screens: TuiAltScreen[] = [];
   afterEach(() => {
@@ -182,13 +144,11 @@ describe("provider login click region", () => {
     // assuming one row; the ChatGPT option label is region-local row 2.
     const bannerHeight = new Text("banner").render(terminal.columns).length;
     const optionRow = bannerHeight + 2 + 1;
-    terminal.send(`${ESC}[<0;5;${optionRow}M`);
-    terminal.send(`${ESC}[<0;5;${optionRow}m`);
+    sendClick(terminal, 5, optionRow);
     expect(selected).toEqual([0]);
 
     // Clicking the banner itself selects nothing.
-    terminal.send(`${ESC}[<0;3;2M`);
-    terminal.send(`${ESC}[<0;3;2m`);
+    sendClick(terminal, 3, 2);
     expect(selected).toEqual([0]);
   });
 });

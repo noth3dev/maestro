@@ -1,7 +1,6 @@
 import type { Component } from "@earendil-works/pi-tui";
 import type { AccountLoginProviderSelection } from "./provider-login-dialog.js";
-import { withClickRegion } from "./mouse.js";
-import { createDynamicRegion } from "./regions.js";
+import { createClickRegion } from "./mouse.js";
 
 export type ProviderLoginClickAction =
   | { kind: "select"; selection: AccountLoginProviderSelection }
@@ -103,15 +102,9 @@ export function createProviderLoginClickRegion(options: {
   isCompact: () => boolean;
   onSelect: (selection: AccountLoginProviderSelection) => void;
 }): Component {
-  let lastWidth = 0;
-  const inner = createDynamicRegion((width) => {
-    lastWidth = width;
-    return [...options.lines(width)];
-  });
-  return withClickRegion(inner, (event) => {
-    if (lastWidth <= 0) return;
-    const selection = resolveProviderLoginClick(options.lines(lastWidth), event.x, event.y, options.isCompact());
-    if (selection === undefined) return;
-    options.onSelect(selection);
+  return createClickRegion({
+    lines: options.lines,
+    resolve: (lines, x, y) => resolveProviderLoginClick(lines, x, y, options.isCompact()),
+    onAction: options.onSelect,
   });
 }

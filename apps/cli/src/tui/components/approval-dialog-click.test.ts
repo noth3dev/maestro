@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TuiAltScreen, VStack, type Terminal } from "@earendil-works/pi-tui";
+import { TuiAltScreen, VStack } from "@earendil-works/pi-tui";
 import { renderApprovalDialog } from "./approval-dialog.js";
 import {
   applyApprovalAction,
@@ -9,6 +9,7 @@ import {
   type ApprovalDialogAction,
   type ApprovalDialogHost,
 } from "./approval-dialog-click.js";
+import { sendClick, StubTerminal } from "./stub-terminal.js";
 
 function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
@@ -162,45 +163,6 @@ describe("approval dialog shared actions", () => {
   });
 });
 
-const ESC = String.fromCharCode(27);
-
-class StubTerminal implements Terminal {
-  columns = 80;
-  rows = 24;
-  kittyProtocolActive = false;
-  private inputHandler?: (data: string) => void;
-
-  start(onInput: (data: string) => void): void {
-    this.inputHandler = onInput;
-  }
-
-  stop(): void {}
-
-  async drainInput(): Promise<void> {}
-
-  write(): void {}
-
-  moveBy(): void {}
-
-  hideCursor(): void {}
-
-  showCursor(): void {}
-
-  clearLine(): void {}
-
-  clearFromCursor(): void {}
-
-  clearScreen(): void {}
-
-  setTitle(): void {}
-
-  setProgress(): void {}
-
-  send(data: string): void {
-    this.inputHandler?.(data);
-  }
-}
-
 describe("approval dialog click region", () => {
   const screens: TuiAltScreen[] = [];
   afterEach(() => {
@@ -225,8 +187,7 @@ describe("approval dialog click region", () => {
     const row = rendered.map((line) => line).findIndex((line) => line.includes("y approve"));
     expect(row).toBeGreaterThanOrEqual(0);
     const column = rendered[row]!.indexOf("y approve") + 1;
-    terminal.send(`${ESC}[<0;${column + 1};${row + 1}M`);
-    terminal.send(`${ESC}[<0;${column + 1};${row + 1}m`);
+    sendClick(terminal, column + 1, row + 1);
 
     expect(actions).toEqual([{ kind: "resolve", decision: "approved" }]);
   });
@@ -247,8 +208,7 @@ describe("approval dialog click region", () => {
     const rendered = renderApprovalDialog(fullSummary, terminal.columns);
     const row = rendered.findIndex((line) => line.includes("───"));
     expect(row).toBeGreaterThanOrEqual(0);
-    terminal.send(`${ESC}[<0;5;${row + 1}M`);
-    terminal.send(`${ESC}[<0;5;${row + 1}m`);
+    sendClick(terminal, 5, row + 1);
 
     expect(actions).toEqual([]);
   });

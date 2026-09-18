@@ -1,45 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { Text, TuiAltScreen, VStack, type Terminal, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { withClickRegion } from "./mouse.js";
-
-const ESC = String.fromCharCode(27);
-
-class StubTerminal implements Terminal {
-  columns = 80;
-  rows = 24;
-  kittyProtocolActive = false;
-  private inputHandler?: (data: string) => void;
-
-  start(onInput: (data: string) => void): void {
-    this.inputHandler = onInput;
-  }
-
-  stop(): void {}
-
-  async drainInput(): Promise<void> {}
-
-  write(): void {}
-
-  moveBy(): void {}
-
-  hideCursor(): void {}
-
-  showCursor(): void {}
-
-  clearLine(): void {}
-
-  clearFromCursor(): void {}
-
-  clearScreen(): void {}
-
-  setTitle(): void {}
-
-  setProgress(): void {}
-
-  send(data: string): void {
-    this.inputHandler?.(data);
-  }
-}
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Text, TuiAltScreen, VStack, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { createClickRegion, withClickRegion } from "./mouse.js";
+import { sendClick, StubTerminal } from "./stub-terminal.js";
 
 describe("TUI mouse click wiring", () => {
   const screens: TuiAltScreen[] = [];
@@ -67,8 +29,7 @@ describe("TUI mouse click wiring", () => {
     terminal.send("a");
     expect(seenByKeyboard).toEqual(["a"]);
 
-    terminal.send(`${ESC}[<0;5;1M`);
-    terminal.send(`${ESC}[<0;5;1m`);
+    sendClick(terminal, 5, 1);
 
     expect(clicks.length).toBe(1);
     expect(clicks[0]?.type).toBe("click");
@@ -76,5 +37,53 @@ describe("TUI mouse click wiring", () => {
     expect(clicks[0]?.screenX).toBe(4);
     expect(clicks[0]?.screenY).toBe(0);
     expect(seenByKeyboard).toEqual(["a"]);
+  });
+});
+
+describe("generic click region", () => {
+  const screens: TuiAltScreen[] = [];
+  afterEach(() => {
+    for (const screen of screens) screen.stop();
+    screens.length = 0;
+  });
+
+  it("routes a click through resolve to onAction against the last rendered width", () => {
+    const terminal = new StubTerminal();
+    const tui = new TuiAltScreen(terminal);
+    screens.push(tui);
+    const resolve = vi.fn((lines: readonly string[], x: number, y: number) => (y === 0 && x < 4 ? "hit" : undefined));
+    const onAction = vi.fn();
+    const region = createClickRegion({ lines: (width) => [`w${width}`], resolve, onAction });
+    tui.setLayoutRoot(new VStack([{ component: region, basis: "auto" }]));
+    tui.start();
+    tui.renderNow(true);
+
+    sendClick(terminal, 2, 1);
+
+    expect(resolve).toHaveBeenCalledOnce();
+    expect(resolve).toHaveBeenCalledWith(["w80"], 1, 0);
+    expect(onAction).toHaveBeenCalledWith("hit");
+  });
+
+  it("ignores clicks before the first render and on unmapped cells", () => {
+    const terminal = new StubTerminal();
+    const tui = new TuiAltScreen(terminal);
+    screens.push(tui);
+    const onAction = vi.fn();
+    const region = createClickRegion({ lines: () => ["clickable"], resolve: () => "hit", onAction });
+    tui.setLayoutRoot(new VStack([{ component: region, basis: "auto" }]));
+    tui.start();
+
+    sendClick(terminal, 2, 1);
+    expect(onAction).not.toHaveBeenCalled();
+
+    tui.renderNow(true);
+    const resolveNone = vi.fn(() => undefined);
+    const idle = createClickRegion({ lines: () => ["clickable"], resolve: resolveNone, onAction });
+    tui.setLayoutRoot(new VStack([{ component: idle, basis: "auto" }]));
+    tui.renderNow(true);
+    sendClick(terminal, 2, 1);
+    expect(resolveNone).toHaveBeenCalled();
+    expect(onAction).not.toHaveBeenCalled();
   });
 });
