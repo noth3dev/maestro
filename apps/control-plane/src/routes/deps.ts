@@ -7,7 +7,9 @@ import type { RouteDeps } from "../server.js";
  * server.ts still assembles and passes the full object; structural typing
  * keeps those call sites compiling untouched.
  */
+export type AdminRouteDeps = Pick<RouteDeps, "projectAccess">;
 export type CapabilityRouteDeps = Pick<RouteDeps, "capabilityApprovals" | "inbox" | "evidenceCapture" | "personaGoalEvidence">;
+export type CatalogRouteDeps = Pick<RouteDeps, "projectDiscovery" | "organizations" | "conversations">;
 export type ChannelRouteDeps = Pick<RouteDeps, "channels">;
 export type ConversationRouteDeps = Pick<
   RouteDeps,
@@ -33,6 +35,5 @@ export type ProviderRouteDeps = Pick<
 >;
 export type ReadRouteDeps = Pick<RouteDeps, "concertmasterReports" | "readState" | "projections">;
 export type SettingsRouteDeps = Pick<RouteDeps, "settingsService">;
-export type SystemRouteDeps = Pick<RouteDeps, "projectAccess" | "projectDiscovery" | "organizations" | "conversations">;
 export type TaskContractRouteDeps = Pick<RouteDeps, "taskContracts">;
 export type WorkerRouteDeps = Pick<RouteDeps, "workers" | "certifications">;

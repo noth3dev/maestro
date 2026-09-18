@@ -8,6 +8,9 @@ One-line package axes (new files follow the axis; never mix):
 - `agent-runtime/ipython/`: protocol-stack layers (`frames` → `validation` → `kernel` → `gateway` → `two-stage`).
 - `domain/`: pure invariants only (no DB/HTTP/fs/fetch).
 
+Split `reads.ts` only when it exceeds ~150 lines or gains a fourth dep,
+then by resource (`goals/:id/*` vs top-level reads), never by backing service.
+
 Rules enforced by `scripts/check-barrel-boundaries.mjs` (CI static job, zero new deps):
 
 | Scope        | Rule                                                                                                                                            |
