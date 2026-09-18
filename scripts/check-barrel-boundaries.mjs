@@ -97,11 +97,6 @@ const EXCEPTIONS = [
     reason: "PROD EXCEPTION: local-backend orchestration owned by CLI; extract to a package as its own finding",
   },
   {
-    importer: "apps/carnegie/electron/bootstrap.ts",
-    specifier: "../../cli/dist/tui/connection.js",
-    reason: "PROD EXCEPTION: local-backend orchestration owned by CLI; extract to a package as its own finding",
-  },
-  {
     importer: "packages/persistence/src/worker.integration.test.ts",
     specifier: "../../../apps/control-plane/src/ensemble-candidate-catalog.js",
     reason: "worker-store integration through control-plane admission; catalog home undecided",
@@ -164,6 +159,7 @@ for (const root of scanRoots) {
       const key = `${importer}\0${specifier}`;
       const isDistImport = /(^|\/)dist\//.test(specifier);
       if (isDistImport && rootBase !== null) {
+        if (/^\s*(import|export)\s*type\b/.test(statement)) continue;
         if (EXCEPTIONS.some((entry) => entry.importer === importer && entry.specifier === specifier)) {
           seenExceptions.add(key);
         } else {
