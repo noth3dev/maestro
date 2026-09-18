@@ -1,10 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { CatalogRouteDeps } from "./deps.js";
-import {
-  ProjectListSchema,
-  OrganizationReadModelSchema,
-  ModelCatalogEntrySchema,
-} from "@maestro/contracts";
+import { ProjectListSchema, OrganizationReadModelSchema, ModelCatalogEntrySchema } from "@maestro/contracts";
 import { requestOperator } from "../server-input.js";
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";

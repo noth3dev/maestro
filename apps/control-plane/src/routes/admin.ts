@@ -1,9 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AdminRouteDeps } from "./deps.js";
-import {
-  ProjectAccessProvisionInputSchema,
-  ProjectAccessProvisionResultSchema,
-} from "@maestro/contracts";
+import { ProjectAccessProvisionInputSchema, ProjectAccessProvisionResultSchema } from "@maestro/contracts";
 import { parse, requestOperator } from "../server-input.js";
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";

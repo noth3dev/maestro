@@ -46,13 +46,7 @@ export async function appendConversationEvent(
   return result.rows[0]!.cursor;
 }
 
-export async function appendTurnDelta(
-  pool: Pool,
-  conversationId: string,
-  projectId: string,
-  turnId: string,
-  text: string,
-): Promise<void> {
+export async function appendTurnDelta(pool: Pool, conversationId: string, projectId: string, turnId: string, text: string): Promise<void> {
   await pool.query(
     "INSERT INTO conversation_events (event_id, conversation_id, project_id, event_type, payload) VALUES ($1, $2, $3, 'turn_delta', $4)",
     [randomUUID(), conversationId, projectId, JSON.stringify({ turnId, text })],
@@ -102,7 +96,8 @@ export async function listConversationEvents(
   conversationId: string,
   projectId: string,
   after: string,
-): Promise<ConversationEvent[]> {  const result = await pool.query<{
+): Promise<ConversationEvent[]> {
+  const result = await pool.query<{
     cursor: string;
     event_id: string;
     conversation_id: string;
@@ -138,11 +133,7 @@ export interface AssistantTurnRow {
   created_at: Date;
 }
 
-export async function findTurnByRequest(
-  pool: Pool,
-  conversationId: string,
-  requestId: string,
-): Promise<TurnRequestRow | null> {
+export async function findTurnByRequest(pool: Pool, conversationId: string, requestId: string): Promise<TurnRequestRow | null> {
   const prior = await pool.query<TurnRequestRow>(
     "SELECT turn_ref, content FROM conversation_turns WHERE conversation_id = $1 AND request_id = $2 AND role = 'user'",
     [conversationId, requestId],
@@ -150,11 +141,7 @@ export async function findTurnByRequest(
   return prior.rowCount !== 0 ? prior.rows[0]! : null;
 }
 
-export async function findAssistantTurn(
-  pool: Pool,
-  conversationId: string,
-  turnRef: string,
-): Promise<AssistantTurnRow | null> {
+export async function findAssistantTurn(pool: Pool, conversationId: string, turnRef: string): Promise<AssistantTurnRow | null> {
   const assistant = await pool.query<AssistantTurnRow>(
     "SELECT turn_id, content, status, cursor::text AS cursor, created_at FROM conversation_turns WHERE conversation_id = $1 AND turn_ref = $2 AND role = 'assistant'",
     [conversationId, turnRef],
@@ -243,7 +230,14 @@ export async function claimConversationTurn(
 }
 
 export type FinalizeConversationTurnResult =
-  | { kind: "finalized"; status: Conversation["status"]; content: string; cursor: string; conversation: ConversationRecord; wasRunning: boolean }
+  | {
+      kind: "finalized";
+      status: Conversation["status"];
+      content: string;
+      cursor: string;
+      conversation: ConversationRecord;
+      wasRunning: boolean;
+    }
   | { kind: "not-found" };
 
 export async function finalizeConversationTurn(
@@ -290,7 +284,16 @@ export async function finalizeConversationTurn(
           });
     await client.query(
       "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'assistant', $6, $7, $8) ON CONFLICT (turn_id) DO NOTHING",
-      [args.turnId, args.turnId, current.active_request_id, args.conversationId, args.projectId, boundedText(content), turnStatus(status), completedCursor],
+      [
+        args.turnId,
+        args.turnId,
+        current.active_request_id,
+        args.conversationId,
+        args.projectId,
+        boundedText(content),
+        turnStatus(status),
+        completedCursor,
+      ],
     );
     const wasRunning = current.status === "running";
     if (wasRunning) {
@@ -310,9 +313,7 @@ export async function finalizeConversationTurn(
 }
 
 export type CancelConversationTurnResult =
-  | { kind: "echo"; conversation: ConversationRecord }
-  | { kind: "cancelled"; conversation: ConversationRecord }
-  | { kind: "not-found" };
+  { kind: "echo"; conversation: ConversationRecord } | { kind: "cancelled"; conversation: ConversationRecord } | { kind: "not-found" };
 
 export async function cancelConversationTurn(
   pool: Pool,
@@ -378,10 +379,7 @@ export async function listActiveConversations(pool: Pool): Promise<ConversationR
 
 export type FenceInterruptedTurnResult = { kind: "fenced" } | { kind: "skipped" };
 
-export async function fenceInterruptedTurn(
-  pool: Pool,
-  args: { conversationId: string },
-): Promise<FenceInterruptedTurnResult> {
+export async function fenceInterruptedTurn(pool: Pool, args: { conversationId: string }): Promise<FenceInterruptedTurnResult> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -404,7 +402,11 @@ export async function fenceInterruptedTurn(
       const cursor =
         existing.rowCount === 1
           ? existing.rows[0]!.cursor
-          : await appendConversationEvent(client, args.conversationId, current.project_id, "turn_unknown", { status: "unknown", turnId, message });
+          : await appendConversationEvent(client, args.conversationId, current.project_id, "turn_unknown", {
+              status: "unknown",
+              turnId,
+              message,
+            });
       await client.query(
         "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'assistant', $6, 'unknown', $7) ON CONFLICT (turn_id) DO NOTHING",
         [turnId, turnId, current.active_request_id ?? randomUUID(), args.conversationId, current.project_id, message, cursor],

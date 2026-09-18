@@ -40,7 +40,11 @@ export async function waitForAccountLoginStart(
 export async function startAccountLoginFlow(
   deps: AccountLoginFlowDeps,
   gateway: {
-    startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => Promise<GatewayAccountLoginStartResult>;
+    startAccountLogin: (input: {
+      operatorId: string;
+      requestId: string;
+      providerId: "openai-codex";
+    }) => Promise<GatewayAccountLoginStartResult>;
   },
   id: { operatorId: string; providerId: "openai-codex"; requestId: string },
 ): Promise<GatewayAccountLoginStartResult> {
@@ -48,12 +52,16 @@ export async function startAccountLoginFlow(
   let record = reservation.record;
   if (reservation.created) {
     try {
-      const providerResult = await gateway.startAccountLogin({ operatorId: id.operatorId, requestId: id.requestId, providerId: id.providerId });
+      const providerResult = await gateway.startAccountLogin({
+        operatorId: id.operatorId,
+        requestId: id.requestId,
+        providerId: id.providerId,
+      });
       record = await deps.store.completeStart(record.loginId, providerResult.loginId, providerResult.authUrl);
-      } catch (error) {
-        await deps.store.failStart(record.loginId, "Provider account login failed").catch(() => undefined);
-        throw error;
-      }
+    } catch (error) {
+      await deps.store.failStart(record.loginId, "Provider account login failed").catch(() => undefined);
+      throw error;
+    }
   } else if (record.state === "starting") {
     record = await waitForAccountLoginStart(deps.store, id.operatorId, id.requestId);
   }
@@ -119,7 +127,12 @@ export type PollAccountLoginStatusResult =
 export async function pollAccountLoginStatus(
   deps: AccountLoginFlowDeps,
   gateway: {
-    accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => Promise<GatewayAccountLoginStatusResult>;
+    accountLoginStatus: (input: {
+      operatorId: string;
+      requestId: string;
+      providerId: "openai-codex";
+      loginId: string;
+    }) => Promise<GatewayAccountLoginStatusResult>;
   },
   id: AccountLoginIdentity,
 ): Promise<PollAccountLoginStatusResult> {
@@ -167,10 +180,7 @@ export async function pollAccountLoginStatus(
 }
 
 export type CancelAccountLoginResult =
-  | { kind: "echo"; record: AccountLoginRecord }
-  | { kind: "contended" }
-  | { kind: "cancelled" }
-  | { kind: "unknown" };
+  { kind: "echo"; record: AccountLoginRecord } | { kind: "contended" } | { kind: "cancelled" } | { kind: "unknown" };
 
 export async function cancelAccountLoginFlow(
   deps: AccountLoginFlowDeps,
