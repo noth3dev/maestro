@@ -3,6 +3,13 @@ import type { Pool } from "pg";
 import type { TaskContractService } from "./task-contract-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 import {
+  appendConversationEvent,
+  appendTurnDelta,
+  listConversationEvents,
+  markConversationUnknown,
+  readConversationRecord,
+} from "@maestro/persistence";
+import {
   UuidSchema,
   ConversationActivityEventSchema,
   type ConversationActivityEvent,
@@ -159,25 +166,9 @@ export function createPostgresConversationService(options: {
   }
 
   async function read(conversationId: string, projectId: string, operatorId: string): Promise<ConversationRow> {
-    const result = await options.pool.query<ConversationRow>(
-      "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 AND operator_id = $3",
-      [conversationId, projectId, operatorId],
-    );
-    if (result.rowCount !== 1) throw new ConversationNotFoundError();
-    return result.rows[0]!;
-  }
-  async function addEvent(
-    client: { query: (text: string, values?: unknown[]) => Promise<{ rows: Array<{ cursor: string }> }> },
-    conversationId: string,
-    projectId: string,
-    eventType: ConversationEvent["eventType"],
-    payload: Record<string, unknown>,
-  ): Promise<string> {
-    const result = await client.query(
-      "INSERT INTO conversation_events (event_id, conversation_id, project_id, event_type, payload) VALUES ($1, $2, $3, $4, $5) RETURNING cursor::text",
-      [randomUUID(), conversationId, projectId, eventType, JSON.stringify(payload)],
-    );
-    return result.rows[0]!.cursor;
+    const row = await readConversationRecord(options.pool, conversationId, projectId, operatorId);
+    if (row === null) throw new ConversationNotFoundError();
+    return row;
   }
 
   function grantFor(row: ConversationRow, _accountRef: string) {
@@ -220,10 +211,7 @@ export function createPostgresConversationService(options: {
     state.pending = state.pending
       .then(async () => {
         for (const text of chunks) {
-          await options.pool.query(
-            "INSERT INTO conversation_events (event_id, conversation_id, project_id, event_type, payload) VALUES ($1, $2, $3, 'turn_delta', $4)",
-            [randomUUID(), conversationId, projectId, JSON.stringify({ turnId, text })],
-          );
+          await appendTurnDelta(options.pool, conversationId, projectId, turnId, text);
         }
       })
       .catch((error) => {
@@ -267,37 +255,6 @@ export function createPostgresConversationService(options: {
       idempotencyKey: row.conversation_id,
     });
     return { execution: spawned.execution, invocation: spawned.invocation, runtime, binding: row.binding, stream };
-  }
-  async function markConversationUnknown(conversationId: string, projectId: string, reason: string, message: string): Promise<void> {
-    const client = await options.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<ConversationRow>(
-        "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 FOR UPDATE",
-        [conversationId, projectId],
-      );
-      const current = currentResult.rows[0];
-      if (current === undefined || ["succeeded", "failed", "cancelled", "unknown"].includes(current.status)) {
-        await client.query("COMMIT");
-        return;
-      }
-      const existing = await client.query<{ cursor: string }>(
-        "SELECT cursor::text AS cursor FROM conversation_events WHERE conversation_id = $1 AND event_type = 'turn_unknown' AND payload->>'reason' = $2 ORDER BY cursor DESC LIMIT 1",
-        [conversationId, reason],
-      );
-      if (existing.rowCount === 0)
-        await addEvent(client, conversationId, projectId, "turn_unknown", { status: "unknown", reason, message });
-      await client.query(
-        "UPDATE conversations SET status = 'unknown', active_turn_id = NULL, active_request_id = NULL, version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND status IN ('active', 'running')",
-        [conversationId],
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
   }
 
   return {
@@ -373,7 +330,7 @@ export function createPostgresConversationService(options: {
             normalizedRequestId,
           ],
         );
-        await addEvent(client, conversationId, input.projectId, "conversation_created", { model: input.model });
+        await appendConversationEvent(client, conversationId, input.projectId, "conversation_created", { model: input.model });
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -425,7 +382,7 @@ export function createPostgresConversationService(options: {
           idempotencyKey: conversationId,
         });
       } catch {
-        await markConversationUnknown(conversationId, input.projectId, "runtime_admission_failed", "Conversation runtime admission failed");
+        await markConversationUnknown(options.pool, conversationId, input.projectId, "runtime_admission_failed", "Conversation runtime admission failed");
         await runtime.close?.();
         throw new ConversationUnavailableError("conversation runtime admission failed");
       }
@@ -528,7 +485,7 @@ export function createPostgresConversationService(options: {
           "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'user', $6, 'accepted', 0)",
           [randomUUID(), turnId, normalizedRequestId, conversationId, input.projectId, input.text],
         );
-        await addEvent(client, conversationId, input.projectId, "turn_started", { turnId, text: input.text });
+        await appendConversationEvent(client, conversationId, input.projectId, "turn_started", { turnId, text: input.text });
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -597,7 +554,7 @@ export function createPostgresConversationService(options: {
         completedCursor =
           existingTerminal.rowCount === 1
             ? existingTerminal.rows[0]!.cursor
-            : await addEvent(resultClient, conversationId, input.projectId, terminalEventType(status), {
+            : await appendConversationEvent(resultClient, conversationId, input.projectId, terminalEventType(status), {
                 status,
                 turnId,
                 ...(status === "succeeded" ? { content: boundedText(content) } : { message: boundedText(content, 2_000) }),
@@ -677,7 +634,7 @@ export function createPostgresConversationService(options: {
         const turnId = current.active_turn_id;
         const requestId = current.active_request_id ?? randomUUID();
         const message = cancellationContent(next);
-        const cursor = await addEvent(client, conversationId, projectId, terminalEventType(next), {
+        const cursor = await appendConversationEvent(client, conversationId, projectId, terminalEventType(next), {
           status: next,
           ...(turnId === undefined ? {} : { turnId }),
           message,
@@ -703,27 +660,7 @@ export function createPostgresConversationService(options: {
     },
     async listEvents(conversationId, projectId, after, operator) {
       await read(conversationId, projectId, operator.operatorId);
-      const result = await options.pool.query<{
-        cursor: string;
-        event_id: string;
-        conversation_id: string;
-        project_id: string;
-        event_type: ConversationEvent["eventType"];
-        payload: Record<string, unknown>;
-        occurred_at: string;
-      }>(
-        "SELECT cursor::text AS cursor, event_id, conversation_id, project_id, event_type, payload, occurred_at FROM conversation_events WHERE conversation_id = $1 AND project_id = $2 AND cursor > $3::bigint ORDER BY cursor ASC LIMIT 256",
-        [conversationId, projectId, after],
-      );
-      return result.rows.map((row) => ({
-        cursor: row.cursor,
-        eventId: row.event_id,
-        conversationId: row.conversation_id,
-        projectId: row.project_id,
-        eventType: row.event_type,
-        payload: row.payload,
-        occurredAt: new Date(row.occurred_at).toISOString(),
-      }));
+      return listConversationEvents(options.pool, conversationId, projectId, after);
     },
     async subscribeActivity(conversationId, projectId, operator, listener) {
       await read(conversationId, projectId, operator.operatorId);
@@ -766,7 +703,7 @@ export function createPostgresConversationService(options: {
               const cursor =
                 existing.rowCount === 1
                   ? existing.rows[0]!.cursor
-                  : await addEvent(client, row.conversation_id, row.project_id, "turn_unknown", { status: "unknown", turnId, message });
+                  : await appendConversationEvent(client, row.conversation_id, row.project_id, "turn_unknown", { status: "unknown", turnId, message });
               await client.query(
                 "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'assistant', $6, 'unknown', $7) ON CONFLICT (turn_id) DO NOTHING",
                 [turnId, turnId, current.active_request_id ?? randomUUID(), row.conversation_id, row.project_id, message, cursor],
@@ -792,6 +729,7 @@ export function createPostgresConversationService(options: {
           recovered += 1;
         } catch {
           await markConversationUnknown(
+            options.pool,
             row.conversation_id,
             row.project_id,
             "runtime_rebuild_failed",
