@@ -457,13 +457,8 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "evidence" && action === "dump") {
-      const goalId = string("goal-id");
-      const projectId = string("project-id");
-      const bundle = await client.getEvidenceBundle(goalId, { projectId });
-      const certifications = await client.listCertifications(goalId, { projectId });
-      const report = await client.getConcertmasterReport(goalId, { projectId });
-      if (report.evidenceBundleId !== bundle.bundleId) throw new Error("Evidence bundle/report identity mismatch");
-      printState(io.stdout, { bundle, certifications, report }, json);
+      const result = await client.getEvidenceDump(string("goal-id"), { projectId: string("project-id") });
+      printState(io.stdout, result, json);
       return 0;
     }
     if (resource === "events" && action === "list") {
