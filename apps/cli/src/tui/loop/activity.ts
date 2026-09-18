@@ -96,7 +96,7 @@ export class ActivitySync {
           dismissSplash: () => c.splash.dismiss(),
           onCompactOutcome: (nextConversation) => {
             if (c.terminal.rows < 16) {
-              c.compactConversationResult = compactConversationAcknowledgement(nextConversation, c.terminal.columns);
+              c.compactConversationResult = compactConversationAcknowledgement(nextConversation, c.contentWidth());
               c.compactCommandResult = undefined;
               c.compactTaskContractReview = false;
             }

@@ -3,6 +3,7 @@ import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
+import { toggleSidebar } from "../components/sidebar.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -122,6 +123,10 @@ export class LifecycleHandler {
       return { consume: true };
     }
     if (dispatchCommandPaletteInput(data, c.view.append)) return { consume: true };
+    if (matchesKey(data, "ctrl+b")) {
+      toggleSidebar(c);
+      return { consume: true };
+    }
     if (matchesKey(data, "ctrl+g")) {
       void c.submitter.submit("/goals list");
       return { consume: true };
@@ -194,8 +199,8 @@ export class LifecycleHandler {
     }
     if (matchesKey(data, "ctrl+a") && c.pendingConfirmation === undefined && (c.state.pendingDecisions?.length ?? 0) > 0) {
       c.compactReview =
-        c.terminal.rows < 16 ? compactReviewAcknowledgement(undefined, c.state.pendingDecisions ?? [], c.terminal.columns) : undefined;
-      c.view.append(renderPendingDecisionDetails(c.state, c.terminal.columns).join("\n"));
+        c.terminal.rows < 16 ? compactReviewAcknowledgement(undefined, c.state.pendingDecisions ?? [], c.contentWidth()) : undefined;
+      c.view.append(renderPendingDecisionDetails(c.state, c.contentWidth()).join("\n"));
       return { consume: true };
     }
     if (c.pendingConfirmation !== undefined && data === "?") {

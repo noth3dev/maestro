@@ -52,7 +52,7 @@ export class TuiView {
   render = (): void => {
     const c = this.c;
     this.syncPendingDecisionState();
-    c.footer.setText(c.terminal.rows < 16 ? "" : renderTuiFooter(c.terminal.columns, c.state));
+    c.footer.setText(c.terminal.rows < 16 ? "" : renderTuiFooter(c.contentWidth(), c.state));
     c.tui.requestRender(true);
   };
 

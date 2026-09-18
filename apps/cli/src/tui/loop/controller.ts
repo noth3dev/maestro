@@ -1,10 +1,11 @@
-import { Box, CombinedAutocompleteProvider, ProcessTerminal, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
+import { Box, CombinedAutocompleteProvider, HStack, ProcessTerminal, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
 import type { GoalEvent } from "@maestro/api-client";
 import type { TaskContract } from "@maestro/contracts";
 import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
+import { contentWidth, isSidebarVisible, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -81,6 +82,12 @@ export class TuiController {
   compactTaskContractReview = false;
   compactProjectNotice: string | undefined;
   lastRenderedTerminalRows: number;
+  sidebarVisible = true;
+
+  /** Main-pane width: full terminal minus the visible sidebar. */
+  contentWidth(): number {
+    return contentWidth(this.terminal.columns, this.sidebarVisible);
+  }
 
   conversation: ConversationTranscriptState = createConversationTranscript();
   draftedTaskContract: TaskContract | undefined = undefined;
@@ -248,7 +255,7 @@ export class TuiController {
     });
     const noticeRegion = createDynamicRegion(() => {
       if (terminal.rows < 16 && this.accountLoginSelection === undefined) return [];
-      return terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, terminal.columns)];
+      return terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, this.contentWidth())];
     });
     // Clickable provider-login options: selecting a row is the same action as
     // the up/down keys; Enter still confirms and starts the flow.
@@ -265,38 +272,49 @@ export class TuiController {
       },
     });
     this.header.setOrderedStreamRenderer(() =>
-      renderUnifiedStreamEntries(this.conversation, this.activity.slice(this.visibleActivityStart), terminal.columns),
+      renderUnifiedStreamEntries(this.conversation, this.activity.slice(this.visibleActivityStart), this.contentWidth()),
     );
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, this.footer]);
+    const sidebarRegion = createDynamicRegion((width) => renderSidebar(width));
+    const mainColumn = new VStack([
+      { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
+      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
+      { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+      {
+        component: approvalClickRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => this.pendingConfirmation !== undefined && terminal.rows >= 16,
+      },
+      {
+        component: noticeRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => terminal.rows >= 16 || this.accountLoginSelection !== undefined,
+      },
+      {
+        component: providerLoginClickRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
+      },
+      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+    ]);
     tui.setLayoutRoot(
-      new VStack([
-        { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
-        { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
-        { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+      new HStack([
         {
-          component: approvalClickRegion,
-          basis: "auto",
+          component: sidebarRegion,
+          basis: SIDEBAR_WIDTH,
           shrink: 0,
           minSize: 0,
-          visible: () => this.pendingConfirmation !== undefined && terminal.rows >= 16,
+          visible: () => isSidebarVisible(this.sidebarVisible, terminal.columns),
         },
-        {
-          component: noticeRegion,
-          basis: "auto",
-          shrink: 0,
-          minSize: 0,
-          visible: () => terminal.rows >= 16 || this.accountLoginSelection !== undefined,
-        },
-        {
-          component: providerLoginClickRegion,
-          basis: "auto",
-          shrink: 0,
-          minSize: 0,
-          visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
-        },
-        { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+        { component: mainColumn, basis: 0, grow: 1, minSize: 0 },
       ]),
     );
     tui.setFocus(this.editor);

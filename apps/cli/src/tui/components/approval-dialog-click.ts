@@ -20,6 +20,7 @@ export interface ApprovalDialogHost {
   pendingConfirmation: { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void } | undefined;
   compactReview: string | undefined;
   readonly terminal: { readonly columns: number; readonly rows: number };
+  contentWidth(): number;
   readonly view: {
     append(line: string): void;
     appendWarning(text: string): void;
@@ -136,8 +137,8 @@ export function applyApprovalAction(host: ApprovalDialogHost, action: ApprovalDi
     }
     case "reveal": {
       host.compactReview =
-        host.terminal.rows < 16 ? compactReviewAcknowledgement(pending.summary, [], host.terminal.columns) : undefined;
-      host.view.append(renderApprovalDialog(pending.summary, host.terminal.columns).join("\n"));
+        host.terminal.rows < 16 ? compactReviewAcknowledgement(pending.summary, [], host.contentWidth()) : undefined;
+      host.view.append(renderApprovalDialog(pending.summary, host.contentWidth()).join("\n"));
       return true;
     }
   }
