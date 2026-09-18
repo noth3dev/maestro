@@ -2,6 +2,7 @@ import { matchesKey } from "@earendil-works/pi-tui";
 import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
+import { applyProviderLoginAction } from "../components/provider-login-click.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -154,17 +155,15 @@ export class LifecycleHandler {
     }
     if (c.accountLoginSelection !== undefined && c.accountLoginState === "selecting") {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
-        c.accountLoginSelection = c.accountLoginSelection === 0 ? 1 : 0;
-        c.view.render();
-        return { consume: true };
+        if (applyProviderLoginAction(c, { kind: "select", selection: c.accountLoginSelection === 0 ? 1 : 0 })) {
+          return { consume: true };
+        }
       }
       if (matchesKey(data, "escape")) {
-        c.auth.cancelAccountLogin();
-        return { consume: true };
+        if (applyProviderLoginAction(c, { kind: "cancel" })) return { consume: true };
       }
       if (matchesKey(data, "enter")) {
-        void c.auth.startAccountLogin();
-        return { consume: true };
+        if (applyProviderLoginAction(c, { kind: "continue" })) return { consume: true };
       }
       return { consume: true };
     }

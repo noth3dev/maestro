@@ -6,6 +6,7 @@ import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider 
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
+import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
 import type { ApprovalDialogSummary, ConfirmationResult, CriticalActionSummary } from "../confirmation.js";
 import type { createStatusRegion } from "../components/regions.js";
@@ -247,18 +248,21 @@ export class TuiController {
     });
     const noticeRegion = createDynamicRegion(() => {
       if (terminal.rows < 16 && this.accountLoginSelection === undefined) return [];
-      const lines = terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, terminal.columns)];
-      if (this.accountLoginSelection !== undefined && this.accountLoginState !== undefined)
-        lines.push(
-          ...renderProviderLoginDialog(
-            terminal.columns,
-            this.accountLoginSelection,
-            this.accountLoginState,
-            this.accountLoginUrl,
-            terminal.rows < 16,
-          ),
-        );
-      return lines;
+      return terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, terminal.columns)];
+    });
+    // Clickable provider-login options: selecting a row is the same action as
+    // the up/down keys; Enter still confirms and starts the flow.
+    const providerLoginClickRegion = createProviderLoginClickRegion({
+      lines: (width) => {
+        const selection = this.accountLoginSelection;
+        const loginState = this.accountLoginState;
+        if (selection === undefined || loginState === undefined) return [];
+        return renderProviderLoginDialog(width, selection, loginState, this.accountLoginUrl, terminal.rows < 16);
+      },
+      isCompact: () => terminal.rows < 16,
+      onSelect: (selection) => {
+        applyProviderLoginAction(this, { kind: "select", selection });
+      },
     });
     this.header.setOrderedStreamRenderer(() =>
       renderUnifiedStreamEntries(this.conversation, this.activity.slice(this.visibleActivityStart), terminal.columns),
@@ -284,6 +288,13 @@ export class TuiController {
           shrink: 0,
           minSize: 0,
           visible: () => terminal.rows >= 16 || this.accountLoginSelection !== undefined,
+        },
+        {
+          component: providerLoginClickRegion,
+          basis: "auto",
+          shrink: 0,
+          minSize: 0,
+          visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
         },
         { component: dock, basis: "auto", shrink: 1, minSize: 1 },
       ]),
