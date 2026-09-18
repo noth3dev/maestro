@@ -4,6 +4,7 @@ import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
 import { toggleSidebar } from "../components/sidebar.js";
+import { applySidebarNavAction, isSidebarNavActive, moveSidebarFocus, NAV_ROWS } from "../components/sidebar-nav.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -124,7 +125,24 @@ export class LifecycleHandler {
     }
     if (dispatchCommandPaletteInput(data, c.view.append)) return { consume: true };
     if (matchesKey(data, "ctrl+b")) {
-      toggleSidebar(c);
+      toggleSidebar(c, NAV_ROWS);
+      return { consume: true };
+    }
+    if (isSidebarNavActive(c)) {
+      if (matchesKey(data, "up") || matchesKey(data, "down")) {
+        c.sidebarFocus = moveSidebarFocus(c.sidebarFocus, matchesKey(data, "up") ? -1 : 1, NAV_ROWS);
+        c.view.render();
+        return { consume: true };
+      }
+      if (matchesKey(data, "enter")) {
+        if (c.sidebarFocus !== undefined) applySidebarNavAction(c, c.sidebarFocus);
+        return { consume: true };
+      }
+      if (matchesKey(data, "escape")) {
+        c.sidebarFocus = undefined;
+        c.view.render();
+        return { consume: true };
+      }
       return { consume: true };
     }
     if (matchesKey(data, "ctrl+g")) {

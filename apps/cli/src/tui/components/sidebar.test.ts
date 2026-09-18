@@ -72,13 +72,16 @@ describe("sidebar visibility", () => {
     expect(contentWidth(120, false)).toBe(120);
   });
 
-  it("toggles the flag and re-renders", () => {
-    const host = { sidebarVisible: false, view: { render: vi.fn() } };
-    toggleSidebar(host);
+  it("toggles visibility with focus following, and re-renders", () => {
+    const host = { sidebarVisible: false, sidebarFocus: undefined as string | undefined, view: { render: vi.fn() } };
+    const rows = [{ id: "a" }, { id: "b" }];
+    toggleSidebar(host, rows);
     expect(host.sidebarVisible).toBe(true);
+    expect(host.sidebarFocus).toBe("a");
     expect(host.view.render).toHaveBeenCalledOnce();
-    toggleSidebar(host);
+    toggleSidebar(host, rows);
     expect(host.sidebarVisible).toBe(false);
+    expect(host.sidebarFocus).toBeUndefined();
     expect(host.view.render).toHaveBeenCalledTimes(2);
   });
 });

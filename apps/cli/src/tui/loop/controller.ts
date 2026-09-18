@@ -5,8 +5,10 @@ import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
+import { applySidebarNavAction, NAV_ROWS, resolveSidebarNavClick } from "../components/sidebar-nav.js";
+import { createClickRegion } from "../components/mouse.js";
 import { renderStatusSection, toSidebarStatus } from "../components/shell.js";
-import { contentWidth, isSidebarVisible, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
+import { contentWidth, isSidebarVisible, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -84,6 +86,7 @@ export class TuiController {
   compactProjectNotice: string | undefined;
   lastRenderedTerminalRows: number;
   sidebarVisible = true;
+  sidebarFocus: string | undefined = undefined;
 
   /** Main-pane width: full terminal minus the visible sidebar. */
   contentWidth(): number {
@@ -278,7 +281,15 @@ export class TuiController {
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, this.footer]);
-    const sidebarRegion = createDynamicRegion((width) => renderSidebar(width, renderStatusSection(toSidebarStatus(state), width)));
+    const sidebarLines = (width: number) =>
+      renderSidebar(width, [...renderStatusSection(toSidebarStatus(state), width), renderNavSection(NAV_ROWS, this.sidebarFocus)]);
+    const sidebarRegion = createClickRegion({
+      lines: sidebarLines,
+      resolve: (lines, x, y) => resolveSidebarNavClick(lines, x, y),
+      onAction: (id) => {
+        applySidebarNavAction(this, id);
+      },
+    });
     const mainColumn = new VStack([
       { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
       { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
