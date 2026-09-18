@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ModelGatewayPort } from "@maestro/agent-runtime";
 import type { OperatorContext } from "@maestro/persistence";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { createPostgresConversationService } from "./conversation-service.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

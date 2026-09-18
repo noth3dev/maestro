@@ -7,9 +7,9 @@ import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@
 import { assertValidRoutingEvidence, taskDemandContentHash } from "@maestro/domain";
 import { applyAllMigrations, bootstrapAuthorityRecord, bootstrapLocalOperator, createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
-import { InMemoryCredentialStore } from "../../model-gateway/src/credential-store.js";
-import { createModelGateway } from "../../model-gateway/src/gateway.js";
-import { buildModelGatewayServer } from "../../model-gateway/src/rpc.js";
+import { InMemoryCredentialStore } from "../../model-gateway/src/index.js";
+import { createModelGateway } from "../../model-gateway/src/index.js";
+import { buildModelGatewayServer } from "../../model-gateway/src/index.js";
 import { createControlPlane } from "./main.js";
 import type { MaestroConfig } from "./config.js";
 

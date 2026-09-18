@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { AuthorizedEffectExecutor, type ActionRequest, type AuthorityRepository } from "../../authority/src/authority.js";
+import { AuthorizedEffectExecutor, type ActionRequest, type AuthorityRepository } from "../../authority/src/index.js";
 import {
   PostgresAuthorityRepository,
   bootstrapAuthorityRecord,

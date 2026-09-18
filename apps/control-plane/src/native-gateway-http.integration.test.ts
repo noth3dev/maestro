@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ProviderRegistry, ToolRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
-import { InMemoryCredentialStore } from "../../model-gateway/src/credential-store.js";
-import { createModelGateway } from "../../model-gateway/src/gateway.js";
-import { buildModelGatewayServer } from "../../model-gateway/src/rpc.js";
+import { InMemoryCredentialStore } from "../../model-gateway/src/index.js";
+import { createModelGateway } from "../../model-gateway/src/index.js";
+import { buildModelGatewayServer } from "../../model-gateway/src/index.js";
 import { createModelGatewayClient } from "./model-gateway-client.js";
 import { createNativeExecutionKernel } from "./native-execution-kernel.js";
 import type { ExecutionAdmission } from "@maestro/domain";

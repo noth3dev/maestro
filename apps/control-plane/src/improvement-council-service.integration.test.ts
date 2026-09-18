@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { improvementCandidateScenarioSuiteHash, type ImprovementCandidateInput } from "@maestro/domain";
 import { applyAllMigrations, bootstrapLocalOperator, bootstrapPermanentOrganization, recordImprovementDigest, recordImprovementCandidate, transitionImprovementCandidate, acquireGoalLease, type GoalLeaseProof } from "@maestro/persistence";
-import { grantProjectMembership, grantProjectRole } from "../../../packages/persistence/src/project-membership.js";
+import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { createImprovementCouncilService, ImprovementCouncilError } from "./improvement-council-service.js";
 import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
 

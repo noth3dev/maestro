@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { bootstrapLocalOperator, createCapabilityApproval } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
-import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { createControlPlane } from "../../apps/control-plane/src/main.js";
 import type { ActionRequest } from "@maestro/authority";
 

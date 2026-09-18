@@ -3,10 +3,10 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { CodexAppServerClient, type CodexAppServerTransport } from "@maestro/model-provider-openai";
 import { applyAllMigrations, bootstrapLocalOperator } from "@maestro/persistence";
-import { InMemoryCredentialStore } from "../../model-gateway/src/credential-store.js";
+import { InMemoryCredentialStore } from "../../model-gateway/src/index.js";
 import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
-import { createModelGateway } from "../../model-gateway/src/gateway.js";
-import { buildModelGatewayServer } from "../../model-gateway/src/rpc.js";
+import { createModelGateway } from "../../model-gateway/src/index.js";
+import { buildModelGatewayServer } from "../../model-gateway/src/index.js";
 import { createControlPlane } from "./main.js";
 import type { MaestroConfig } from "./config.js";
 

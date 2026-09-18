@@ -21,7 +21,7 @@ import {
 } from "@maestro/persistence";
 import type { OperationalOverlay } from "@maestro/domain";
 import { grantProjectMembership } from "@maestro/persistence/testing";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { createReadStateService } from "./read-state-service.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

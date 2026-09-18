@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

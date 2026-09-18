@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapLocalOperator } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 
 // A real integration test that spawns the compiled control-plane
 // (apps/control-plane/dist/main.js, produced by `npm run build`) as a real

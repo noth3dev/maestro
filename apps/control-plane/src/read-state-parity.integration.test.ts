@@ -34,7 +34,7 @@ import {
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "./main.js";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

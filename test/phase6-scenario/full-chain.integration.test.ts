@@ -38,7 +38,7 @@ import {
   type ExecutionAdmission,
   type ExecutionKernelPort,
 } from "@maestro/domain";
-import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { acquireGoalLease, type GoalLeaseProof } from "../../packages/persistence/src/commands.js";
 import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
 import { grantProjectMembership, grantProjectRole } from "../../packages/persistence/src/project-membership.js";
