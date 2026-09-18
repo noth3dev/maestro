@@ -4,8 +4,8 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { METRONOME_ACTOR_ID, type GoalState } from "../../packages/domain/src/index.js";
 import { createMetronomeLoop } from "../../apps/control-plane/src/metronome-loop.js";
-import { runMigrations } from "../../packages/persistence/src/migrate.js";
-import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
+import { runMigrations } from "../../packages/persistence/src/index.js";
+import { bootstrapPermanentOrganization } from "../../packages/persistence/src/index.js";
 import { acquireGoalLease, executeGoalCommand, releaseGoalLease, reconcileOnStartup } from "../../packages/persistence/src/index.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

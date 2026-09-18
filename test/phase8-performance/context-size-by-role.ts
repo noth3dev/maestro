@@ -1,7 +1,7 @@
-import type { ModelMessage, ModelGatewayPort, GatewayBinding, GatewayTurnRequest } from "../../packages/agent-runtime/src/model-provider.js";
-import { createMaestroAgentRuntime, ToolRegistry } from "../../packages/agent-runtime/src/agent-runtime.js";
+import type { ModelMessage, ModelGatewayPort, GatewayBinding, GatewayTurnRequest } from "../../packages/agent-runtime/src/index.js";
+import { createMaestroAgentRuntime, ToolRegistry } from "../../packages/agent-runtime/src/index.js";
 import type { CapabilityGrant, ExecutionAdmission, ModelIdentity, SpawnRequest, WorkerProfileAssignment } from "@maestro/domain";
-import { buildSemanticReviewPrompt } from "../../packages/domain/src/semantic-review.js";
+import { buildSemanticReviewPrompt } from "../../packages/domain/src/index.js";
 
 export type ContextRole = "head" | "worker" | "team-lead-helper" | "encore-reviewer" | "semantic-reviewer" | "conversation";
 

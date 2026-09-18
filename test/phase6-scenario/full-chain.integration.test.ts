@@ -39,18 +39,18 @@ import {
   type ExecutionKernelPort,
 } from "@maestro/domain";
 import { applyAllMigrations } from "@maestro/persistence";
-import { acquireGoalLease, type GoalLeaseProof } from "../../packages/persistence/src/commands.js";
-import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
-import { grantProjectMembership, grantProjectRole } from "../../packages/persistence/src/project-membership.js";
-import { recordImprovementDigest } from "../../packages/persistence/src/improvement-digest.js";
-import { proposeOrganizationalKnowledge, promoteOrganizationalKnowledgeToProject, promoteOrganizationalKnowledgeToGlobal } from "../../packages/persistence/src/organizational-knowledge.js";
-import { raiseMetronomeChallenge, readMetronomeChallenge } from "../../packages/persistence/src/metronome-challenge.js";
-import { deriveWorkerProfileForMission } from "../../packages/persistence/src/worker-profile-derivation.js";
-import { runEncoreCouncilReview } from "../../packages/persistence/src/encore-council.js";
+import { acquireGoalLease, type GoalLeaseProof } from "../../packages/persistence/src/index.js";
+import { bootstrapPermanentOrganization } from "../../packages/persistence/src/index.js";
+import { grantProjectMembership, grantProjectRole } from "../../packages/persistence/src/testing.js";
+import { recordImprovementDigest } from "../../packages/persistence/src/index.js";
+import { proposeOrganizationalKnowledge, promoteOrganizationalKnowledgeToProject, promoteOrganizationalKnowledgeToGlobal } from "../../packages/persistence/src/index.js";
+import { raiseMetronomeChallenge, readMetronomeChallenge } from "../../packages/persistence/src/index.js";
+import { deriveWorkerProfileForMission } from "../../packages/persistence/src/index.js";
+import { runEncoreCouncilReview } from "../../packages/persistence/src/index.js";
 import { createImprovementCouncilService } from "../../apps/control-plane/src/improvement-council-service.js";
-import { createHeadCouncil, submitIndependentBrief, revealCouncilBriefs, recordCouncilDecisionPacket } from "../../packages/persistence/src/council.js";
-import { createDepartmentPlan } from "../../packages/persistence/src/department-plan.js";
-import { createMissionBundle, issueMissionPersonaOverlay, readActiveMissionPersonaOverlay, type IssueMissionPersonaOverlayRequest } from "../../packages/persistence/src/mission-bundle.js";
+import { createHeadCouncil, submitIndependentBrief, revealCouncilBriefs, recordCouncilDecisionPacket } from "../../packages/persistence/src/index.js";
+import { createDepartmentPlan } from "../../packages/persistence/src/index.js";
+import { createMissionBundle, issueMissionPersonaOverlay, readActiveMissionPersonaOverlay, type IssueMissionPersonaOverlayRequest } from "../../packages/persistence/src/index.js";
 import {
   recordImprovementCandidate,
   readImprovementCandidate,
@@ -61,8 +61,8 @@ import {
   transitionRoutingCandidateToJudged,
   recordRoutingCandidateEvaluation,
   type ImprovementCandidateAuthor,
-} from "../../packages/persistence/src/improvement-candidate.js";
-import { enableImprovementClass, startBoundedRollout, observeBoundedRollout } from "../../packages/persistence/src/rollout-controller.js";
+} from "../../packages/persistence/src/index.js";
+import { enableImprovementClass, startBoundedRollout, observeBoundedRollout } from "../../packages/persistence/src/index.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

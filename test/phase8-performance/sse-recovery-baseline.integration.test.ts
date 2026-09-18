@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApiClient, type GoalEvent } from "../../packages/api-client/src/index.js";
 import { bootstrapLocalOperator } from "../../packages/persistence/src/index.js";
 import { grantProjectMembership, grantProjectRole } from "../../packages/persistence/src/testing.js";
-import { runMigrations } from "../../packages/persistence/src/migrate.js";
+import { runMigrations } from "../../packages/persistence/src/index.js";
 import { createControlPlane } from "../../apps/control-plane/src/main.js";
 import { subscribeToEvents } from "../../apps/cli/src/tui/activity-stream.js";
 

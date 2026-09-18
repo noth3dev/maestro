@@ -3,13 +3,13 @@ import {
   improvementCandidateContentHash,
   improvementCandidateScenarioSuiteHash,
   type ImprovementCandidateInput,
-} from "../../packages/domain/src/improvement-candidate.js";
+} from "../../packages/domain/src/index.js";
 import {
   replayCandidateAgainstFrozenBaseline,
   runSyntheticAdversarialScenarios,
   SYNTHETIC_SCENARIO_SPECS,
-} from "../../packages/domain/src/candidate-evaluation.js";
-import { runShadowEvaluation, type ShadowEvaluationEvidence, type ShadowOutput } from "../../packages/domain/src/shadow-evaluation.js";
+} from "../../packages/domain/src/index.js";
+import { runShadowEvaluation, type ShadowEvaluationEvidence, type ShadowOutput } from "../../packages/domain/src/index.js";
 
 const PROJECT_ID = "11111111-1111-4111-8111-111111111111";
 const GOAL_ID = "22222222-2222-4222-8222-222222222222";

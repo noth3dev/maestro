@@ -19,8 +19,8 @@ import {
   type MissionBundleSubstance,
   MODEL_CAPABILITY_AXES,
 } from "../../packages/domain/src/index.js";
-import { createLocalRuntimeAdapter, type SpawnedProcess } from "../../packages/environment-adapter/src/runtime-adapter.js";
-import { createReadOnlyHostRequestHandler } from "../../packages/agent-runtime/src/ipython-host.js";
+import { createLocalRuntimeAdapter, type SpawnedProcess } from "../../packages/environment-adapter/src/index.js";
+import { createReadOnlyHostRequestHandler } from "../../packages/agent-runtime/src/index.js";
 import { FileEvidenceStore, verifyEvidenceRecord } from "../../packages/evidence/src/index.js";
 import { assertLocallyExecutableDeviceGrant, signDeviceGrantEnvelope, verifyDeviceGrantEnvelope, type UnsignedDeviceGrantEnvelope } from "../../packages/device-agent/src/index.js";
 import { EventEmitter } from "node:events";

@@ -6,11 +6,11 @@ import { FileEvidenceStore } from "@maestro/evidence";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "@maestro/persistence";
-import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
-import { bootstrapLocalOperator } from "../../packages/persistence/src/auth.js";
-import { grantProjectMembership } from "../../packages/persistence/src/project-membership.js";
-import { appendEvidenceMetadata, getEvidenceMetadata } from "../../packages/persistence/src/evidence.js";
-import { capturePersonaGoalEvidence, listPersonaGoalEvidence, readPersonaGoalEvidence, type PersonaGoalEvidenceInput } from "../../packages/persistence/src/persona-goal-evidence.js";
+import { bootstrapPermanentOrganization } from "../../packages/persistence/src/index.js";
+import { bootstrapLocalOperator } from "../../packages/persistence/src/index.js";
+import { grantProjectMembership } from "../../packages/persistence/src/testing.js";
+import { appendEvidenceMetadata, getEvidenceMetadata } from "../../packages/persistence/src/index.js";
+import { capturePersonaGoalEvidence, listPersonaGoalEvidence, readPersonaGoalEvidence, type PersonaGoalEvidenceInput } from "../../packages/persistence/src/index.js";
 
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

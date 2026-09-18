@@ -21,10 +21,10 @@ import {
   type TaskCapabilityRequirements,
   type TaskDemand,
 } from "@maestro/domain";
-import { runMigrations } from "../../packages/persistence/src/migrate.js";
-import { acquireGoalLease, releaseGoalLease, type GoalLeaseProof } from "../../packages/persistence/src/commands.js";
-import { requestSemanticReview } from "../../packages/persistence/src/semantic-review.js";
-import { runEncoreCouncilReview } from "../../packages/persistence/src/encore-council.js";
+import { runMigrations } from "../../packages/persistence/src/index.js";
+import { acquireGoalLease, releaseGoalLease, type GoalLeaseProof } from "../../packages/persistence/src/index.js";
+import { requestSemanticReview } from "../../packages/persistence/src/index.js";
+import { runEncoreCouncilReview } from "../../packages/persistence/src/index.js";
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 const SAMPLE_COUNT = 10;

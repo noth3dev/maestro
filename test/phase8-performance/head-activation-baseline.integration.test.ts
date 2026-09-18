@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ExecutionAdmission, ExecutionKernelPort } from "../../packages/domain/src/index.js";
 import { bootstrapLocalOperator } from "../../packages/persistence/src/index.js";
 import { grantProjectMembership, grantProjectRole } from "../../packages/persistence/src/testing.js";
-import { runMigrations } from "../../packages/persistence/src/migrate.js";
+import { runMigrations } from "../../packages/persistence/src/index.js";
 import { createControlPlane } from "../../apps/control-plane/src/main.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
