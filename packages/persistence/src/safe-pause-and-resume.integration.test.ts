@@ -14,7 +14,7 @@ import {
   resolveCapabilityEffect,
   type CapabilityApprovalInput,
 } from "./capability-approval.js";
-import { AuthorizedEffectExecutor } from "../../authority/src/authority.js";
+import { AuthorizedEffectExecutor } from "../../authority/src/index.js";
 import { PostgresAuthorityRepository, bootstrapAuthorityRecord, getGoalControl } from "./authority.js";
 import { setCapabilitySession } from "./capability-approval.js";
 import { listIpPythonSessionJournal, recordIpPythonSessionStarted } from "./ipython-session-journal.js";

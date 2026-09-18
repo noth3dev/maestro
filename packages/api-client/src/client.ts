@@ -258,6 +258,7 @@ export interface ApiClient {
   generateConcertmasterReport(goalId: string, query: GoalQuery, commandId: string): Promise<ConcertmasterFinalReport>;
   getConcertmasterReport(goalId: string, query: GoalQuery): Promise<ConcertmasterFinalReport>;
   getEvidenceBundle(goalId: string, query: GoalQuery): Promise<EvidenceBundleRead>;
+  getEvidenceDump(goalId: string, query: GoalQuery): Promise<{ bundle: EvidenceBundleRead; certifications: CertificationList; report: ConcertmasterFinalReport }>;
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;

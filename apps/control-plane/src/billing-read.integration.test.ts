@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, afterEach, describe, expect, it } from "vitest";
 import { bootstrapPermanentOrganization } from "@maestro/persistence";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { createReadStateService } from "./read-state-service.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;

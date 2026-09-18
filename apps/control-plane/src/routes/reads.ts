@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { ReadRouteDeps } from "./deps.js";
 import {
   ArrangementsReadSchema,
   GoalBudgetSummarySchema,
@@ -22,7 +22,7 @@ import { parse, requestOperator, RequestValidationError } from "../server-input.
 import { GoalNotFoundError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerReadRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerReadRoutes(app: FastifyInstance, deps: ReadRouteDeps): void {
   const { concertmasterReports, readState, projections } = deps;
   app.get("/v1/goals", async (request, reply) => {
     const query = parse(GoalQuerySchema, request.query);

@@ -1,4 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { accessSync, constants, statSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { createInterface } from "node:readline";
 import type {
   ModelMessage,
@@ -635,4 +637,25 @@ export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions)
       );
     },
   };
+}
+
+/** Resolve the codex app-server executable: explicit config first, then PATH search. */
+export function resolveCodexAppServerCommand(configuredCommand?: string, pathValue = process.env.PATH): string | undefined {
+  const explicit = configuredCommand?.trim();
+  if (explicit !== undefined && explicit !== "") return explicit;
+  const pathEntries = pathValue?.split(delimiter) ?? [];
+  const commandNames = process.platform === "win32" ? ["codex.exe", "codex.cmd", "codex.bat", "codex"] : ["codex"];
+  for (const entry of pathEntries) {
+    for (const name of commandNames) {
+      const candidate = join(entry === "" ? "." : entry, name);
+      try {
+        if (!statSync(candidate).isFile()) continue;
+        accessSync(candidate, constants.X_OK);
+        return candidate;
+      } catch {
+        // Continue searching the remaining PATH entries.
+      }
+    }
+  }
+  return undefined;
 }

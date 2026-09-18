@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { OversightRouteDeps } from "./deps.js";
 import {
   UuidSchema,
   EncoreReviewInputSchema,
@@ -16,7 +16,7 @@ import {
 import { parse, requestOperator } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerOversightRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerOversightRoutes(app: FastifyInstance, deps: OversightRouteDeps): void {
   const { metronome, encore } = deps;
   app.post("/v1/goals/:goalId/encore/reviews", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);

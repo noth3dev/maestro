@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { SettingsRouteDeps } from "./deps.js";
 import {
   SettingsReadSchema,
   SettingsPreferencesUpdateSchema,
@@ -10,7 +10,7 @@ import { parse, requestOperator } from "../server-input.js";
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerSettingsRoutes(app: FastifyInstance, deps: SettingsRouteDeps): void {
   const { settingsService } = deps;
   app.get("/v1/settings", async (request, reply) => {
     if (settingsService === undefined) throw new DurableStoreUnavailableError();

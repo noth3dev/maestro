@@ -1,25 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
-import {
-  ProjectAccessProvisionInputSchema,
-  ProjectAccessProvisionResultSchema,
-  ProjectListSchema,
-  OrganizationReadModelSchema,
-  ModelCatalogEntrySchema,
-} from "@maestro/contracts";
-import { parse, requestOperator } from "../server-input.js";
+import type { CatalogRouteDeps } from "./deps.js";
+import { ProjectListSchema, OrganizationReadModelSchema, ModelCatalogEntrySchema } from "@maestro/contracts";
+import { requestOperator } from "../server-input.js";
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerSystemRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  const { projectAccess, projectDiscovery, organizations, conversations } = deps;
-  app.post("/v1/admin/project-access", async (request, reply) => {
-    if (!projectAccess) throw new DurableStoreUnavailableError();
-    const input = parse(ProjectAccessProvisionInputSchema, request.body);
-    const result = await projectAccess.provisionProjectAccess(requestOperator(request as { operator?: OperatorContext }).operatorId, input);
-    return reply.status(200).send(ProjectAccessProvisionResultSchema.parse(result));
-  });
-
+export function registerCatalogRoutes(app: FastifyInstance, deps: CatalogRouteDeps): void {
+  const { projectDiscovery, organizations, conversations } = deps;
   app.get("/v1/projects", async (request, reply) => {
     if (!projectDiscovery) throw new DurableStoreUnavailableError();
     const projects = await projectDiscovery.listProjects(requestOperator(request as { operator?: OperatorContext }).operatorId);

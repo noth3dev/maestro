@@ -16,6 +16,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "migrations:check": "node scripts/check-migration-numbers.mjs",
+    "boundaries:check": "node scripts/check-barrel-boundaries.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

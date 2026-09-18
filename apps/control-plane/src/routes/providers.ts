@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { ProviderRouteDeps } from "./deps.js";
 import {
   ProviderCredentialLoginInputSchema,
   ProviderCredentialBindingSchema,
@@ -10,28 +10,10 @@ import {
 import { parse, requestOperator, RequestValidationError } from "../server-input.js";
 import { randomUUID } from "node:crypto";
 import { DurableStoreUnavailableError } from "../goal-service.js";
-import { ModelGatewayClientError } from "../model-gateway-client.js";
-import type { OperatorContext, AccountLoginStore, AccountLoginRecord } from "@maestro/persistence";
+import type { OperatorContext } from "@maestro/persistence";
+import { cancelAccountLoginFlow, pollAccountLoginStatus, startAccountLoginFlow } from "../account-login-flow.js";
 
-function toAccountLoginStartResult(record: AccountLoginRecord): import("@maestro/agent-runtime").GatewayAccountLoginStartResult {
-  if (record.providerLoginId === null || record.authUrl === null) throw new Error(record.message ?? "Provider account login is not ready");
-  return { providerId: record.providerId, loginId: record.loginId, authUrl: record.authUrl };
-}
-
-function isLostGatewayLogin(error: unknown): boolean {
-  return error instanceof ModelGatewayClientError && error.code === "account_login_session_unknown";
-}
-
-async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: string, requestId: string): Promise<AccountLoginRecord> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const record = await store.getByRequest(operatorId, requestId);
-    if (record !== undefined && record.state !== "starting") return record;
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error("account login start is still in progress");
-}
-
-export function registerProviderRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRouteDeps): void {
   const { providerCredentials, accountLoginStore, loginOwnerId, loginOperationStaleAfterMs } = deps;
   app.get("/v1/provider-credentials", async (_request, reply) => {
     if (providerCredentials?.list === undefined) throw new DurableStoreUnavailableError();
@@ -59,20 +41,12 @@ export function registerProviderRoutes(app: FastifyInstance, deps: RouteDeps): v
     const header = request.headers["idempotency-key"];
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const reservation = await accountLoginStore.reserveStart(operatorId, requestId, input.providerId, loginOwnerId);
-    let record = reservation.record;
-    if (reservation.created) {
-      try {
-        const providerResult = await providerCredentials.startAccountLogin({ operatorId, requestId, providerId: input.providerId });
-        record = await accountLoginStore.completeStart(record.loginId, providerResult.loginId, providerResult.authUrl);
-      } catch (error) {
-        await accountLoginStore.failStart(record.loginId, "Provider account login failed").catch(() => undefined);
-        throw error;
-      }
-    } else if (record.state === "starting") {
-      record = await waitForAccountLoginStart(accountLoginStore, operatorId, requestId);
-    }
-    return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(toAccountLoginStartResult(record)));
+    const result = await startAccountLoginFlow(
+      { store: accountLoginStore, ownerId: loginOwnerId, staleAfterMs: loginOperationStaleAfterMs },
+      { startAccountLogin: providerCredentials.startAccountLogin },
+      { operatorId, providerId: input.providerId, requestId },
+    );
+    return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(result));
   });
 
   app.post("/v1/provider-account-logins/logout", async (request, reply) => {
@@ -95,91 +69,36 @@ export function registerProviderRoutes(app: FastifyInstance, deps: RouteDeps): v
     const header = request.headers["idempotency-key"];
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const record = await accountLoginStore.get(input.loginId, operatorId);
-    if (record === undefined || record.providerId !== input.providerId) throw new Error("account login session is unknown");
-    if (record.state === "starting")
+    const outcome = await pollAccountLoginStatus(
+      { store: accountLoginStore, ownerId: loginOwnerId, staleAfterMs: loginOperationStaleAfterMs },
+      { accountLoginStatus: providerCredentials.accountLoginStatus },
+      { operatorId, loginId: input.loginId, providerId: input.providerId, requestId },
+    );
+    if (outcome.kind === "starting")
       return reply
         .status(200)
-        .send(ProviderAccountLoginStatusSchema.parse({ providerId: record.providerId, loginId: record.loginId, state: "pending" }));
-    if (record.state !== "pending" || record.providerLoginId === null)
+        .send(ProviderAccountLoginStatusSchema.parse({ providerId: input.providerId, loginId: input.loginId, state: "pending" }));
+    if (outcome.kind === "echo")
       return reply.status(200).send(
         ProviderAccountLoginStatusSchema.parse({
-          providerId: record.providerId,
-          loginId: record.loginId,
-          state: record.state,
-          ...(record.message === null ? {} : { message: record.message }),
+          providerId: outcome.record.providerId,
+          loginId: outcome.record.loginId,
+          state: outcome.record.state,
+          ...(outcome.record.message === null ? {} : { message: outcome.record.message }),
         }),
       );
-    const operationToken = await accountLoginStore.claimOperation(
-      record.loginId,
-      operatorId,
-      "status",
-      loginOwnerId,
-      loginOperationStaleAfterMs,
-    );
-    if (operationToken === undefined) {
-      const current = await accountLoginStore.get(record.loginId, operatorId);
-      if (current === undefined) throw new Error("account login session is unknown");
-      if (current.state !== "pending" || current.providerLoginId === null)
-        return reply.status(200).send(
-          ProviderAccountLoginStatusSchema.parse({
-            providerId: current.providerId,
-            loginId: current.loginId,
-            state: current.state,
-            ...(current.message === null ? {} : { message: current.message }),
-          }),
-        );
+    if (outcome.kind === "contended")
       return reply.status(409).send({
         error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" },
       });
-    }
-    try {
-      let result: import("@maestro/agent-runtime").GatewayAccountLoginStatusResult;
-      try {
-        result = await providerCredentials.accountLoginStatus({
-          operatorId,
-          requestId,
-          providerId: input.providerId,
-          loginId: record.providerLoginId,
-        });
-      } catch (error) {
-        if (!isLostGatewayLogin(error)) throw error;
-        const unknown = await accountLoginStore.updateState(
-          record.loginId,
-          operatorId,
-          "unknown",
-          "Gateway login session was lost during restart",
-          loginOwnerId,
-          operationToken,
-        );
-        return reply.status(200).send(
-          ProviderAccountLoginStatusSchema.parse({
-            providerId: unknown.providerId,
-            loginId: unknown.loginId,
-            state: unknown.state,
-            message: unknown.message,
-          }),
-        );
-      }
-      const updated = await accountLoginStore.updateState(
-        record.loginId,
-        operatorId,
-        result.state,
-        result.message,
-        loginOwnerId,
-        operationToken,
-      );
-      return reply.status(200).send(
-        ProviderAccountLoginStatusSchema.parse({
-          providerId: updated.providerId,
-          loginId: updated.loginId,
-          state: updated.state,
-          ...(updated.message === null ? {} : { message: updated.message }),
-        }),
-      );
-    } finally {
-      await accountLoginStore.releaseOperation(record.loginId, operatorId, loginOwnerId, operationToken).catch(() => undefined);
-    }
+    return reply.status(200).send(
+      ProviderAccountLoginStatusSchema.parse({
+        providerId: outcome.record.providerId,
+        loginId: outcome.record.loginId,
+        state: outcome.record.state,
+        ...(outcome.record.message === null ? {} : { message: outcome.record.message }),
+      }),
+    );
   });
 
   app.post("/v1/provider-account-logins/cancel", async (request, reply) => {
@@ -188,51 +107,17 @@ export function registerProviderRoutes(app: FastifyInstance, deps: RouteDeps): v
     const header = request.headers["idempotency-key"];
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const record = await accountLoginStore.get(input.loginId, operatorId);
-    if (record === undefined || record.providerId !== input.providerId) throw new Error("account login session is unknown");
-    if (record.state !== "pending" || record.providerLoginId === null)
-      return reply.status(200).send({ cancelled: record.state === "cancelled" });
-    const operationToken = await accountLoginStore.claimOperation(
-      record.loginId,
-      operatorId,
-      "cancel",
-      loginOwnerId,
-      loginOperationStaleAfterMs,
+    const outcome = await cancelAccountLoginFlow(
+      { store: accountLoginStore, ownerId: loginOwnerId, staleAfterMs: loginOperationStaleAfterMs },
+      { cancelAccountLogin: providerCredentials.cancelAccountLogin },
+      { operatorId, loginId: input.loginId, providerId: input.providerId, requestId },
     );
-    if (operationToken === undefined) {
-      const current = await accountLoginStore.get(record.loginId, operatorId);
-      if (current === undefined) throw new Error("account login session is unknown");
-      if (current.state !== "pending" || current.providerLoginId === null)
-        return reply.status(200).send({ cancelled: current.state === "cancelled" });
+    if (outcome.kind === "echo") return reply.status(200).send({ cancelled: outcome.record.state === "cancelled" });
+    if (outcome.kind === "contended")
       return reply.status(409).send({
         error: { code: "account_login_operation_in_progress", message: "provider account login operation is already in progress" },
       });
-    }
-    try {
-      try {
-        await providerCredentials.cancelAccountLogin({
-          operatorId,
-          requestId,
-          providerId: input.providerId,
-          loginId: record.providerLoginId,
-        });
-        await accountLoginStore.updateState(record.loginId, operatorId, "cancelled", undefined, loginOwnerId, operationToken);
-      } catch (error) {
-        if (!isLostGatewayLogin(error)) throw error;
-        await accountLoginStore.updateState(
-          record.loginId,
-          operatorId,
-          "unknown",
-          "Gateway login session was lost during restart",
-          loginOwnerId,
-          operationToken,
-        );
-        return reply.status(200).send({ cancelled: false });
-      }
-      return reply.status(200).send({ cancelled: true });
-    } finally {
-      await accountLoginStore.releaseOperation(record.loginId, operatorId, loginOwnerId, operationToken).catch(() => undefined);
-    }
+    return reply.status(200).send({ cancelled: outcome.kind === "cancelled" });
   });
 
   app.delete("/v1/provider-credentials/:providerId", async (request, reply) => {

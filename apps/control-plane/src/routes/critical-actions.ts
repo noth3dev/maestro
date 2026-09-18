@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { CriticalActionRouteDeps } from "./deps.js";
 import { UuidSchema, CriticalActionInputSchema, CriticalActionApprovalInputSchema, CriticalActionResultSchema } from "@maestro/contracts";
 import { parse, requestOperator, CriticalActionDeniedError, CriticalActionRequiresApprovalError } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerCriticalActionRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerCriticalActionRoutes(app: FastifyInstance, deps: CriticalActionRouteDeps): void {
   const { criticalActions } = deps;
   app.post("/v1/goals/:goalId/critical-actions", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);

@@ -3,6 +3,21 @@ import type { Pool } from "pg";
 import type { TaskContractService } from "./task-contract-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 import {
+  appendConversationEvent,
+  appendTurnDelta,
+  cancelConversationTurn,
+  claimConversationTurn,
+  fenceInterruptedTurn,
+  finalizeConversationTurn,
+  findAssistantTurn,
+  findTurnByRequest,
+  listActiveConversations,
+  listConversationEvents,
+  markConversationUnknown,
+  readConversationRecord,
+  type AssistantTurnRow,
+} from "@maestro/persistence";
+import {
   UuidSchema,
   ConversationActivityEventSchema,
   type ConversationActivityEvent,
@@ -45,15 +60,12 @@ export {
 };
 import {
   assertSafeText,
-  boundedText,
-  cancellationContent,
   modelFromRow,
   now,
   statusFromObservation,
-  terminalEventType,
-  turnStatus,
   type ConversationRow,
 } from "./conversation/text.js";
+import { boundedText, cancellationContent, turnStatus } from "@maestro/contracts";
 
 export interface ConversationService {
   listModels(operator: OperatorContext): Promise<readonly ModelCatalogEntry[]>;
@@ -87,6 +99,25 @@ type RuntimeHandle = {
   binding: GatewayBinding;
   stream: RuntimeStreamState;
 };
+
+function buildReplayTurn(
+  conversationId: string,
+  current: ConversationRow,
+  replay: AssistantTurnRow,
+): { conversation: Conversation; turn: { turnId: string; conversationId: string; role: "assistant"; content: string; status: AssistantTurnRow["status"]; cursor: string; createdAt: string } } {
+  return {
+    conversation: modelFromRow(current),
+    turn: {
+      turnId: UuidSchema.parse(replay.turn_id),
+      conversationId,
+      role: "assistant" as const,
+      content: replay.content,
+      status: replay.status,
+      cursor: replay.cursor,
+      createdAt: replay.created_at.toISOString(),
+    },
+  };
+}
 export function createPostgresConversationService(options: {
   pool: Pool;
   gateway: ModelGatewayPort;
@@ -159,25 +190,9 @@ export function createPostgresConversationService(options: {
   }
 
   async function read(conversationId: string, projectId: string, operatorId: string): Promise<ConversationRow> {
-    const result = await options.pool.query<ConversationRow>(
-      "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 AND operator_id = $3",
-      [conversationId, projectId, operatorId],
-    );
-    if (result.rowCount !== 1) throw new ConversationNotFoundError();
-    return result.rows[0]!;
-  }
-  async function addEvent(
-    client: { query: (text: string, values?: unknown[]) => Promise<{ rows: Array<{ cursor: string }> }> },
-    conversationId: string,
-    projectId: string,
-    eventType: ConversationEvent["eventType"],
-    payload: Record<string, unknown>,
-  ): Promise<string> {
-    const result = await client.query(
-      "INSERT INTO conversation_events (event_id, conversation_id, project_id, event_type, payload) VALUES ($1, $2, $3, $4, $5) RETURNING cursor::text",
-      [randomUUID(), conversationId, projectId, eventType, JSON.stringify(payload)],
-    );
-    return result.rows[0]!.cursor;
+    const row = await readConversationRecord(options.pool, conversationId, projectId, operatorId);
+    if (row === null) throw new ConversationNotFoundError();
+    return row;
   }
 
   function grantFor(row: ConversationRow, _accountRef: string) {
@@ -220,10 +235,7 @@ export function createPostgresConversationService(options: {
     state.pending = state.pending
       .then(async () => {
         for (const text of chunks) {
-          await options.pool.query(
-            "INSERT INTO conversation_events (event_id, conversation_id, project_id, event_type, payload) VALUES ($1, $2, $3, 'turn_delta', $4)",
-            [randomUUID(), conversationId, projectId, JSON.stringify({ turnId, text })],
-          );
+          await appendTurnDelta(options.pool, conversationId, projectId, turnId, text);
         }
       })
       .catch((error) => {
@@ -267,37 +279,6 @@ export function createPostgresConversationService(options: {
       idempotencyKey: row.conversation_id,
     });
     return { execution: spawned.execution, invocation: spawned.invocation, runtime, binding: row.binding, stream };
-  }
-  async function markConversationUnknown(conversationId: string, projectId: string, reason: string, message: string): Promise<void> {
-    const client = await options.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const currentResult = await client.query<ConversationRow>(
-        "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 FOR UPDATE",
-        [conversationId, projectId],
-      );
-      const current = currentResult.rows[0];
-      if (current === undefined || ["succeeded", "failed", "cancelled", "unknown"].includes(current.status)) {
-        await client.query("COMMIT");
-        return;
-      }
-      const existing = await client.query<{ cursor: string }>(
-        "SELECT cursor::text AS cursor FROM conversation_events WHERE conversation_id = $1 AND event_type = 'turn_unknown' AND payload->>'reason' = $2 ORDER BY cursor DESC LIMIT 1",
-        [conversationId, reason],
-      );
-      if (existing.rowCount === 0)
-        await addEvent(client, conversationId, projectId, "turn_unknown", { status: "unknown", reason, message });
-      await client.query(
-        "UPDATE conversations SET status = 'unknown', active_turn_id = NULL, active_request_id = NULL, version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND status IN ('active', 'running')",
-        [conversationId],
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
   }
 
   return {
@@ -350,6 +331,10 @@ export function createPostgresConversationService(options: {
         const models = await options.gateway.listModels({ operatorId: options.gatewayOperatorId });
         const catalog = models.find((item) => item.identity.provider === parsed.provider && item.identity.id === parsed.id);
         if (catalog === undefined || !catalog.capabilities.has("text")) throw new ConversationModelNotAllowedError();
+        // Intentional wart: gateway admit stays inside this txn because the
+        // gateway performs no requestId dedup, so hoisting admit out could
+        // leak orphan provider sessions on concurrent same-key creates.
+        // Extraction awaits an idempotent re-admit/read or orphan-reaper.
         const accountRef = options.accountRefs[parsed.provider] ?? `${parsed.provider}-${operator.operatorId}`;
         conversationId = randomUUID();
         binding = await options.gateway.admit({
@@ -373,7 +358,7 @@ export function createPostgresConversationService(options: {
             normalizedRequestId,
           ],
         );
-        await addEvent(client, conversationId, input.projectId, "conversation_created", { model: input.model });
+        await appendConversationEvent(client, conversationId, input.projectId, "conversation_created", { model: input.model });
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -425,7 +410,7 @@ export function createPostgresConversationService(options: {
           idempotencyKey: conversationId,
         });
       } catch {
-        await markConversationUnknown(conversationId, input.projectId, "runtime_admission_failed", "Conversation runtime admission failed");
+        await markConversationUnknown(options.pool, conversationId, input.projectId, "runtime_admission_failed", "Conversation runtime admission failed");
         await runtime.close?.();
         throw new ConversationUnavailableError("conversation runtime admission failed");
       }
@@ -439,103 +424,34 @@ export function createPostgresConversationService(options: {
       assertSafeText(input.text);
       const normalizedRequestId = UuidSchema.parse(requestId);
       const row = await read(conversationId, input.projectId, _operator.operatorId);
-      const prior = await options.pool.query<{ turn_ref: string; content: string }>(
-        "SELECT turn_ref, content FROM conversation_turns WHERE conversation_id = $1 AND request_id = $2 AND role = 'user'",
-        [conversationId, normalizedRequestId],
-      );
-      if (prior.rowCount !== 0) {
-        if (prior.rows[0]!.content !== input.text) throw new ConversationConflictError("idempotency key is bound to different turn text");
-        const assistant = await options.pool.query<{
-          turn_id: string;
-          content: string;
-          status: "completed" | "failed" | "cancelled" | "unknown";
-          cursor: string;
-          created_at: Date;
-        }>(
-          "SELECT turn_id, content, status, cursor::text AS cursor, created_at FROM conversation_turns WHERE conversation_id = $1 AND turn_ref = $2 AND role = 'assistant'",
-          [conversationId, prior.rows[0]!.turn_ref],
-        );
-        if (assistant.rowCount !== 1) throw new ConversationConflictError("conversation turn is already in progress");
-        const replay = assistant.rows[0]!;
+      const prior = await findTurnByRequest(options.pool, conversationId, normalizedRequestId);
+      if (prior !== null) {
+        if (prior.content !== input.text) throw new ConversationConflictError("idempotency key is bound to different turn text");
+        const assistant = await findAssistantTurn(options.pool, conversationId, prior.turn_ref);
+        if (assistant === null) throw new ConversationConflictError("conversation turn is already in progress");
         const current = await read(conversationId, input.projectId, _operator.operatorId);
-        return {
-          conversation: modelFromRow(current),
-          turn: {
-            turnId: UuidSchema.parse(replay.turn_id),
-            conversationId,
-            role: "assistant" as const,
-            content: replay.content,
-            status: replay.status,
-            cursor: replay.cursor,
-            createdAt: replay.created_at.toISOString(),
-          },
-        };
+        return buildReplayTurn(conversationId, current, assistant);
       }
       if (row.status === "unknown" || row.status === "cancelled") throw new ConversationUnavailableError("conversation is not resumable");
       const handle = runtimes.get(conversationId);
       if (handle === undefined) throw new ConversationUnavailableError("conversation runtime is unavailable after restart");
       const turnId = randomUUID();
-      const client = await options.pool.connect();
-      try {
-        await client.query("BEGIN");
-        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2, 0))", [conversationId, normalizedRequestId]);
-        const lockedPrior = await client.query<{ turn_ref: string; content: string }>(
-          "SELECT turn_ref, content FROM conversation_turns WHERE conversation_id = $1 AND request_id = $2 AND role = 'user'",
-          [conversationId, normalizedRequestId],
-        );
-        if (lockedPrior.rowCount !== 0) {
-          if (lockedPrior.rows[0]!.content !== input.text)
-            throw new ConversationConflictError("idempotency key is bound to different turn text");
-          const lockedAssistant = await client.query<{
-            turn_id: string;
-            content: string;
-            status: "completed" | "failed" | "cancelled" | "unknown";
-            cursor: string;
-            created_at: Date;
-          }>(
-            "SELECT turn_id, content, status, cursor::text AS cursor, created_at FROM conversation_turns WHERE conversation_id = $1 AND turn_ref = $2 AND role = 'assistant'",
-            [conversationId, lockedPrior.rows[0]!.turn_ref],
-          );
-          if (lockedAssistant.rowCount !== 1) throw new ConversationConflictError("conversation turn is already in progress");
-          const replay = lockedAssistant.rows[0]!;
-          const currentResult = await client.query<ConversationRow>(
-            "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 AND operator_id = $3 FOR UPDATE",
-            [conversationId, input.projectId, _operator.operatorId],
-          );
-          if (currentResult.rowCount !== 1) throw new ConversationNotFoundError();
-          const current = currentResult.rows[0]!;
-          await client.query("COMMIT");
-          client.release();
-          return {
-            conversation: modelFromRow(current),
-            turn: {
-              turnId: UuidSchema.parse(replay.turn_id),
-              conversationId,
-              role: "assistant" as const,
-              content: replay.content,
-              status: replay.status,
-              cursor: replay.cursor,
-              createdAt: replay.created_at.toISOString(),
-            },
-          };
-        }
-        const claimed = await client.query(
-          "UPDATE conversations SET status = 'running', active_turn_id = $3, active_request_id = $4, version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND version = $2 AND status NOT IN ('running', 'cancelled', 'unknown')",
-          [conversationId, row.version, turnId, normalizedRequestId],
-        );
-        if (claimed.rowCount !== 1) throw new ConversationConflictError("conversation already has an active turn");
-        await client.query(
-          "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'user', $6, 'accepted', 0)",
-          [randomUUID(), turnId, normalizedRequestId, conversationId, input.projectId, input.text],
-        );
-        await addEvent(client, conversationId, input.projectId, "turn_started", { turnId, text: input.text });
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        client.release();
-        throw error;
+      const claim = await claimConversationTurn(options.pool, {
+        conversationId,
+        projectId: input.projectId,
+        operatorId: _operator.operatorId,
+        turnId,
+        requestId: normalizedRequestId,
+        text: input.text,
+        version: row.version,
+      });
+      if (claim.kind === "replay") return buildReplayTurn(conversationId, claim.conversation, claim.turn);
+      if (claim.kind === "not-found") throw new ConversationNotFoundError();
+      if (claim.kind === "conflict") {
+        if (claim.reason === "text-mismatch") throw new ConversationConflictError("idempotency key is bound to different turn text");
+        if (claim.reason === "in-progress") throw new ConversationConflictError("conversation turn is already in progress");
+        throw new ConversationConflictError("conversation already has an active turn");
       }
-      client.release();
       handle.stream.turnId = turnId;
       handle.stream.requestId = normalizedRequestId;
       handle.stream.pending = Promise.resolve();
@@ -557,7 +473,7 @@ export function createPostgresConversationService(options: {
       } catch {
         streamWriteFailed = true;
       }
-      let status: Conversation["status"] = streamWriteFailed ? "unknown" : statusFromObservation(observed?.status ?? "unknown");
+      const status: Conversation["status"] = streamWriteFailed ? "unknown" : statusFromObservation(observed?.status ?? "unknown");
       let content =
         observed?.answer.state === "available"
           ? observed.answer.text
@@ -575,69 +491,34 @@ export function createPostgresConversationService(options: {
           content = JSON.stringify(draftedContract);
         }
       }
-      const resultClient = await options.pool.connect();
-      let completedCursor: string;
-      let finalConversation: Conversation;
-      try {
-        await resultClient.query("BEGIN");
-        const currentResult = await resultClient.query<ConversationRow>(
-          "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 AND operator_id = $3 FOR UPDATE",
-          [conversationId, input.projectId, _operator.operatorId],
-        );
-        if (currentResult.rowCount !== 1) throw new ConversationNotFoundError();
-        const current = currentResult.rows[0]!;
-        if (current.status !== "running") {
-          status = current.status === "active" ? status : current.status;
-          if (status === "cancelled" || status === "unknown") content = cancellationContent(status);
-        }
-        const existingTerminal = await resultClient.query<{ cursor: string }>(
-          "SELECT cursor::text AS cursor FROM conversation_events WHERE conversation_id = $1 AND project_id = $2 AND event_type IN ('turn_completed', 'turn_failed', 'turn_cancelled', 'turn_unknown') AND payload->>'turnId' = $3 ORDER BY cursor DESC LIMIT 1",
-          [conversationId, input.projectId, turnId],
-        );
-        completedCursor =
-          existingTerminal.rowCount === 1
-            ? existingTerminal.rows[0]!.cursor
-            : await addEvent(resultClient, conversationId, input.projectId, terminalEventType(status), {
-                status,
-                turnId,
-                ...(status === "succeeded" ? { content: boundedText(content) } : { message: boundedText(content, 2_000) }),
-              });
-        await resultClient.query(
-          "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'assistant', $6, $7, $8) ON CONFLICT (turn_id) DO NOTHING",
-          [turnId, turnId, normalizedRequestId, conversationId, input.projectId, boundedText(content), turnStatus(status), completedCursor],
-        );
-        if (current.status === "running") {
-          await resultClient.query(
-            "UPDATE conversations SET status = $2, active_turn_id = NULL, active_request_id = NULL, version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND status = 'running'",
-            [conversationId, status],
-          );
-          finalConversation = { ...modelFromRow(current), status, version: current.version + 1 };
-        } else {
-          finalConversation = modelFromRow(current);
-        }
-        await resultClient.query("COMMIT");
-      } catch (error) {
-        await resultClient.query("ROLLBACK");
-        resultClient.release();
-        throw error;
-      }
-      resultClient.release();
+      const finalized = await finalizeConversationTurn(options.pool, {
+        conversationId,
+        projectId: input.projectId,
+        operatorId: _operator.operatorId,
+        turnId,
+        status,
+        content,
+      });
+      if (finalized.kind === "not-found") throw new ConversationNotFoundError();
+      const finalConversation = finalized.wasRunning
+        ? { ...modelFromRow(finalized.conversation), status: finalized.status, version: finalized.conversation.version + 1 }
+        : modelFromRow(finalized.conversation);
       publishActivity(conversationId, input.projectId, turnId, {
         kind: "terminal",
         cursor: 0,
-        status: status === "succeeded" ? "succeeded" : status === "failed" ? "failed" : status === "cancelled" ? "cancelled" : "unknown",
+        status: finalized.status === "succeeded" ? "succeeded" : finalized.status === "failed" ? "failed" : finalized.status === "cancelled" ? "cancelled" : "unknown",
       });
       handle.stream.turnId = undefined;
       handle.stream.requestId = undefined;
       return {
-        conversation: finalConversation!,
+        conversation: finalConversation,
         turn: {
           turnId,
           conversationId,
           role: "assistant" as const,
-          content: boundedText(content),
-          status: turnStatus(status),
-          cursor: completedCursor!,
+          content: boundedText(finalized.content),
+          status: turnStatus(finalized.status),
+          cursor: finalized.cursor,
           createdAt: now(),
         },
       };
@@ -661,69 +542,21 @@ export function createPostgresConversationService(options: {
           : (await handle.runtime.getInvocationStatus(handle.invocation)) === "cancelled"
             ? "cancelled"
             : "unknown";
-      const client = await options.pool.connect();
-      try {
-        await client.query("BEGIN");
-        const currentResult = await client.query<ConversationRow>(
-          "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 AND project_id = $2 AND operator_id = $3 FOR UPDATE",
-          [conversationId, projectId, operator.operatorId],
-        );
-        if (currentResult.rowCount !== 1) throw new ConversationNotFoundError();
-        const current = currentResult.rows[0]!;
-        if (["succeeded", "failed", "cancelled", "unknown"].includes(current.status)) {
-          await client.query("COMMIT");
-          return modelFromRow(current);
-        }
-        const turnId = current.active_turn_id;
-        const requestId = current.active_request_id ?? randomUUID();
-        const message = cancellationContent(next);
-        const cursor = await addEvent(client, conversationId, projectId, terminalEventType(next), {
-          status: next,
-          ...(turnId === undefined ? {} : { turnId }),
-          message,
-        });
-        if (turnId !== undefined) {
-          await client.query(
-            "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'assistant', $6, $7, $8) ON CONFLICT (turn_id) DO NOTHING",
-            [turnId, turnId, requestId, conversationId, projectId, message, turnStatus(next), cursor],
-          );
-        }
-        await client.query(
-          "UPDATE conversations SET status = $2, active_turn_id = NULL, active_request_id = NULL, version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND status IN ('active', 'running')",
-          [conversationId, next],
-        );
-        await client.query("COMMIT");
-        return { ...modelFromRow(current), status: next, version: current.version + 1 };
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
+      const message = cancellationContent(next);
+      const outcome = await cancelConversationTurn(options.pool, {
+        conversationId,
+        projectId,
+        operatorId: operator.operatorId,
+        next,
+        message,
+      });
+      if (outcome.kind === "not-found") throw new ConversationNotFoundError();
+      if (outcome.kind === "echo") return modelFromRow(outcome.conversation);
+      return { ...modelFromRow(outcome.conversation), status: next, version: outcome.conversation.version + 1 };
     },
     async listEvents(conversationId, projectId, after, operator) {
       await read(conversationId, projectId, operator.operatorId);
-      const result = await options.pool.query<{
-        cursor: string;
-        event_id: string;
-        conversation_id: string;
-        project_id: string;
-        event_type: ConversationEvent["eventType"];
-        payload: Record<string, unknown>;
-        occurred_at: string;
-      }>(
-        "SELECT cursor::text AS cursor, event_id, conversation_id, project_id, event_type, payload, occurred_at FROM conversation_events WHERE conversation_id = $1 AND project_id = $2 AND cursor > $3::bigint ORDER BY cursor ASC LIMIT 256",
-        [conversationId, projectId, after],
-      );
-      return result.rows.map((row) => ({
-        cursor: row.cursor,
-        eventId: row.event_id,
-        conversationId: row.conversation_id,
-        projectId: row.project_id,
-        eventType: row.event_type,
-        payload: row.payload,
-        occurredAt: new Date(row.occurred_at).toISOString(),
-      }));
+      return listConversationEvents(options.pool, conversationId, projectId, after);
     },
     async subscribeActivity(conversationId, projectId, operator, listener) {
       await read(conversationId, projectId, operator.operatorId);
@@ -737,53 +570,13 @@ export function createPostgresConversationService(options: {
       };
     },
     async recover() {
-      const rows = await options.pool.query<ConversationRow>(
-        "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE status IN ('active', 'running') ORDER BY created_at ASC",
-      );
+      const rows = await listActiveConversations(options.pool);
       let recovered = 0;
       let markedUnknown = 0;
-      for (const row of rows.rows) {
+      for (const row of rows) {
         if (row.active_turn_id !== null) {
-          const client = await options.pool.connect();
-          try {
-            await client.query("BEGIN");
-            const currentResult = await client.query<ConversationRow>(
-              "SELECT conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, active_turn_id, active_request_id, create_request_id FROM conversations WHERE conversation_id = $1 FOR UPDATE",
-              [row.conversation_id],
-            );
-            const current = currentResult.rows[0];
-            if (
-              current !== undefined &&
-              current.active_turn_id !== null &&
-              !["succeeded", "failed", "cancelled", "unknown"].includes(current.status)
-            ) {
-              const turnId = current.active_turn_id;
-              const existing = await client.query<{ cursor: string }>(
-                "SELECT cursor::text AS cursor FROM conversation_events WHERE conversation_id = $1 AND event_type = 'turn_unknown' AND payload->>'turnId' = $2 ORDER BY cursor DESC LIMIT 1",
-                [row.conversation_id, turnId],
-              );
-              const message = cancellationContent("unknown");
-              const cursor =
-                existing.rowCount === 1
-                  ? existing.rows[0]!.cursor
-                  : await addEvent(client, row.conversation_id, row.project_id, "turn_unknown", { status: "unknown", turnId, message });
-              await client.query(
-                "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $2, $3, $4, $5, 'assistant', $6, 'unknown', $7) ON CONFLICT (turn_id) DO NOTHING",
-                [turnId, turnId, current.active_request_id ?? randomUUID(), row.conversation_id, row.project_id, message, cursor],
-              );
-              await client.query(
-                "UPDATE conversations SET status = 'unknown', active_turn_id = NULL, active_request_id = NULL, version = version + 1, updated_at = transaction_timestamp() WHERE conversation_id = $1 AND status IN ('active', 'running')",
-                [row.conversation_id],
-              );
-              markedUnknown += 1;
-            }
-            await client.query("COMMIT");
-          } catch (error) {
-            await client.query("ROLLBACK");
-            throw error;
-          } finally {
-            client.release();
-          }
+          const fenced = await fenceInterruptedTurn(options.pool, { conversationId: row.conversation_id });
+          if (fenced.kind === "fenced") markedUnknown += 1;
           continue;
         }
         try {
@@ -792,6 +585,7 @@ export function createPostgresConversationService(options: {
           recovered += 1;
         } catch {
           await markConversationUnknown(
+            options.pool,
             row.conversation_id,
             row.project_id,
             "runtime_rebuild_failed",

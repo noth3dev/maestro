@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { PersonaRouteDeps } from "./deps.js";
 import { UuidSchema, PersonaInspectionSchema, PersonaReadQuerySchema, PersonaProposalInputSchema } from "@maestro/contracts";
 import { parse, requestOperator } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerPersonaRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerPersonaRoutes(app: FastifyInstance, deps: PersonaRouteDeps): void {
   const { personaInspection } = deps;
   app.get("/v1/persona", async (request, reply) => {
     const query = parse(PersonaReadQuerySchema, request.query);

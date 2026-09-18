@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { WorkerRouteDeps } from "./deps.js";
 import {
   CertificationSchema,
   DepartmentAcceptanceSchema,
@@ -17,7 +17,7 @@ import {
 import { parse, requestOperator, parseCertificationKind, parseDepartmentId } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerWorkerRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerWorkerRoutes(app: FastifyInstance, deps: WorkerRouteDeps): void {
   const { workers, certifications } = deps;
   app.post("/v1/councils/:councilId/departments/:departmentId/workers", async (request, reply) => {
     const params = request.params as { councilId?: unknown; departmentId?: unknown };

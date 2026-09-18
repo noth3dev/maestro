@@ -18,9 +18,7 @@ import {
 import type { ApiClient } from "../client.js";
 import type { MethodContext } from "../context.js";
 
-export function createReportingMethods(
-  ctx: MethodContext,
-): Pick<
+export type ReportingMethods = Pick<
   ApiClient,
   | "listMetronomeChallenges"
   | "listEncoreCouncilRounds"
@@ -28,6 +26,7 @@ export function createReportingMethods(
   | "generateConcertmasterReport"
   | "getConcertmasterReport"
   | "getEvidenceBundle"
+  | "getEvidenceDump"
   | "getGitIntegrationState"
   | "listWorkersForGoal"
   | "listImprovementDigestsForGoal"
@@ -35,9 +34,11 @@ export function createReportingMethods(
   | "getPersona"
   | "proposePersona"
   | "editPersonaCandidate"
-> {
+>;
+
+export function createReportingMethods(ctx: MethodContext): ReportingMethods {
   const { request, headers } = ctx;
-  return {
+  const methods: ReportingMethods = {
     listMetronomeChallenges(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);
       return request(
@@ -89,6 +90,13 @@ export function createReportingMethods(
         { headers },
         EvidenceBundleReadSchema,
       );
+    },
+    async getEvidenceDump(goalId, query) {
+      const bundle = await methods.getEvidenceBundle(goalId, query);
+      const certifications = await methods.listCertifications(goalId, query);
+      const report = await methods.getConcertmasterReport(goalId, query);
+      if (report.evidenceBundleId !== bundle.bundleId) throw new Error("Evidence bundle/report identity mismatch");
+      return { bundle, certifications, report };
     },
     getGitIntegrationState(goalId, query) {
       const parsed = GoalQuerySchema.parse(query);
@@ -155,4 +163,5 @@ export function createReportingMethods(
       );
     },
   };
+  return methods;
 }

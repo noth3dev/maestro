@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { FileEvidenceStore } from "@maestro/evidence";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { bootstrapPermanentOrganization } from "../../packages/persistence/src/organization.js";
 import { bootstrapLocalOperator } from "../../packages/persistence/src/auth.js";
 import { grantProjectMembership } from "../../packages/persistence/src/project-membership.js";

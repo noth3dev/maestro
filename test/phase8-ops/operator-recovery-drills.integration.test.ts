@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 import { bootstrapLocalOperator } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
-import { applyAllMigrations } from "../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { executeCli } from "../../apps/cli/src/main.js";
 import { createControlPlane } from "../../apps/control-plane/src/main.js";
 

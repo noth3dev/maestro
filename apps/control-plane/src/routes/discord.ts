@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { DiscordRouteDeps } from "./deps.js";
 import { AuthenticatedDiscordSignalSchema, StoredDiscordSignalSchema } from "@maestro/contracts";
 import { parse } from "../server-input.js";
 
-export function registerDiscordRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerDiscordRoutes(app: FastifyInstance, deps: DiscordRouteDeps): void {
   const { discordSignal } = deps;
   // Ingests one authenticated Discord watchdog signal. Bearer authentication (above) proves the
   // caller holds a real operator credential; the signal's own HMAC signature (verified inside

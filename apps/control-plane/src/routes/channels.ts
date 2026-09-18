@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { ChannelRouteDeps } from "./deps.js";
 import {
   ChannelSelectorSchema,
   ChannelQuerySchema,
@@ -11,7 +11,7 @@ import {
 import { parse, requestOperator } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerChannelRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerChannelRoutes(app: FastifyInstance, deps: ChannelRouteDeps): void {
   const { channels } = deps;
   app.get("/v1/goals/:goalId/channels/:kind/:channelId", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);

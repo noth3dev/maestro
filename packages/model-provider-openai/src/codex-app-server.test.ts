@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { resolveCodexAppServerCommand } from "../../../apps/cli/src/tui/local-bootstrap.js";
-import { CodexAppServerClient, createCodexAppServerPlugin, type CodexAppServerTransport } from "./codex-app-server.js";
+import { CodexAppServerClient, createCodexAppServerPlugin, resolveCodexAppServerCommand, type CodexAppServerTransport } from "./codex-app-server.js";
 
 class SilentTransport implements CodexAppServerTransport {
   onMessage(_listener: (message: unknown) => void): () => void {

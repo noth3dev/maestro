@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { applyAllMigrations as applyScopedMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations as applyScopedMigrations } from "@maestro/persistence";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

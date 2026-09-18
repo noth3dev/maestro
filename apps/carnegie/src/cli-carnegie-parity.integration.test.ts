@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bootstrapLocalOperator } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { createApiClient } from "@maestro/api-client";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { executeCli } from "../../cli/src/main.js";
 import { createControlPlane } from "../../control-plane/src/main.js";
 import { loadGoalPageData } from "./lib/goal-data.js";

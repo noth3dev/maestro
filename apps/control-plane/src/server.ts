@@ -47,7 +47,8 @@ import {
   requestProjectId,
 } from "./server-input.js";
 import { registerCapabilityRoutes } from "./routes/capability.js";
-import { registerSystemRoutes } from "./routes/system.js";
+import { registerAdminRoutes } from "./routes/admin.js";
+import { registerCatalogRoutes } from "./routes/catalog.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerProviderRoutes } from "./routes/providers.js";
 import { registerPersonaRoutes } from "./routes/persona.js";
@@ -725,7 +726,8 @@ export function buildServer({
       return reply.status(503).send({ status: "not_ready" });
     }
   });
-  registerSystemRoutes(app, deps);
+  registerAdminRoutes(app, deps);
+  registerCatalogRoutes(app, deps);
   registerSettingsRoutes(app, deps);
   registerProviderRoutes(app, deps);
   registerPersonaRoutes(app, deps);

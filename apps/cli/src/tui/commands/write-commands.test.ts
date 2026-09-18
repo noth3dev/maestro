@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ApiClient } from "@maestro/api-client";
 import { executeWriteCommand } from "./write-commands.js";
-import { loadChannel as secretaryLoadChannel } from "../../../../carnegie/src/lib/channel-data.js";
 import { parseInput } from "./parser.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -385,7 +384,7 @@ describe("TUI write commands", () => {
     const client = api();
     Object.assign(client, { getChannel, postChannelMessage });
     await executeWriteCommand({ client, projectId, goalId, confirm: vi.fn() }, { name: "channel", action: "post", options: { "channel-kind": "department", "channel-id": "engineering", content: "hello", "command-id": message.messageId } });
-    await expect(secretaryLoadChannel({ getChannel }, goalId, { kind: "department", channelId: "engineering" }, projectId)).resolves.toMatchObject({ messages: [message] });
+    await expect(getChannel(goalId, { kind: "department", channelId: "engineering" }, { projectId })).resolves.toMatchObject({ messages: [message] });
     expect(getChannel).toHaveBeenCalledWith(goalId, { kind: "department", channelId: "engineering" }, { projectId });
   });
 

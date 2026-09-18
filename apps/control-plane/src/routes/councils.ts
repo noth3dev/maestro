@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { CouncilRouteDeps } from "./deps.js";
 import {
   UuidSchema,
   HeadParticipationInputSchema,
@@ -20,7 +20,7 @@ import {
 import { parse, requestOperator, parseDepartmentId, parseItemId, parsePositiveInteger } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerCouncilRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerCouncilRoutes(app: FastifyInstance, deps: CouncilRouteDeps): void {
   const { headParticipations, councils, departmentPlans, missionBundles } = deps;
   app.post("/v1/goals/:goalId/head-participations", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);

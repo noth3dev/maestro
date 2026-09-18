@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApiClient, type GoalEvent } from "@maestro/api-client";
 import { bootstrapLocalOperator } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
-import { applyAllMigrations } from "../../../packages/persistence/src/test-migrations.js";
+import { applyAllMigrations } from "@maestro/persistence";
 import { advanceWorkspaceSession, loadWorkspaceSession, saveWorkspaceSession, type WorkspaceSession } from "../../cli/src/tui/session.js";
 import { readDashboard } from "../../cli/src/tui/commands/read-commands.js";
 import { runActivityStream, subscribeToEvents } from "../../cli/src/tui/activity-stream.js";

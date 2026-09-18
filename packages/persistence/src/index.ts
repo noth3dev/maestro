@@ -29,6 +29,7 @@ export {
   verifyStoredEvidenceBundle,
 } from "./evidence-bundle.js";
 export * from "./concertmaster-report.js";
+export * from "./conversation.js";
 export * from "./environment.js";
 export * from "./device.js";
 export {

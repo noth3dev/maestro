@@ -1,5 +1,5 @@
-import type { Conversation, ConversationActivityEvent, ConversationEvent } from "@maestro/contracts";
-import { UuidSchema } from "@maestro/contracts";
+import type { Conversation, ConversationActivityEvent } from "@maestro/contracts";
+import { MAX_PERSISTED_TEXT_BYTES, UuidSchema } from "@maestro/contracts";
 import { formatModelRef, type GatewayBinding } from "@maestro/agent-runtime";
 
 export class ConversationNotFoundError extends Error {}
@@ -23,20 +23,8 @@ export type ConversationRow = {
 };
 
 export const MAX_TEXT = 64_000;
-export const MAX_PERSISTED_TEXT_BYTES = 60_000;
 export const SECRET_LIKE =
   /(bearer\s+[\w./+=-]{12,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|private[_-]?key)\s*[:=]|-----begin .*private key-----|(?:^|[^a-z0-9])sk-[a-z0-9_-]{16,})/i;
-export function boundedText(text: string, maxBytes = MAX_PERSISTED_TEXT_BYTES): string {
-  if (Buffer.byteLength(text, "utf8") <= maxBytes) return text;
-  let end = Math.min(text.length, maxBytes);
-  while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf8") > maxBytes) end -= 1;
-  if (end < text.length && end > 0) {
-    const previous = text.charCodeAt(end - 1);
-    const next = text.charCodeAt(end);
-    if (previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end -= 1;
-  }
-  return text.slice(0, end);
-}
 export function assertSafeText(text: string): void {
   if (text.length > MAX_TEXT || Buffer.byteLength(text, "utf8") > MAX_PERSISTED_TEXT_BYTES || SECRET_LIKE.test(text))
     throw new ConversationConflictError("conversation text is invalid or contains credential-like data");
@@ -68,21 +56,6 @@ export function statusFromObservation(status: string): Conversation["status"] {
   if (status === "cancelled") return "cancelled";
   if (status === "unknown") return "unknown";
   return "running";
-}
-export function terminalEventType(status: Conversation["status"]): ConversationEvent["eventType"] {
-  return status === "succeeded"
-    ? "turn_completed"
-    : status === "cancelled"
-      ? "turn_cancelled"
-      : status === "unknown"
-        ? "turn_unknown"
-        : "turn_failed";
-}
-export function turnStatus(status: Conversation["status"]): "completed" | "failed" | "cancelled" | "unknown" {
-  return status === "succeeded" ? "completed" : status === "failed" ? "failed" : status === "cancelled" ? "cancelled" : "unknown";
-}
-export function cancellationContent(status: Conversation["status"]): string {
-  return status === "cancelled" ? "Conversation turn cancelled" : "Conversation turn outcome is unavailable";
 }
 export function now(): string {
   return new Date().toISOString();
