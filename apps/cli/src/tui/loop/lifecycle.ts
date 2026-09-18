@@ -3,7 +3,7 @@ import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
-import { toggleSidebar } from "../components/sidebar.js";
+import { isSidebarVisible, toggleSidebar } from "../components/sidebar.js";
 import { activateSidebarRow, isSidebarNavActive, moveSidebarFocus, NAV_ROWS, sidebarFocusRows } from "../components/sidebar-nav.js";
 import { activateSidebarChannel, channelRowKey } from "../components/sidebar-channels.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
@@ -129,7 +129,10 @@ export class LifecycleHandler {
       toggleSidebar(c, NAV_ROWS);
       return { consume: true };
     }
-    if (isSidebarNavActive(c)) {
+    // The focus block also requires effective visibility: a focused but
+    // narrowed sidebar keeps its focus value (widening restores seamlessly)
+    // while keys fall through to the existing global handling below.
+    if (isSidebarNavActive(c) && isSidebarVisible(c.sidebarVisible, c.terminal.columns)) {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
         c.sidebarFocus = moveSidebarFocus(
           c.sidebarFocus,

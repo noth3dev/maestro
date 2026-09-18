@@ -124,3 +124,18 @@ export function renderGoalSection(
   if (goals.length > visible.length) rows.push({ label: `+${goals.length - visible.length} more`, selectable: false });
   return { title: "goals", rows };
 }
+
+/**
+ * Trailing key hints. Non-selectable label/value rows: no focus id, no
+ * resolver, no dispatcher. Text avoids every nav label so the content-search
+ * nav resolver can never match a footer line.
+ */
+export function renderFooterSection(): SidebarSection {
+  return {
+    title: "keys",
+    rows: [
+      { label: "up/dn", value: "move · enter open" },
+      { label: "esc", value: "unfocus · ctrl+b" },
+    ],
+  };
+}

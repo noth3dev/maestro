@@ -3,6 +3,7 @@ import { HStack, Text, TuiAltScreen, VStack, visibleWidth } from "@earendil-work
 import {
   contentWidth,
   isSidebarVisible,
+  renderFooterSection,
   renderGoalSection,
   renderNavSection,
   renderSidebar,
@@ -11,7 +12,8 @@ import {
   toggleSidebar,
   type SidebarSection,
 } from "./sidebar.js";
-import { NAV_ROWS } from "./sidebar-nav.js";
+import { NAV_ROWS, resolveSidebarGoalClick, resolveSidebarNavClick } from "./sidebar-nav.js";
+import { renderChannelSection, resolveSidebarChannelClick } from "./sidebar-channels.js";
 import { StubTerminal } from "./stub-terminal.js";
 
 function plain(value: string): string {
@@ -112,6 +114,80 @@ describe("sidebar goal section", () => {
     const lines = renderSidebar(SIDEBAR_WIDTH, [section!]);
     for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
     expect(plain(lines.join("\n"))).toContain("11111111 · running");
+  });
+});
+
+describe("sidebar footer", () => {
+  it("renders non-selectable key hints under a trailing title", () => {
+    const section = renderFooterSection();
+    expect(section.title).toBe("keys");
+    expect(section.rows.length).toBe(2);
+    for (const row of section.rows) {
+      expect(row.selectable).not.toBe(true);
+      expect(row.id).toBeUndefined();
+      expect(row.label.length).toBeGreaterThan(0);
+      expect(row.value).toBeDefined();
+    }
+  });
+
+  it("keeps footer rows within the fixed width", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [renderFooterSection()]);
+    for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
+    const text = lines.map(plain).join("\n");
+    expect(text).toContain("keys");
+    expect(text).toContain("ctrl+b");
+  });
+
+  it("keeps footer text clear of nav-label substrings", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [renderFooterSection()]);
+    const text = lines.map(plain).join("\n");
+    for (const row of NAV_ROWS) expect(text.includes(row.label)).toBe(false);
+    lines.forEach((line, y) => {
+      expect(resolveSidebarNavClick(lines, 3, y)).toBeUndefined();
+    });
+  });
+});
+
+describe("sidebar section composition", () => {
+  const goals = [{ goalId: "11111111-2222-4333-8444-555555555555", state: "running" }];
+  const channels = [
+    {
+      channel: { kind: "department" as const, scopeId: "engineering", displayName: "#engineering" },
+      messages: [{}, {}],
+      members: [{}],
+    },
+  ];
+
+  function composed() {
+    return renderSidebar(SIDEBAR_WIDTH, [
+      renderNavSection(NAV_ROWS, undefined),
+      renderChannelSection(channels as never, undefined)!,
+      renderGoalSection(goals, undefined, undefined)!,
+      renderFooterSection(),
+    ]);
+  }
+
+  function rowIndex(rendered: readonly string[], fragment: string): number {
+    return rendered.findIndex((line) => plain(line).includes(fragment));
+  }
+
+  it("keeps goal and channel clicks stable with the footer appended", () => {
+    const rendered = composed();
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "11111111"))).toBe(goals[0]!.goalId);
+    expect(resolveSidebarChannelClick(rendered, channels as never, 3, rowIndex(rendered, "#engineering"))).toBe(
+      "channel:department:engineering",
+    );
+  });
+
+  it("leaves footer rows unmapped for every resolver", () => {
+    const rendered = composed();
+    const footerTop = rowIndex(rendered, "keys");
+    expect(footerTop).toBeGreaterThanOrEqual(0);
+    for (let y = footerTop; y < rendered.length - 1; y++) {
+      expect(resolveSidebarNavClick(rendered, 3, y)).toBeUndefined();
+      expect(resolveSidebarGoalClick(rendered, goals, 3, y)).toBeUndefined();
+      expect(resolveSidebarChannelClick(rendered, channels as never, 3, y)).toBeUndefined();
+    }
   });
 });
 

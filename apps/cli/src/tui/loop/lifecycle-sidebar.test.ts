@@ -26,6 +26,7 @@ function stubController() {
     sidebarVisible: false,
     sidebarFocus: undefined as string | undefined,
     pendingConfirmation: undefined as { summary: Record<string, unknown>; resolve: (decision: string) => void } | undefined,
+    project: { kind: "unavailable", reason: "stub" },
     state: { pendingDecisions: [] },
     terminal: { columns: 120, rows: 30 },
     sidebarGoals: [] as Array<{ goalId: string }>,
@@ -145,5 +146,43 @@ describe("sidebar focus keys", () => {
     const handler = new LifecycleHandler(c as unknown as TuiController);
     expect(handler.handleInput("\r")).toEqual({ consume: true });
     expect(c.submitter.submit).toHaveBeenCalledWith("/channel read --channel-kind department --channel-id engineering");
+  });
+
+  it("stops swallowing keys when narrowed while focused", () => {
+    const c = stubController();
+    c.sidebarVisible = true;
+    c.sidebarFocus = "home";
+    c.terminal.columns = 80;
+    const handler = new LifecycleHandler(c as unknown as TuiController);
+    expect(handler.handleInput("a")).toBeUndefined();
+    expect(c.sidebarFocus).toBe("home");
+    expect(handler.handleInput(UP)).toBeUndefined();
+    expect(c.sidebarFocus).toBe("home");
+    expect(handler.handleInput("\r")).toBeUndefined();
+    expect(c.submitter.submit).not.toHaveBeenCalled();
+    expect(handler.handleInput(ESC)).toBeUndefined();
+    expect(c.sidebarFocus).toBe("home");
+  });
+
+  it("restores nav without refocus after widening", () => {
+    const c = stubController();
+    c.sidebarVisible = true;
+    c.sidebarFocus = "home";
+    c.terminal.columns = 80;
+    const handler = new LifecycleHandler(c as unknown as TuiController);
+    expect(handler.handleInput(UP)).toBeUndefined();
+    c.terminal.columns = 120;
+    expect(handler.handleInput(UP)).toEqual({ consume: true });
+    expect(c.sidebarFocus).toBe("luthiery");
+  });
+
+  it("still toggles visibility while narrow", () => {
+    const c = stubController();
+    c.sidebarVisible = true;
+    c.terminal.columns = 80;
+    const handler = new LifecycleHandler(c as unknown as TuiController);
+    expect(handler.handleInput(CTRL_B)).toEqual({ consume: true });
+    expect(c.sidebarVisible).toBe(false);
+    expect(c.sidebarFocus).toBeUndefined();
   });
 });

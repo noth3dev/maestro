@@ -15,7 +15,7 @@ import {
 } from "../components/sidebar-channels.js";
 import { createClickRegion } from "../components/mouse.js";
 import { pendingCount, renderStatusSection, toSidebarStatus } from "../components/shell.js";
-import { contentWidth, isSidebarVisible, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
+import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -349,6 +349,7 @@ export class TuiController {
         renderNavSection(NAV_ROWS, this.sidebarFocus, pending > 0 ? { inbox: `(${pending})` } : {}),
         ...(channelSection === undefined ? [] : [channelSection]),
         ...(goalSection === undefined ? [] : [goalSection]),
+        renderFooterSection(),
       ]);
     };
     const sidebarRegion = createClickRegion({
