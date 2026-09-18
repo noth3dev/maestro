@@ -4,7 +4,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApiClient } from "@maestro/api-client";
 import { executeReadCommand } from "../../cli/src/tui/commands/read-commands.js";
 import { executeWriteCommand } from "../../cli/src/tui/commands/write-commands.js";
-import { loadChannel as secretaryLoadChannel } from "../../carnegie/src/lib/channel-data.js";
 import { applyAllMigrations, assertProjectMembership, bootstrapLocalOperator, bootstrapPermanentOrganization, getChannel, postChannelMessage } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { buildServer, type GoalService, type OperatorAuthenticator } from "./server.js";
@@ -110,7 +109,7 @@ describeDatabase("channel route durability", () => {
     const reloadedAddress = await reloaded.listen({ host: "127.0.0.1", port: 0 });
     const reloadedClient = createApiClient({ baseUrl: reloadedAddress, token: `${credentialId}.${operatorSecret}` });
     try {
-      const secretaryRead = await secretaryLoadChannel(reloadedClient, goalId, selector, projectId);
+      const secretaryRead = await reloadedClient.getChannel(goalId, selector, { projectId });
       expect(secretaryRead.messages.map((message) => message.content)).toEqual(["one durable message"]);
       const tuiRead = await executeReadCommand({ client: reloadedClient, projectId, goalId }, {
         name: "channel", action: "read", options: { "channel-kind": selector.kind, "channel-id": selector.channelId },
