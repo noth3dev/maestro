@@ -4,6 +4,8 @@ import type { AccountLoginStore } from "@maestro/persistence";
 import {
   cancelAccountLoginFlow,
   pollAccountLoginStatus,
+  startAccountLoginFlow,
+  waitForAccountLoginStart,
   withLoginOperation,
   type AccountLoginFlowDeps,
   type AccountLoginIdentity,
@@ -89,5 +91,64 @@ describe("cancelAccountLoginFlow", () => {
     });
     const unknownState = vi.fn(async () => ({ ...pending, state: "unknown" as const, message: "Gateway login session was lost during restart" }));
     expect(await cancelAccountLoginFlow(depsFor(pending, { updateState: unknownState }), { cancelAccountLogin: lost }, identity)).toEqual({ kind: "unknown" });
+  });
+});
+
+describe("startAccountLoginFlow", () => {
+  const startId = { operatorId: "operator-1", providerId: "openai-codex" as const, requestId: "request-1" };
+  const starting = { ...base, providerLoginId: null, authUrl: null, state: "starting" as const, message: null };
+  const ready = { ...base, state: "pending" as const, message: null };
+
+  it("starts once, fails the reservation on gateway error, and waits for concurrent starters", async () => {
+    const providerResult = { providerId: "openai-codex" as const, loginId: "provider-login-1", authUrl: "https://chatgpt.com/login" };
+    const startAccountLogin = vi.fn(async () => providerResult);
+    const completeStart = vi.fn(async () => ready);
+    const deps = depsFor(starting, {
+      reserveStart: vi.fn(async () => ({ created: true, record: starting })),
+      completeStart,
+    });
+    const result = await startAccountLoginFlow(deps, { startAccountLogin }, startId);
+    expect(result).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", authUrl: "https://chatgpt.com/login" });
+    expect(startAccountLogin).toHaveBeenCalledWith({ operatorId: "operator-1", requestId: "request-1", providerId: "openai-codex" });
+    expect(completeStart).toHaveBeenCalledWith("durable-login-1", "provider-login-1", "https://chatgpt.com/login");
+
+    const failure = new Error("gateway exploded");
+    const failStart = vi.fn(async () => starting);
+    const failingDeps = depsFor(starting, {
+      reserveStart: vi.fn(async () => ({ created: true, record: starting })),
+      failStart,
+    });
+    await expect(
+      startAccountLoginFlow(failingDeps, { startAccountLogin: vi.fn(async () => { throw failure; }) }, startId),
+    ).rejects.toBe(failure);
+    expect(failStart).toHaveBeenCalledWith("durable-login-1", "Provider account login failed");
+
+    const waitingDeps = depsFor(starting, {
+      reserveStart: vi.fn(async () => ({ created: false, record: starting })),
+      getByRequest: vi.fn(async () => ready),
+    });
+    const waited = await startAccountLoginFlow(waitingDeps, { startAccountLogin: vi.fn() }, startId);
+    expect(waited).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", authUrl: "https://chatgpt.com/login" });
+  });
+
+  it("rejects records that never become ready and times out stuck starters", async () => {
+    const unready = { ...base, providerLoginId: null, authUrl: null, state: "pending" as const, message: null };
+    const deps = depsFor(unready, { reserveStart: vi.fn(async () => ({ created: false, record: unready })) });
+    await expect(startAccountLoginFlow(deps, { startAccountLogin: vi.fn() }, startId)).rejects.toThrow("Provider account login is not ready");
+
+    const stuck = { ...base, providerLoginId: null, authUrl: null, state: "starting" as const, message: null };
+    const stuckStore = depsFor(stuck, {
+      reserveStart: vi.fn(async () => ({ created: false, record: stuck })),
+      getByRequest: vi.fn(async () => stuck),
+    }).store;
+    vi.useFakeTimers();
+    try {
+      const pending = waitForAccountLoginStart(stuckStore, "operator-1", "request-1");
+      const assertion = expect(pending).rejects.toThrow("account login start is still in progress");
+      await vi.advanceTimersByTimeAsync(6000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,5 +1,5 @@
 import type { AccountLoginRecord, AccountLoginStore } from "@maestro/persistence";
-import type { GatewayAccountLoginStatusResult } from "@maestro/agent-runtime";
+import type { GatewayAccountLoginStartResult, GatewayAccountLoginStatusResult } from "@maestro/agent-runtime";
 import { ModelGatewayClientError } from "./model-gateway-client.js";
 
 export interface AccountLoginFlowDeps {
@@ -17,6 +17,47 @@ export interface AccountLoginIdentity {
 
 export function isLostGatewayLogin(error: unknown): boolean {
   return error instanceof ModelGatewayClientError && error.code === "account_login_session_unknown";
+}
+
+export function toAccountLoginStartResult(record: AccountLoginRecord): GatewayAccountLoginStartResult {
+  if (record.providerLoginId === null || record.authUrl === null) throw new Error(record.message ?? "Provider account login is not ready");
+  return { providerId: record.providerId, loginId: record.loginId, authUrl: record.authUrl };
+}
+
+export async function waitForAccountLoginStart(
+  store: AccountLoginStore,
+  operatorId: string,
+  requestId: string,
+): Promise<AccountLoginRecord> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const record = await store.getByRequest(operatorId, requestId);
+    if (record !== undefined && record.state !== "starting") return record;
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("account login start is still in progress");
+}
+
+export async function startAccountLoginFlow(
+  deps: AccountLoginFlowDeps,
+  gateway: {
+    startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) => Promise<GatewayAccountLoginStartResult>;
+  },
+  id: { operatorId: string; providerId: "openai-codex"; requestId: string },
+): Promise<GatewayAccountLoginStartResult> {
+  const reservation = await deps.store.reserveStart(id.operatorId, id.requestId, id.providerId, deps.ownerId);
+  let record = reservation.record;
+  if (reservation.created) {
+    try {
+      const providerResult = await gateway.startAccountLogin({ operatorId: id.operatorId, requestId: id.requestId, providerId: id.providerId });
+      record = await deps.store.completeStart(record.loginId, providerResult.loginId, providerResult.authUrl);
+      } catch (error) {
+        await deps.store.failStart(record.loginId, "Provider account login failed").catch(() => undefined);
+        throw error;
+      }
+  } else if (record.state === "starting") {
+    record = await waitForAccountLoginStart(deps.store, id.operatorId, id.requestId);
+  }
+  return toAccountLoginStartResult(record);
 }
 
 async function loadLoginRecord(store: AccountLoginStore, id: AccountLoginIdentity): Promise<AccountLoginRecord> {

@@ -10,22 +10,8 @@ import {
 import { parse, requestOperator, RequestValidationError } from "../server-input.js";
 import { randomUUID } from "node:crypto";
 import { DurableStoreUnavailableError } from "../goal-service.js";
-import type { OperatorContext, AccountLoginStore, AccountLoginRecord } from "@maestro/persistence";
-import { cancelAccountLoginFlow, pollAccountLoginStatus } from "../account-login-flow.js";
-
-function toAccountLoginStartResult(record: AccountLoginRecord): import("@maestro/agent-runtime").GatewayAccountLoginStartResult {
-  if (record.providerLoginId === null || record.authUrl === null) throw new Error(record.message ?? "Provider account login is not ready");
-  return { providerId: record.providerId, loginId: record.loginId, authUrl: record.authUrl };
-}
-
-async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: string, requestId: string): Promise<AccountLoginRecord> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const record = await store.getByRequest(operatorId, requestId);
-    if (record !== undefined && record.state !== "starting") return record;
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error("account login start is still in progress");
-}
+import type { OperatorContext } from "@maestro/persistence";
+import { cancelAccountLoginFlow, pollAccountLoginStatus, startAccountLoginFlow } from "../account-login-flow.js";
 
 export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRouteDeps): void {
   const { providerCredentials, accountLoginStore, loginOwnerId, loginOperationStaleAfterMs } = deps;
@@ -55,20 +41,12 @@ export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRoute
     const header = request.headers["idempotency-key"];
     const requestId = typeof header === "string" && header.trim() !== "" ? header : randomUUID();
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
-    const reservation = await accountLoginStore.reserveStart(operatorId, requestId, input.providerId, loginOwnerId);
-    let record = reservation.record;
-    if (reservation.created) {
-      try {
-        const providerResult = await providerCredentials.startAccountLogin({ operatorId, requestId, providerId: input.providerId });
-        record = await accountLoginStore.completeStart(record.loginId, providerResult.loginId, providerResult.authUrl);
-      } catch (error) {
-        await accountLoginStore.failStart(record.loginId, "Provider account login failed").catch(() => undefined);
-        throw error;
-      }
-    } else if (record.state === "starting") {
-      record = await waitForAccountLoginStart(accountLoginStore, operatorId, requestId);
-    }
-    return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(toAccountLoginStartResult(record)));
+    const result = await startAccountLoginFlow(
+      { store: accountLoginStore, ownerId: loginOwnerId, staleAfterMs: loginOperationStaleAfterMs },
+      { startAccountLogin: providerCredentials.startAccountLogin },
+      { operatorId, providerId: input.providerId, requestId },
+    );
+    return reply.status(200).send(ProviderAccountLoginStartResultSchema.parse(result));
   });
 
   app.post("/v1/provider-account-logins/logout", async (request, reply) => {

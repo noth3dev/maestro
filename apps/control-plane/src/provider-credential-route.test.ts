@@ -261,4 +261,37 @@ describe("provider account login status and cancel branches", () => {
     expect(claimOperation).not.toHaveBeenCalled();
     await app.close();
   });
+
+  it("marks the reservation failed when the gateway start throws", async () => {
+    const starting = { ...base, providerLoginId: null, authUrl: null, state: "starting" as const, message: null };
+    const startAccountLogin = vi.fn(async () => {
+      throw new Error("gateway exploded");
+    });
+    const failStart = vi.fn(async () => starting);
+    const store = storeFor(starting, {
+      reserveStart: vi.fn(async () => ({ created: true, record: starting })),
+      failStart,
+    });
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ startAccountLogin }), accountLoginStore: store });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/start", headers, payload: { providerId: "openai-codex" } });
+    expect(response.statusCode).toBe(503);
+    expect(failStart).toHaveBeenCalledWith("durable-login-1", "Provider account login failed");
+    await app.close();
+  });
+
+  it("waits for a concurrent starter instead of starting twice", async () => {
+    const starting = { ...base, providerLoginId: null, authUrl: null, state: "starting" as const, message: null };
+    const ready = { ...base, state: "pending" as const, message: null };
+    const startAccountLogin = vi.fn();
+    const store = storeFor(starting, {
+      reserveStart: vi.fn(async () => ({ created: false, record: starting })),
+      getByRequest: vi.fn(async () => ready),
+    });
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ startAccountLogin }), accountLoginStore: store });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/start", headers, payload: { providerId: "openai-codex" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", authUrl: "https://chatgpt.com/login" });
+    expect(startAccountLogin).not.toHaveBeenCalled();
+    await app.close();
+  });
 });
