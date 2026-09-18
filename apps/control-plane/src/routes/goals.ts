@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { GoalRouteDeps } from "./deps.js";
 import {
   UuidSchema,
   CreateGoalInputSchema,
@@ -11,7 +11,7 @@ import {
 import { parse, requestOperator } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerGoalRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerGoalRoutes(app: FastifyInstance, deps: GoalRouteDeps): void {
   const { goalService } = deps;
   app.post("/v1/goals", async (request, reply) => {
     const input = parse(CreateGoalInputSchema, request.body);

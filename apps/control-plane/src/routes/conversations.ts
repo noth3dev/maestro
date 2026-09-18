@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { ConversationRouteDeps } from "./deps.js";
 import {
   UuidSchema,
   ConversationSchema,
@@ -16,7 +16,7 @@ import { parse, requestOperator, RequestValidationError } from "../server-input.
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerConversationRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerConversationRoutes(app: FastifyInstance, deps: ConversationRouteDeps): void {
   const { pollingScheduler, conversations, activeStreams, maxActiveStreams } = deps;
   app.post("/v1/conversations", async (request, reply) => {
     const input = parse(CreateConversationInputSchema, request.body);

@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { EventRouteDeps } from "./deps.js";
 import { UuidSchema, EventCursorSchema, EventQuerySchema, GoalEventPageSchema } from "@maestro/contracts";
 import { parse, bearerSecret, AuthenticationRequiredError, CredentialForbiddenError, RequestValidationError } from "../server-input.js";
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerEventRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerEventRoutes(app: FastifyInstance, deps: EventRouteDeps): void {
   const { events, pollingScheduler, activeStreams, maxActiveStreams, authenticator, projectMembership } = deps;
   app.get("/v1/events", async (request, reply) => {
     const query = parse(EventQuerySchema, request.query);

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { GitRouteDeps } from "./deps.js";
 import {
   WorkerIntegrationInputSchema,
   UuidSchema,
@@ -15,7 +15,7 @@ import {
 import { parse, requestOperator, parseDepartmentId } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerGitRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerGitRoutes(app: FastifyInstance, deps: GitRouteDeps): void {
   const { gitIntegrations } = deps;
   app.post("/v1/goals/:goalId/git/integration-branch", async (request, reply) => {
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { SystemRouteDeps } from "./deps.js";
 import {
   ProjectAccessProvisionInputSchema,
   ProjectAccessProvisionResultSchema,
@@ -11,7 +11,7 @@ import { parse, requestOperator } from "../server-input.js";
 import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerSystemRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerSystemRoutes(app: FastifyInstance, deps: SystemRouteDeps): void {
   const { projectAccess, projectDiscovery, organizations, conversations } = deps;
   app.post("/v1/admin/project-access", async (request, reply) => {
     if (!projectAccess) throw new DurableStoreUnavailableError();

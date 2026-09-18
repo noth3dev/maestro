@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { CapabilityRouteDeps } from "./deps.js";
 import {
   CapabilitySessionSelectionInputSchema,
   CapabilitySessionSchema,
@@ -12,7 +12,7 @@ import {
 import { parse, requestOperator } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
-export function registerCapabilityRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerCapabilityRoutes(app: FastifyInstance, deps: CapabilityRouteDeps): void {
   const { capabilityApprovals, inbox, evidenceCapture, personaGoalEvidence } = deps;
   app.get("/v1/inbox", async (request, reply) => {
     const query = parse(GoalQuerySchema, request.query);

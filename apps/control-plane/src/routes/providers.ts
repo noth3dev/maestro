@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { RouteDeps } from "../server.js";
+import type { ProviderRouteDeps } from "./deps.js";
 import {
   ProviderCredentialLoginInputSchema,
   ProviderCredentialBindingSchema,
@@ -31,7 +31,7 @@ async function waitForAccountLoginStart(store: AccountLoginStore, operatorId: st
   throw new Error("account login start is still in progress");
 }
 
-export function registerProviderRoutes(app: FastifyInstance, deps: RouteDeps): void {
+export function registerProviderRoutes(app: FastifyInstance, deps: ProviderRouteDeps): void {
   const { providerCredentials, accountLoginStore, loginOwnerId, loginOperationStaleAfterMs } = deps;
   app.get("/v1/provider-credentials", async (_request, reply) => {
     if (providerCredentials?.list === undefined) throw new DurableStoreUnavailableError();
