@@ -5,6 +5,7 @@ import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
+import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { type TuiShellState } from "../components/shell.js";
 import type { ApprovalDialogSummary, ConfirmationResult, CriticalActionSummary } from "../confirmation.js";
 import type { createStatusRegion } from "../components/regions.js";
@@ -236,6 +237,14 @@ export class TuiController {
     // Keep status and decisions outside the scroll view; only the chronological
     // conversation/activity stream may scroll or follow new output.
     const decisionRegion = createDecisionRegion({ state, height: () => terminal.rows });
+    // Clickable approval dialog: same actions as the y/n/scope keyboard path,
+    // mounted only while a confirmation is pending.
+    const approvalClickRegion = createApprovalClickRegion({
+      lines: (width) => approvalDialogClickLines(this, width),
+      onAction: (action) => {
+        applyApprovalAction(this, action);
+      },
+    });
     const noticeRegion = createDynamicRegion(() => {
       if (terminal.rows < 16 && this.accountLoginSelection === undefined) return [];
       const lines = terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, terminal.columns)];
@@ -262,6 +271,13 @@ export class TuiController {
         { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
         { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
         { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+        {
+          component: approvalClickRegion,
+          basis: "auto",
+          shrink: 0,
+          minSize: 0,
+          visible: () => this.pendingConfirmation !== undefined && terminal.rows >= 16,
+        },
         {
           component: noticeRegion,
           basis: "auto",

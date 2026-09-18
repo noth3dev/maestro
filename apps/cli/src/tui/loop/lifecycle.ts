@@ -1,8 +1,7 @@
 import { matchesKey } from "@earendil-works/pi-tui";
 import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
-import { renderApprovalDialog } from "../components/approval-dialog.js";
-import { nextApprovalDialogScope, type ConfirmationResult } from "../confirmation.js";
+import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -189,21 +188,10 @@ export class LifecycleHandler {
       (matchesKey(data, "up") || matchesKey(data, "down")) &&
       c.pendingConfirmation.summary.repetitionScope !== undefined
     ) {
-      c.pendingConfirmation = {
-        ...c.pendingConfirmation,
-        summary: {
-          ...c.pendingConfirmation.summary,
-          repetitionScope: nextApprovalDialogScope(c.pendingConfirmation.summary.repetitionScope, matchesKey(data, "up") ? -1 : 1),
-        },
-      };
-      c.view.render();
-      return { consume: true };
+      if (applyApprovalAction(c, { kind: "cycle-scope", direction: matchesKey(data, "up") ? -1 : 1 })) return { consume: true };
     }
     if (matchesKey(data, "ctrl+a") && c.pendingConfirmation !== undefined) {
-      c.compactReview =
-        c.terminal.rows < 16 ? compactReviewAcknowledgement(c.pendingConfirmation.summary, [], c.terminal.columns) : undefined;
-      c.view.append(renderApprovalDialog(c.pendingConfirmation.summary, c.terminal.columns).join("\n"));
-      return { consume: true };
+      if (applyApprovalAction(c, { kind: "reveal" })) return { consume: true };
     }
     if (matchesKey(data, "ctrl+a") && c.pendingConfirmation === undefined && (c.state.pendingDecisions?.length ?? 0) > 0) {
       c.compactReview =
@@ -212,28 +200,15 @@ export class LifecycleHandler {
       return { consume: true };
     }
     if (c.pendingConfirmation !== undefined && data === "?") {
-      const { summary } = c.pendingConfirmation;
-      c.view.appendWarning(
-        `Approval tier: ${summary.tier === "user" ? "You" : (summary.tier ?? "You")}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`,
-      );
-      return { consume: true };
+      if (applyApprovalAction(c, { kind: "why" })) return { consume: true };
     }
     if (
       c.pendingConfirmation !== undefined &&
       (data === "y" || data === "Y" || data === "n" || data === "N" || data === "\r" || data === "\u001b")
     ) {
-      const decision: ConfirmationResult =
-        data === "y" || data === "Y"
-          ? c.pendingConfirmation.summary.repetitionScope === undefined
-            ? "approved"
-            : { decision: "approved", repetitionScope: c.pendingConfirmation.summary.repetitionScope }
-          : "cancelled";
-      const resolveConfirmation = c.pendingConfirmation.resolve;
-      c.pendingConfirmation = undefined;
-      c.view.syncPendingDecisionState();
-      resolveConfirmation(decision);
-      c.view.render();
-      return { consume: true };
+      if (applyApprovalAction(c, { kind: "resolve", decision: data === "y" || data === "Y" ? "approved" : "cancelled" })) {
+        return { consume: true };
+      }
     }
     return undefined;
   };
