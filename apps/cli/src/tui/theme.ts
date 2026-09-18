@@ -89,6 +89,15 @@ export const tuiTheme = {
   // The terminal owns its background. These are identity paints by design.
   inputSurface: terminalBackground,
   autocompleteSurface: terminalBackground,
+
+  // Focus bar for keyboard selection. Reverse video uses the terminal's own
+  // colors instead of a hardcoded fill, so it stays readable on light and
+  // dark terminals alike and degrades to unpainted text under NO_COLOR
+  // (where the gutter marker remains the focus signal).
+  selected: (text: string): string => {
+    if (Object.prototype.hasOwnProperty.call(process.env, "NO_COLOR")) return text;
+    return `[7m${text}[27m`;
+  },
 };
 
 export function fitPlain(text: string, width: number): string {

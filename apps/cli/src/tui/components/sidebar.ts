@@ -52,7 +52,8 @@ const LABEL_WIDTH = 8;
 function renderRow(row: SidebarRow, width: number): string {
   if (row.selectable === true) {
     const cells = `${row.focused === true ? "› " : "  "}${fitPlain(row.label, Math.max(0, width - 2))}`.padEnd(width);
-    return row.focused === true ? tuiTheme.primary(cells) : tuiTheme.text(cells);
+    if (row.focused === true) return tuiTheme.selected(tuiTheme.primary(cells));
+    return tuiTheme.text(cells);
   }
   const labelWidth = Math.min(LABEL_WIDTH, width);
   const valueWidth = Math.max(0, width - labelWidth - 1);
