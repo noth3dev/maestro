@@ -51,7 +51,7 @@ flowchart TD
 
 Mission Bundle은 approved model, skill, tool, path, environment, authority action, external/data 경계, retry, worker/child 한도, time/budget을 별도로 제한합니다. 설치된 capability가 자동으로 할당되는 것은 아닙니다.
 
-현재 production Control Plane은 비어 있는 native `ToolRegistry`를 구성하므로 미등록 model tool은 거부됩니다. Git adapter는 명시적인 authority-backed Control Plane 서비스이며 숨겨진 worker callback이 아닙니다. 일반 critical-action route도 기본 effect adapter가 없으면 성공을 가장하지 않고 fail-closed합니다.
+현재 production Control Plane은 native `ToolRegistry`에 IPython host tool 하나만 등록하며(`apps/control-plane/src/main.ts`), 그 외 미등록 model tool은 거부됩니다. Git adapter는 명시적인 authority-backed Control Plane 서비스이며 숨겨진 worker callback이 아닙니다. 일반 critical-action route도 기본 effect adapter가 없으면 성공을 가장하지 않고 fail-closed합니다.
 
 ---
 
@@ -59,7 +59,7 @@ Mission Bundle은 approved model, skill, tool, path, environment, authority acti
 
 ## Router 및 host-tool 현황
 
-Authority/effect/evidence 경계는 구현되어 있지만 production host-tool enablement를 의미하지 않습니다. Native `ToolRegistry`는 비어 있고 host-tool write/effect와 live acceptance는 구현되지 않았습니다. Ensemble Router routing evidence는 별도로 저장되지만 selection은 활성화되지 않았습니다. 정확한 `modelPolicy` admission이 계속 권위 있는 경계입니다.
+Authority/effect/evidence 경계는 구현되어 있습니다. Native `ToolRegistry`는 IPython host tool을 등록하고(`apps/control-plane/src/main.ts`), 그 외 host-tool write/effect와 live acceptance는 아직 구현되지 않았습니다. Ensemble Router는 production wiring이 완료되어 기본 routing mode이며(`apps/control-plane/src/composition/execution-services.ts`의 `composeExecutionServices`, `apps/control-plane/src/worker-service.ts`의 `assertWorkerRoutingMode`/`resolveWorkerModelForRouting`), 정확한 `modelPolicy` pin admission은 `MAESTRO_MODEL_ROUTING_MODE=pin`으로 여전히 사용 가능합니다.
 ## 3. 봉인 제출 (Sealed Submissions) 및 증거 무결성
 
 에이전트 간 담합 및 데이터 위·변조를 방지하기 위한 암호화적 무결성 검증 체계입니다.

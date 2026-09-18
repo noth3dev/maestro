@@ -59,7 +59,7 @@ The production Control Plane currently composes an empty native `ToolRegistry`; 
 
 ## Router and host-tool status
 
-Authority/effect/evidence boundaries are implemented, but they do not constitute production host-tool enablement. The native `ToolRegistry` remains empty; host-tool writes/effects and live acceptance are not implemented. Ensemble Router routing evidence is persisted separately, but selection is not enabled. Exact `modelPolicy` admission remains authoritative.
+Authority/effect/evidence boundaries are implemented. The native `ToolRegistry` registers the IPython host tool (`apps/control-plane/src/main.ts`); other host-tool writes/effects and live acceptance remain unimplemented. Ensemble Router production wiring is implemented and is the default routing mode (`composeExecutionServices` in `apps/control-plane/src/composition/execution-services.ts`; `assertWorkerRoutingMode`/`resolveWorkerModelForRouting` in `apps/control-plane/src/worker-service.ts`); exact `modelPolicy` pin admission remains available via `MAESTRO_MODEL_ROUTING_MODE=pin`.
 ## 3. Sealed Submissions & Cryptographic Integrity
 
 To prevent collusion, retroactive goal edits, or hallucinations, Maestro employs a **Sealed Submission Protocol**:

@@ -17,7 +17,7 @@ flowchart TD
     end
 
     subgraph ExecutionSecurityLayer [실행 및 보안 격리]
-        WORKERS[🛠️ Scout & Execution 워커<br/>• ExecutionKernelPort<br/>• 네이티브 런타임과 인증된 Model Gateway 사용 (Ensemble Router selection은 아직 구현되지 않음)<br/>• 격리된 Git Worktrees .worktrees/ ]
+        WORKERS[🛠️ Scout & Execution 워커<br/>• ExecutionKernelPort<br/>• 네이티브 런타임과 인증된 Model Gateway 사용 (Ensemble Router selection은 구현되어 있으며 기본 routing mode)<br/>• 격리된 Git Worktrees .worktrees/ ]
         EXECUTOR[🛡️ AuthorizedEffectExecutor<br/>• Default-Deny 기본 거부 & 액션 분류<br/>• Audit-Before-Effect DB 사전 감사 커밋<br/>• 단조 펜싱 토큰 리스 검증]
     end
 
@@ -70,7 +70,7 @@ Maestro는 모델 I/O, 에이전트 동작 및 내구성 있는 권한을 분리
 
 ### Ensemble Router 경계
 
-현재 코드는 자동 model selection이 아니라 routing artifact를 구현합니다. A/D/E domain contract, B provider-facts domain/wire schema, 순수 Goal snapshot helper를 포함한 C operational-overlay domain/wire schema, 4개 pressure-band domain/wire schema 및 human-owned 빈 `config/model_map.json` baseline이 있습니다. [`routing-selector.ts`](../../packages/domain/src/routing-selector.ts)가 A↔D weakest-link 검사와 B/C hard filter를 갖는 pure selector를 제공합니다. Persistence migration [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql)과 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 durable C overlay/Goal snapshot 및 append-only routing-evidence storage를 제공합니다. Production selector/native-admission wiring, fixed-model pin migration, host-tool write/effect 및 live acceptance는 없습니다. 따라서 native admission은 여전히 정확히 하나의 `modelPolicy` identity를 받으며, 필요한 경우 `MAESTRO_NATIVE_MODEL`은 명시적 fixed-model pin/routing-off 입력으로 남습니다.
+routing artifact와, worker admission에 실제로 배선된 production selector(기본 routing mode)가 모두 존재합니다. A/D/E domain contract, B provider-facts domain/wire schema, 순수 Goal snapshot helper를 포함한 C operational-overlay domain/wire schema, 4개 pressure-band domain/wire schema 및 human-owned `config/model_map.json` baseline이 있습니다. [`routing-selector.ts`](../../packages/domain/src/routing-selector.ts)가 A↔D weakest-link 검사와 B/C hard filter를 갖는 pure selector를 제공합니다. Persistence migration [`0072_ensemble_router_artifacts.sql`](../../packages/persistence/migrations/0072_ensemble_router_artifacts.sql)과 [`ensemble-router-artifacts.ts`](../../packages/persistence/src/ensemble-router-artifacts.ts)가 durable C overlay/Goal snapshot 및 append-only routing-evidence storage를 제공합니다. Production selector/native-admission wiring은 구현되어 있습니다(`apps/control-plane/src/composition/execution-services.ts`의 `composeExecutionServices`, `apps/control-plane/src/worker-service.ts`의 `assertWorkerRoutingMode`/`resolveWorkerModelForRouting`). fixed-model pin migration과 live acceptance는 아직 없습니다. `MAESTRO_MODEL_ROUTING_MODE=pin`과 `MAESTRO_NATIVE_MODEL`은 필요한 경우 명시적 fixed-model pin/routing-off 입력으로 남습니다.
 
 ## 4. 저장소 구조 개요 (Repository Layout Overview)
 
