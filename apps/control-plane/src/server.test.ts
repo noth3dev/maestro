@@ -548,6 +548,87 @@ describe("SSE stream lifecycle", () => {
   });
 });
 
+describe("conversation stream lifecycle", () => {
+  const conversationId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03";
+
+  function fakeConversations(overrides: Record<string, unknown> = {}) {
+    return {
+      listModels: vi.fn(async () => []),
+      create: vi.fn(),
+      get: vi.fn(),
+      turn: vi.fn(),
+      cancel: vi.fn(),
+      listEvents: vi.fn(async () => []),
+      ...overrides,
+    };
+  }
+
+  async function expectCleanShutdown(app: { close: () => Promise<unknown> }) {
+    await Promise.race([
+      app.close(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("server close hung with an open stream")), 10_000)),
+    ]);
+  }
+
+  it("cleans up a conversation events stream on client abort", async () => {
+    const scheduled: Array<() => void> = [];
+    const scheduler = {
+      setInterval: vi.fn((tick: () => void) => {
+        scheduled.push(tick);
+        return tick;
+      }),
+      clearInterval: vi.fn((tick: () => void) => {
+        scheduled.splice(scheduled.indexOf(tick), 1);
+      }),
+    };
+    const listEvents = vi.fn(async () => []);
+    const app = buildServer({
+      goalService: fakeService(),
+      authenticator: authenticated(),
+      conversationService: fakeConversations({ listEvents }),
+      pollingScheduler: scheduler,
+    });
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.address();
+    if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
+    const response = await openSse(`http://127.0.0.1:${address.port}/v1/conversations/${conversationId}/events/stream?projectId=${goal.projectId}`);
+    response.resume();
+    const closed = once(response, "close");
+    response.destroy();
+    await closed;
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    expect(scheduler.clearInterval).toHaveBeenCalledTimes(2);
+    expect(scheduled).toEqual([]);
+    const callsBefore = listEvents.mock.calls.length;
+    await expectCleanShutdown(app);
+    expect(listEvents.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("cleans up a conversation activity stream on client abort", async () => {
+    const scheduler = { setInterval: vi.fn(() => ({})), clearInterval: vi.fn() };
+    const unsubscribe = vi.fn();
+    const subscribeActivity = vi.fn(async () => unsubscribe);
+    const app = buildServer({
+      goalService: fakeService(),
+      authenticator: authenticated(),
+      conversationService: fakeConversations({ subscribeActivity }),
+      pollingScheduler: scheduler,
+    });
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const address = app.server.address();
+    if (address === null || typeof address === "string") throw new Error("Expected TCP listener");
+    const response = await openSse(`http://127.0.0.1:${address.port}/v1/conversations/${conversationId}/activity/stream?projectId=${goal.projectId}`);
+    response.resume();
+    const closed = once(response, "close");
+    response.destroy();
+    await closed;
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(scheduler.clearInterval).toHaveBeenCalledOnce();
+    await expectCleanShutdown(app);
+  });
+});
+
 function openSse(url: string): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(url, { headers: { authorization: "Bearer test-secret" } });
