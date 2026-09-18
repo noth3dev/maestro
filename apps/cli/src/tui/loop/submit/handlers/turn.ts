@@ -150,7 +150,7 @@ export async function handleNaturalLanguageTurn(c: TuiController, text: string, 
         if (c.conversationTurnBoundary.isCurrent(turnGeneration) && c.conversationDisplayBoundary.isCurrent(displayGeneration)) {
           c.conversation = applyConversationEvent(c.conversation, terminalEvent);
           if (c.terminal.rows < 16) {
-            c.compactConversationResult = compactConversationAcknowledgement(c.conversation, c.terminal.columns);
+            c.compactConversationResult = compactConversationAcknowledgement(c.conversation, c.contentWidth());
             c.compactCommandResult = undefined;
             c.compactTaskContractReview = false;
           }

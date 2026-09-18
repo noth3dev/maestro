@@ -67,7 +67,7 @@ export async function handleSessionCommand(c: TuiController, parsed: ParsedComma
     c.compactProjectNotice = undefined;
     c.view.syncProjectPresentation();
     c.recovery = reconcileTuiSession(c.sessionWorkspacePath, c.session);
-    c.view.append(renderRecoveryBanner(c.recovery, c.terminal.columns).join(" · "));
+    c.view.append(renderRecoveryBanner(c.recovery, c.contentWidth()).join(" · "));
     void c.refreshDashboard();
     c.activitySync.restartActivity();
     const project = c.project;
@@ -81,7 +81,7 @@ export async function handleSessionCommand(c: TuiController, parsed: ParsedComma
     c.view.append(
       current === undefined
         ? "Session: no saved workspace session"
-        : renderRecoveryBanner(reconcileTuiSession(c.sessionWorkspacePath, current), c.terminal.columns).join(" · "),
+        : renderRecoveryBanner(reconcileTuiSession(c.sessionWorkspacePath, current), c.contentWidth()).join(" · "),
     );
   } else {
     c.view.appendWarning(`Command: /session ${parsed.action ?? ""} (unknown session action)`.trim());

@@ -1,10 +1,21 @@
-import { Box, CombinedAutocompleteProvider, ProcessTerminal, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
-import type { GoalEvent } from "@maestro/api-client";
+import { Box, CombinedAutocompleteProvider, HStack, ProcessTerminal, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
+import type { ChannelRead, GoalEvent, GoalResult } from "@maestro/api-client";
 import type { TaskContract } from "@maestro/contracts";
 import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
+import { activateSidebarRow, NAV_ROWS, resolveSidebarGoalClick, resolveSidebarNavClick } from "../components/sidebar-nav.js";
+import {
+  activateSidebarChannel,
+  loadSidebarChannels,
+  renderChannelSections,
+  resolveSidebarChannelClick,
+  sidebarChannelSyncAction,
+} from "../components/sidebar-channels.js";
+import { createClickRegion } from "../components/mouse.js";
+import { renderStatusSection, sidebarNavBadges, toSidebarStatus } from "../components/shell.js";
+import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -23,6 +34,7 @@ import { renderUnifiedStreamEntries } from "../conversation-transcript.js";
 import type { ConversationTranscriptState } from "../conversation-transcript.js";
 import { createConversationTranscript } from "../conversation-transcript.js";
 import { workspaceIdentity } from "../workspace.js";
+import { selectedConversationGoalId } from "../dashboard-state.js";
 import { refreshDashboardState } from "../dashboard-refresh.js";
 import { readDashboard } from "../commands/read-commands.js";
 import type { InteractiveTuiOptions } from "../startup.js";
@@ -81,6 +93,19 @@ export class TuiController {
   compactTaskContractReview = false;
   compactProjectNotice: string | undefined;
   lastRenderedTerminalRows: number;
+  sidebarVisible = true;
+  sidebarFocus: string | undefined = undefined;
+  /** Dashboard goal cache backing the sidebar goals section (setRecovery only). */
+  sidebarGoals: GoalResult[] = [];
+  /** Roster cache backing the sidebar channels section, tagged by goal. */
+  sidebarChannels: ChannelRead[] = [];
+  sidebarChannelGoalId: string | undefined = undefined;
+  sidebarChannelsGeneration = 0;
+
+  /** Main-pane width: full terminal minus the visible sidebar. */
+  contentWidth(): number {
+    return contentWidth(this.terminal.columns, this.sidebarVisible);
+  }
 
   conversation: ConversationTranscriptState = createConversationTranscript();
   draftedTaskContract: TaskContract | undefined = undefined;
@@ -207,9 +232,41 @@ export class TuiController {
           ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }),
           ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }),
         });
+        this.sidebarGoals = dashboard.goals;
       },
       render: this.view.render,
     });
+  };
+
+  /**
+   * Refill the channel roster for the currently selected goal. Always fetches
+   * (callers decide when): the render-time tag sync fires on goal changes and
+   * the refresh row fires on demand. Stale winners keep old rows silently;
+   * total failure keeps old rows and warns.
+   */
+  refreshSidebarChannels = async (): Promise<void> => {
+    const generation = ++this.sidebarChannelsGeneration;
+    const { client, project } = this;
+    const goalId = selectedConversationGoalId(this.state.goal, this.session?.goalId);
+    if (client === undefined || project.kind !== "attached" || goalId === undefined) return;
+    const requestClient = client;
+    const requestProjectId = project.projectId;
+    const isCurrent = (): boolean =>
+      !this.stopped &&
+      generation === this.sidebarChannelsGeneration &&
+      this.client === requestClient &&
+      this.project.kind === "attached" &&
+      this.project.projectId === requestProjectId;
+    try {
+      const reads = await loadSidebarChannels({ client, projectId: requestProjectId, goalId, isCurrent });
+      if (reads === undefined) return;
+      this.sidebarChannels = reads;
+      this.sidebarChannelGoalId = goalId;
+    } catch {
+      if (!isCurrent()) return;
+      this.view.appendWarning("Channel roster unavailable · select refresh to retry");
+    }
+    this.view.render();
   };
 
   confirm = (summary: CriticalActionSummary): Promise<ConfirmationResult> =>
@@ -248,7 +305,7 @@ export class TuiController {
     });
     const noticeRegion = createDynamicRegion(() => {
       if (terminal.rows < 16 && this.accountLoginSelection === undefined) return [];
-      return terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, terminal.columns)];
+      return terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, this.contentWidth())];
     });
     // Clickable provider-login options: selecting a row is the same action as
     // the up/down keys; Enter still confirms and starts the flow.
@@ -265,38 +322,83 @@ export class TuiController {
       },
     });
     this.header.setOrderedStreamRenderer(() =>
-      renderUnifiedStreamEntries(this.conversation, this.activity.slice(this.visibleActivityStart), terminal.columns),
+      renderUnifiedStreamEntries(this.conversation, this.activity.slice(this.visibleActivityStart), this.contentWidth()),
     );
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, this.footer]);
+    const sidebarLines = (width: number) => {
+      const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
+      // Render-time tag sync (the dynamic-region precedent in view.ts
+      // buildInputLabel): a goal change clears the old roster and fires one
+      // fetch — the synchronous tag update is the whole dedup mechanism.
+      const sync = sidebarChannelSyncAction(this.sidebarChannelGoalId, goalId);
+      if (sync === "clear") {
+        this.sidebarChannelGoalId = undefined;
+        this.sidebarChannels = [];
+      } else if (sync === "fetch") {
+        this.sidebarChannelGoalId = goalId;
+        this.sidebarChannels = [];
+        void this.refreshSidebarChannels();
+      }
+      const channelSections = renderChannelSections(this.sidebarChannels, this.sidebarFocus);
+      const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
+      return renderSidebar(width, [
+        ...renderStatusSection(toSidebarStatus(state), width),
+        renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state)),
+        ...channelSections,
+        ...(goalSection === undefined ? [] : [goalSection]),
+        renderFooterSection(),
+      ]);
+    };
+    const sidebarRegion = createClickRegion({
+      lines: sidebarLines,
+      resolve: (lines, x, y) =>
+        resolveSidebarNavClick(lines, x, y) ??
+        resolveSidebarGoalClick(lines, this.sidebarGoals, x, y) ??
+        resolveSidebarChannelClick(lines, this.sidebarChannels, x, y),
+      onAction: (id) => {
+        activateSidebarRow(this, id);
+        activateSidebarChannel(this, id);
+      },
+    });
+    const mainColumn = new VStack([
+      { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
+      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
+      { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+      {
+        component: approvalClickRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => this.pendingConfirmation !== undefined && terminal.rows >= 16,
+      },
+      {
+        component: noticeRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => terminal.rows >= 16 || this.accountLoginSelection !== undefined,
+      },
+      {
+        component: providerLoginClickRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
+      },
+      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+    ]);
     tui.setLayoutRoot(
-      new VStack([
-        { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
-        { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
-        { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
+      new HStack([
         {
-          component: approvalClickRegion,
-          basis: "auto",
+          component: sidebarRegion,
+          basis: SIDEBAR_WIDTH,
           shrink: 0,
           minSize: 0,
-          visible: () => this.pendingConfirmation !== undefined && terminal.rows >= 16,
+          visible: () => isSidebarVisible(this.sidebarVisible, terminal.columns),
         },
-        {
-          component: noticeRegion,
-          basis: "auto",
-          shrink: 0,
-          minSize: 0,
-          visible: () => terminal.rows >= 16 || this.accountLoginSelection !== undefined,
-        },
-        {
-          component: providerLoginClickRegion,
-          basis: "auto",
-          shrink: 0,
-          minSize: 0,
-          visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
-        },
-        { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+        { component: mainColumn, basis: 0, grow: 1, minSize: 0 },
       ]),
     );
     tui.setFocus(this.editor);

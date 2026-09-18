@@ -52,6 +52,7 @@ function fakeHost(summary: typeof fullSummary): ApprovalDialogHost & { resolve: 
     pendingConfirmation: { summary, resolve },
     compactReview: undefined,
     terminal: { columns: 100, rows: 30 },
+    contentWidth: () => 100,
     view: { append: vi.fn(), appendWarning: vi.fn(), render: vi.fn(), syncPendingDecisionState: vi.fn() },
     resolve,
   };

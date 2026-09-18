@@ -30,7 +30,7 @@ export class SubmitDispatcher {
     }
     if (shouldBlockPendingConfirmationSubmit(text, c.pendingConfirmation !== undefined)) {
       c.editor.setText(text);
-      c.view.appendWarning(approvalPendingAcknowledgement(c.terminal.columns));
+      c.view.appendWarning(approvalPendingAcknowledgement(c.contentWidth()));
       c.view.render();
       return;
     }
@@ -61,7 +61,7 @@ export class SubmitDispatcher {
       ) {
         await handleShellCommand(c, parsed);
       } else if (parsed.kind === "command" && parsed.name === "help") {
-        c.compactHelp = c.terminal.rows < 16 ? compactHelpAcknowledgement(c.terminal.columns) : undefined;
+        c.compactHelp = c.terminal.rows < 16 ? compactHelpAcknowledgement(c.contentWidth()) : undefined;
         dispatchCommandPaletteInput("help", c.view.append);
       } else if (
         parsed.kind === "command" &&

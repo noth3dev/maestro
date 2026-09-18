@@ -3,6 +3,9 @@ import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
+import { isSidebarVisible, toggleSidebar } from "../components/sidebar.js";
+import { activateSidebarRow, isSidebarNavActive, moveSidebarFocus, NAV_ROWS, sidebarFocusRows } from "../components/sidebar-nav.js";
+import { activateSidebarChannel, channelRowKey } from "../components/sidebar-channels.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -122,6 +125,42 @@ export class LifecycleHandler {
       return { consume: true };
     }
     if (dispatchCommandPaletteInput(data, c.view.append)) return { consume: true };
+    if (matchesKey(data, "ctrl+b")) {
+      toggleSidebar(c, NAV_ROWS);
+      return { consume: true };
+    }
+    // The focus block also requires effective visibility: a focused but
+    // narrowed sidebar keeps its focus value (widening restores seamlessly)
+    // while keys fall through to the existing global handling below.
+    if (isSidebarNavActive(c) && isSidebarVisible(c.sidebarVisible, c.terminal.columns)) {
+      if (matchesKey(data, "up") || matchesKey(data, "down")) {
+        c.sidebarFocus = moveSidebarFocus(
+          c.sidebarFocus,
+          matchesKey(data, "up") ? -1 : 1,
+          sidebarFocusRows(c.sidebarGoals, c.sidebarChannels.map((read) => channelRowKey(read))),
+        );
+        c.view.render();
+        return { consume: true };
+      }
+      if (matchesKey(data, "enter")) {
+        if (c.sidebarFocus !== undefined) {
+          activateSidebarRow(c, c.sidebarFocus);
+          activateSidebarChannel(c, c.sidebarFocus);
+        }
+        return { consume: true };
+      }
+      if (matchesKey(data, "escape")) {
+        c.sidebarFocus = undefined;
+        c.view.render();
+        return { consume: true };
+      }
+      // Control keys keep their existing global behavior (cancel, shortcuts):
+      // execution falls out of this block to the branches below. Only
+      // printable input is swallowed so typing never reaches the editor while
+      // sidebar focus is shown. Compares bytes, never key names, so no
+      // control-byte literal is needed here.
+      if (data.charCodeAt(0) !== 27 && !(data.length === 1 && data < " ")) return { consume: true };
+    }
     if (matchesKey(data, "ctrl+g")) {
       void c.submitter.submit("/goals list");
       return { consume: true };
@@ -194,8 +233,8 @@ export class LifecycleHandler {
     }
     if (matchesKey(data, "ctrl+a") && c.pendingConfirmation === undefined && (c.state.pendingDecisions?.length ?? 0) > 0) {
       c.compactReview =
-        c.terminal.rows < 16 ? compactReviewAcknowledgement(undefined, c.state.pendingDecisions ?? [], c.terminal.columns) : undefined;
-      c.view.append(renderPendingDecisionDetails(c.state, c.terminal.columns).join("\n"));
+        c.terminal.rows < 16 ? compactReviewAcknowledgement(undefined, c.state.pendingDecisions ?? [], c.contentWidth()) : undefined;
+      c.view.append(renderPendingDecisionDetails(c.state, c.contentWidth()).join("\n"));
       return { consume: true };
     }
     if (c.pendingConfirmation !== undefined && data === "?") {
