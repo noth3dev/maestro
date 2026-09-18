@@ -9,8 +9,8 @@
     }
   },
   "dependencies": {
-    "@maestro/authority": "file:../authority",
-    "@maestro/domain": "file:../domain"
+    "@maestro/authority": "*",
+    "@maestro/domain": "*"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts"

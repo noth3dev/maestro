@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
 import { createLocalGitPort } from "@maestro/git-adapter";
@@ -16,7 +15,6 @@ import {
   assertProjectMembership,
   bootstrapPermanentOrganization,
   createPostgresAccountLoginStore,
-  createPostgresSettingsService,
   listProjectMemberships,
   listPermanentOrganization,
   listGoalEvents,
@@ -41,6 +39,7 @@ import type { NativeAdmissionInput } from "./native-admission.js";
 import { createControlPlaneIpPythonSessions } from "./composition/sessions.js";
 import { composeFoundationServices } from "./composition/foundation-services.js";
 import { composeExecutionServices } from "./composition/execution-services.js";
+import { composeProviderCredentials, composeSettingsService } from "./composition/provider-access.js";
 import { inspectIpPythonProcessOutcome } from "./composition/ipython.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
@@ -151,6 +150,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     metronomeService,
     encoreService,
   } = composeExecutionServices({ pool, config, overrides, withGoalLease, executionKernel, authorityExecutor, modelGateway });
+  const providerCredentials = composeProviderCredentials({ pool, config, modelGateway });
   const app = buildServer({
     goalService,
     headParticipationService,
@@ -166,108 +166,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
-    settingsService: createPostgresSettingsService({
-      pool,
-      models: {
-        list: async () => {
-          const mapPath = resolve(process.cwd(), "config/model_map.json");
-          try {
-            const parsed = JSON.parse(readFileSync(mapPath, "utf8")) as {
-              entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }>;
-            };
-            return (parsed.entries ?? [])
-              .filter(
-                (entry): entry is { modelRef: string; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } } =>
-                  typeof entry.modelRef === "string",
-              )
-              .map((entry) => {
-                const values = Object.values(entry.capability?.axes ?? {}).flatMap((axis) =>
-                  axis.status === "scored" && typeof axis.score === "number" ? [axis.score] : [],
-                );
-                return {
-                  modelRef: entry.modelRef,
-                  score: values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length,
-                };
-              });
-          } catch {
-            return [];
-          }
-        },
-      },
-      providers: {
-        list: async () => {
-          if (modelGateway?.listModels === undefined) return [];
-          const models = await modelGateway.listModels({ operatorId: config.modelGatewayOperatorId });
-          const providers = new Map<string, Set<"api-key" | "managed-subscription">>();
-          for (const model of models) {
-            const modes = providers.get(model.identity.provider) ?? new Set<"api-key" | "managed-subscription">();
-            for (const mode of model.authModes) modes.add(mode);
-            providers.set(model.identity.provider, modes);
-          }
-          return [...providers.entries()].map(([providerId, modes]) => ({ providerId, connected: true, authModes: [...modes] }));
-        },
-      },
-    }),
+    settingsService: composeSettingsService({ pool, config, modelGateway }),
     ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),
-    // The Model Gateway process authenticates one fixed gateway-level
-    // operator identity (config.modelGatewayOperatorId), matching exactly
-    // how native admission already calls gateway.admit() with
-    // gatewayOperatorId rather than the calling end-user's own operator ID
-    // (apps/control-plane/src/native-execution-kernel.ts). Provider
-    // credentials and managed logins are shared per Control-Plane process,
-    // not per individual Maestro operator; the real end-user's identity and
-    // authorization remain enforced entirely by Maestro's own persistence
-    // layer (accountLoginStore, project membership, roles), which still
-    // receives and scopes by the real operatorId untouched. Forwarding the
-    // real end-user operatorId to the gateway's own operatorId-equality
-    // check instead of this fixed constant made every credential bind and
-    // every account-login call fail closed with "credential operator
-    // context mismatch" for any authenticated operator whose ID is not
-    // literally equal to the configured gateway operator ID -- i.e. always,
-    // for every real multi-operator deployment.
-    ...(modelGateway === undefined || modelGateway.bindCredential === undefined || modelGateway.revokeCredential === undefined
-      ? {}
-      : {
-          providerCredentials: {
-            bind: (input: {
-              operatorId: string;
-              requestId: string;
-              providerId: "openai" | "anthropic";
-              authMode: "api-key";
-              secret: string;
-            }) => modelGateway.bindCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
-            revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) =>
-              modelGateway.revokeCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
-            list: async () => {
-              const models = await modelGateway.listModels({ operatorId: config.modelGatewayOperatorId });
-              const providers = new Map<string, Set<"api-key" | "managed-subscription">>();
-              for (const model of models) {
-                const modes = providers.get(model.identity.provider) ?? new Set<"api-key" | "managed-subscription">();
-                for (const mode of model.authModes) modes.add(mode);
-                providers.set(model.identity.provider, modes);
-              }
-              return [...providers.entries()].map(([providerId, modes]) => ({ providerId, connected: true, authModes: [...modes] }));
-            },
-            ...(modelGateway.startAccountLogin === undefined ||
-            modelGateway.accountLoginStatus === undefined ||
-            modelGateway.cancelAccountLogin === undefined
-              ? {}
-              : {
-                  startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) =>
-                    modelGateway.startAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
-                  accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) =>
-                    modelGateway.accountLoginStatus!({ ...input, operatorId: config.modelGatewayOperatorId }),
-                  cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) =>
-                    modelGateway.cancelAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
-                  ...(modelGateway.logoutAccount === undefined
-                    ? {}
-                    : {
-                        logoutAccount: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) =>
-                          modelGateway.logoutAccount!({ ...input, operatorId: config.modelGatewayOperatorId }),
-                      }),
-                }),
-          },
-        }),
+    ...(providerCredentials === undefined ? {} : { providerCredentials }),
     criticalActionService,
     inboxService: {
       listPendingApprovals: async (projectId) => ({
