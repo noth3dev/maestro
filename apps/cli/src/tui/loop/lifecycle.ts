@@ -1,0 +1,240 @@
+import { matchesKey } from "@earendil-works/pi-tui";
+import { copyToClipboard } from "../../external-url.js";
+import { dispatchCommandPaletteInput } from "../commands/palette.js";
+import { renderApprovalDialog } from "../components/approval-dialog.js";
+import { nextApprovalDialogScope, type ConfirmationResult } from "../confirmation.js";
+import { cancelConversationTurn } from "../conversation-cancellation.js";
+import {
+  isSplashRestoreShortcut,
+  shouldCancelPendingProviderLogin,
+  shouldConsumeAccountLoginBackgroundInput,
+  shouldConsumeAccountLoginSelectingBackgroundInput,
+  shouldConsumePendingProviderLoginBackgroundInput,
+  shouldConsumeProviderLoginInFlightBackgroundInput,
+  compactReviewAcknowledgement,
+} from "../entry-helpers.js";
+import { renderPendingDecisionDetails } from "../components/shell.js";
+import type { TuiController } from "./controller.js";
+
+export class LifecycleHandler {
+  constructor(private c: TuiController) {}
+
+  stop = (): void => {
+    const c = this.c;
+    if (c.stopped) return;
+    c.stopped = true;
+    c.invalidateDashboardRefreshes();
+    c.conversationTurnBoundary.invalidate();
+    c.conversationDisplayBoundary.clear();
+    c.naturalSubmitInFlight = false;
+    c.providerLoginGeneration += 1;
+    c.providerLoginInFlight = false;
+    c.providerLoginInFlightProvider = undefined;
+    c.pendingConfirmation?.resolve("cancelled");
+    c.pendingConfirmation = undefined;
+    c.view.syncPendingDecisionState();
+    c.activityController?.abort();
+    c.conversationTurnController?.abort();
+    c.conversationStreamController?.abort();
+    c.conversationActivityController?.abort();
+    if (c.workingLoaderTimer !== undefined) clearInterval(c.workingLoaderTimer);
+    c.accountLoginController?.abort();
+    if (c.accountLoginId !== undefined && c.client !== undefined) void c.client.cancelAccountLogin(c.accountLoginId).catch(() => undefined);
+    c.flashmobAnimationId += 1;
+    c.tui.stop();
+    c.finish(0);
+  };
+
+  cancelActiveConversation = (): boolean => {
+    const c = this.c;
+    const cancelled = cancelConversationTurn({
+      controller: c.conversationTurnController,
+      client: c.client,
+      projectId: c.project.kind === "attached" ? c.project.projectId : undefined,
+      conversationId: c.session?.conversationId,
+      onWarning: c.view.appendWarning,
+      onError: c.view.appendError,
+    });
+    if (!cancelled) return false;
+    c.conversationTurnBoundary.invalidate();
+    c.conversationTurnController = undefined;
+    c.conversationActivityController?.abort();
+    c.conversationActivityController = undefined;
+    if (c.workingLoaderTimer !== undefined) {
+      clearInterval(c.workingLoaderTimer);
+      c.workingLoaderTimer = undefined;
+    }
+    c.state.working = false;
+    delete c.state.workingSince;
+    delete c.state.workingTick;
+    delete c.state.conversationActivity;
+    c.view.render();
+    return true;
+  };
+
+  handleInput = (data: string): { consume: boolean } | undefined => {
+    const c = this.c;
+    if (
+      shouldConsumePendingProviderLoginBackgroundInput(c.pendingProviderLogin, data) ||
+      shouldConsumeProviderLoginInFlightBackgroundInput(c.providerLoginInFlight, data)
+    )
+      return { consume: true };
+    const reviewShortcut = matchesKey(data, "ctrl+a");
+    const reviewAvailable = c.pendingConfirmation !== undefined || (c.state.pendingDecisions?.length ?? 0) > 0;
+    if (c.compactHelp !== undefined) {
+      c.compactHelp = undefined;
+      c.view.render();
+    }
+    if (c.compactModelList !== undefined) {
+      c.compactModelList = undefined;
+      c.view.render();
+    }
+    if (c.compactTaskContractReview) {
+      c.compactTaskContractReview = false;
+      c.view.render();
+    }
+    if (c.compactConversationResult !== undefined) {
+      c.compactConversationResult = undefined;
+      c.view.render();
+    }
+    if (c.compactCommandResult !== undefined) {
+      c.compactCommandResult = undefined;
+      c.view.render();
+    }
+    if (c.compactReview !== undefined && (!reviewShortcut || !reviewAvailable)) {
+      c.compactReview = undefined;
+      c.view.render();
+    }
+    if (
+      shouldConsumeAccountLoginBackgroundInput(
+        c.accountLoginState,
+        matchesKey(data, "ctrl+c"),
+        matchesKey(data, "escape"),
+        matchesKey(data, "alt+c"),
+      )
+    ) {
+      return { consume: true };
+    }
+    if (shouldConsumeAccountLoginSelectingBackgroundInput(c.accountLoginState, data)) return { consume: true };
+    if (isSplashRestoreShortcut(data)) {
+      c.splash.restore();
+      c.tui.requestRender(true);
+      return { consume: true };
+    }
+    if (dispatchCommandPaletteInput(data, c.view.append)) return { consume: true };
+    if (matchesKey(data, "ctrl+g")) {
+      void c.submitter.submit("/goals list");
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+e")) {
+      void c.submitter.submit("/events list");
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+r")) {
+      void c.submitter.submit("/session retry");
+      return { consume: true };
+    }
+    if (matchesKey(data, "escape") && this.cancelActiveConversation()) return { consume: true };
+    if (matchesKey(data, "ctrl+c")) {
+      if (this.cancelActiveConversation()) return { consume: true };
+      this.stop();
+      return { consume: true };
+    }
+    if (matchesKey(data, "escape") && shouldCancelPendingProviderLogin(c.pendingProviderLogin)) {
+      c.pendingProviderLogin = undefined;
+      c.editor.hidden = false;
+      c.editor.setText("");
+      c.view.appendWarning("Provider login cancelled.");
+      c.view.render();
+      return { consume: true };
+    }
+    if (c.accountLoginSelection !== undefined && c.accountLoginState === "opening" && matchesKey(data, "escape")) {
+      c.auth.cancelAccountLogin();
+      c.view.appendWarning("Account login cancelled.");
+      return { consume: true };
+    }
+    if (c.accountLoginSelection !== undefined && c.accountLoginState === "selecting") {
+      if (matchesKey(data, "up") || matchesKey(data, "down")) {
+        c.accountLoginSelection = c.accountLoginSelection === 0 ? 1 : 0;
+        c.view.render();
+        return { consume: true };
+      }
+      if (matchesKey(data, "escape")) {
+        c.auth.cancelAccountLogin();
+        return { consume: true };
+      }
+      if (matchesKey(data, "enter")) {
+        void c.auth.startAccountLogin();
+        return { consume: true };
+      }
+      return { consume: true };
+    }
+    if (c.accountLoginSelection !== undefined && c.accountLoginState === "waiting" && matchesKey(data, "alt+c")) {
+      const url = c.accountLoginUrl;
+      if (url === undefined) c.view.appendWarning("The provider login link is not ready yet.");
+      else {
+        void (c.options.io.copyToClipboard ?? copyToClipboard)(url)
+          .then(() => c.view.appendSuccess("Provider login link copied to the clipboard."))
+          .catch(() => c.view.appendWarning(`Clipboard unavailable. Copy this provider login link: ${url}`));
+      }
+      return { consume: true };
+    }
+    if (c.accountLoginSelection !== undefined && c.accountLoginState === "waiting" && matchesKey(data, "escape")) {
+      c.auth.cancelAccountLogin();
+      c.view.appendWarning("Account login cancelled.");
+      return { consume: true };
+    }
+    if (
+      c.pendingConfirmation !== undefined &&
+      (matchesKey(data, "up") || matchesKey(data, "down")) &&
+      c.pendingConfirmation.summary.repetitionScope !== undefined
+    ) {
+      c.pendingConfirmation = {
+        ...c.pendingConfirmation,
+        summary: {
+          ...c.pendingConfirmation.summary,
+          repetitionScope: nextApprovalDialogScope(c.pendingConfirmation.summary.repetitionScope, matchesKey(data, "up") ? -1 : 1),
+        },
+      };
+      c.view.render();
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+a") && c.pendingConfirmation !== undefined) {
+      c.compactReview =
+        c.terminal.rows < 16 ? compactReviewAcknowledgement(c.pendingConfirmation.summary, [], c.terminal.columns) : undefined;
+      c.view.append(renderApprovalDialog(c.pendingConfirmation.summary, c.terminal.columns).join("\n"));
+      return { consume: true };
+    }
+    if (matchesKey(data, "ctrl+a") && c.pendingConfirmation === undefined && (c.state.pendingDecisions?.length ?? 0) > 0) {
+      c.compactReview =
+        c.terminal.rows < 16 ? compactReviewAcknowledgement(undefined, c.state.pendingDecisions ?? [], c.terminal.columns) : undefined;
+      c.view.append(renderPendingDecisionDetails(c.state, c.terminal.columns).join("\n"));
+      return { consume: true };
+    }
+    if (c.pendingConfirmation !== undefined && data === "?") {
+      const { summary } = c.pendingConfirmation;
+      c.view.appendWarning(
+        `Approval tier: ${summary.tier === "user" ? "You" : (summary.tier ?? "You")}; scope: ${summary.repetitionScope ?? "once"}. Reject proposes: ${summary.saferAlternative ?? "a safer alternative"}`,
+      );
+      return { consume: true };
+    }
+    if (
+      c.pendingConfirmation !== undefined &&
+      (data === "y" || data === "Y" || data === "n" || data === "N" || data === "\r" || data === "\u001b")
+    ) {
+      const decision: ConfirmationResult =
+        data === "y" || data === "Y"
+          ? c.pendingConfirmation.summary.repetitionScope === undefined
+            ? "approved"
+            : { decision: "approved", repetitionScope: c.pendingConfirmation.summary.repetitionScope }
+          : "cancelled";
+      const resolveConfirmation = c.pendingConfirmation.resolve;
+      c.pendingConfirmation = undefined;
+      c.view.syncPendingDecisionState();
+      resolveConfirmation(decision);
+      c.view.render();
+      return { consume: true };
+    }
+    return undefined;
+  };
+}
