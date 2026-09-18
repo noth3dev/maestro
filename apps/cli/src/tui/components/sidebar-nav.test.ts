@@ -179,6 +179,17 @@ describe("sidebar focus rows", () => {
     const many = Array.from({ length: 9 }, (_, index) => ({ goalId: `goal-${index}` }));
     expect(sidebarFocusRows(many).length).toBe(6 + 5);
   });
+
+  it("orders channel rows between nav and goal rows with a shared cap", () => {
+    const ids = sidebarFocusRows([{ goalId: "goal-1" }], ["channel:department:engineering", "channel:organization:general"]).map(
+      (row) => row.id,
+    );
+    expect(ids.slice(0, 6)).toEqual(["home", "inbox", "channel", "evlog", "billing", "luthiery"]);
+    expect(ids.slice(6, 8)).toEqual(["channel:department:engineering", "channel:organization:general"]);
+    expect(ids[8]).toBe("goal-1");
+    const many = Array.from({ length: 12 }, (_, index) => `channel:department:dept-${index}`);
+    expect(sidebarFocusRows([], many).length).toBe(6 + 8);
+  });
 });
 
 describe("resolveSidebarGoalClick", () => {

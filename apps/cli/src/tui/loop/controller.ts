@@ -1,11 +1,18 @@
 import { Box, CombinedAutocompleteProvider, HStack, ProcessTerminal, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
-import type { GoalEvent, GoalResult } from "@maestro/api-client";
+import type { ChannelRead, GoalEvent, GoalResult } from "@maestro/api-client";
 import type { TaskContract } from "@maestro/contracts";
 import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
 import { activateSidebarRow, NAV_ROWS, resolveSidebarGoalClick, resolveSidebarNavClick } from "../components/sidebar-nav.js";
+import {
+  activateSidebarChannel,
+  loadSidebarChannels,
+  renderChannelSection,
+  resolveSidebarChannelClick,
+  sidebarChannelSyncAction,
+} from "../components/sidebar-channels.js";
 import { createClickRegion } from "../components/mouse.js";
 import { pendingCount, renderStatusSection, toSidebarStatus } from "../components/shell.js";
 import { contentWidth, isSidebarVisible, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
@@ -90,6 +97,10 @@ export class TuiController {
   sidebarFocus: string | undefined = undefined;
   /** Dashboard goal cache backing the sidebar goals section (setRecovery only). */
   sidebarGoals: GoalResult[] = [];
+  /** Roster cache backing the sidebar channels section, tagged by goal. */
+  sidebarChannels: ChannelRead[] = [];
+  sidebarChannelGoalId: string | undefined = undefined;
+  sidebarChannelsGeneration = 0;
 
   /** Main-pane width: full terminal minus the visible sidebar. */
   contentWidth(): number {
@@ -227,6 +238,37 @@ export class TuiController {
     });
   };
 
+  /**
+   * Refill the channel roster for the currently selected goal. Always fetches
+   * (callers decide when): the render-time tag sync fires on goal changes and
+   * the refresh row fires on demand. Stale winners keep old rows silently;
+   * total failure keeps old rows and warns.
+   */
+  refreshSidebarChannels = async (): Promise<void> => {
+    const generation = ++this.sidebarChannelsGeneration;
+    const { client, project } = this;
+    const goalId = selectedConversationGoalId(this.state.goal, this.session?.goalId);
+    if (client === undefined || project.kind !== "attached" || goalId === undefined) return;
+    const requestClient = client;
+    const requestProjectId = project.projectId;
+    const isCurrent = (): boolean =>
+      !this.stopped &&
+      generation === this.sidebarChannelsGeneration &&
+      this.client === requestClient &&
+      this.project.kind === "attached" &&
+      this.project.projectId === requestProjectId;
+    try {
+      const reads = await loadSidebarChannels({ client, projectId: requestProjectId, goalId, isCurrent });
+      if (reads === undefined) return;
+      this.sidebarChannels = reads;
+      this.sidebarChannelGoalId = goalId;
+    } catch {
+      if (!isCurrent()) return;
+      this.view.appendWarning("Channel roster unavailable · select refresh to retry");
+    }
+    this.view.render();
+  };
+
   confirm = (summary: CriticalActionSummary): Promise<ConfirmationResult> =>
     new Promise((resolveConfirmation) => {
       this.pendingConfirmation = { summary, resolve: resolveConfirmation };
@@ -287,22 +329,37 @@ export class TuiController {
     const dock = new VStack([composer, this.footer]);
     const sidebarLines = (width: number) => {
       const pending = pendingCount(state);
-      const goalSection = renderGoalSection(
-        this.sidebarGoals,
-        selectedConversationGoalId(state.goal, this.session?.goalId),
-        this.sidebarFocus,
-      );
+      const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
+      // Render-time tag sync (the dynamic-region precedent in view.ts
+      // buildInputLabel): a goal change clears the old roster and fires one
+      // fetch — the synchronous tag update is the whole dedup mechanism.
+      const sync = sidebarChannelSyncAction(this.sidebarChannelGoalId, goalId);
+      if (sync === "clear") {
+        this.sidebarChannelGoalId = undefined;
+        this.sidebarChannels = [];
+      } else if (sync === "fetch") {
+        this.sidebarChannelGoalId = goalId;
+        this.sidebarChannels = [];
+        void this.refreshSidebarChannels();
+      }
+      const channelSection = renderChannelSection(this.sidebarChannels, this.sidebarFocus);
+      const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
       return renderSidebar(width, [
         ...renderStatusSection(toSidebarStatus(state), width),
         renderNavSection(NAV_ROWS, this.sidebarFocus, pending > 0 ? { inbox: `(${pending})` } : {}),
+        ...(channelSection === undefined ? [] : [channelSection]),
         ...(goalSection === undefined ? [] : [goalSection]),
       ]);
     };
     const sidebarRegion = createClickRegion({
       lines: sidebarLines,
-      resolve: (lines, x, y) => resolveSidebarNavClick(lines, x, y) ?? resolveSidebarGoalClick(lines, this.sidebarGoals, x, y),
+      resolve: (lines, x, y) =>
+        resolveSidebarNavClick(lines, x, y) ??
+        resolveSidebarGoalClick(lines, this.sidebarGoals, x, y) ??
+        resolveSidebarChannelClick(lines, this.sidebarChannels, x, y),
       onAction: (id) => {
         activateSidebarRow(this, id);
+        activateSidebarChannel(this, id);
       },
     });
     const mainColumn = new VStack([

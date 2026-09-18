@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { LifecycleHandler } from "./lifecycle.js";
 import type { TuiController } from "./controller.js";
+import type { ChannelRead } from "@maestro/api-client";
 
 // Control bytes use \u escapes: raw ESC bytes do not survive file tooling round-trips.
 const CTRL_B = "";
@@ -28,6 +29,7 @@ function stubController() {
     state: { pendingDecisions: [] },
     terminal: { columns: 120, rows: 30 },
     sidebarGoals: [] as Array<{ goalId: string }>,
+    sidebarChannels: [] as ChannelRead[],
     splash: { dismiss: vi.fn(), restore: vi.fn() },
     tui: { requestRender: vi.fn() },
     view: { render: vi.fn(), append: vi.fn(), appendWarning: vi.fn(), syncPendingDecisionState: vi.fn() },
@@ -119,5 +121,29 @@ describe("sidebar focus keys", () => {
     expect(c.sidebarFocus).toBe("goal-1");
     expect(handler.handleInput(DOWN)).toEqual({ consume: true });
     expect(c.sidebarFocus).toBe("home");
+  });
+
+  it("activates cached channel rows with enter", () => {
+    const c = stubController();
+    c.sidebarVisible = true;
+    c.sidebarChannels = [
+      {
+        channel: {
+          channelId: "channel-1",
+          projectId: "project-1",
+          goalId: "goal-1",
+          state: "active",
+          kind: "department",
+          scopeId: "engineering",
+          displayName: "#engineering",
+        },
+        messages: [],
+        members: [],
+      },
+    ];
+    c.sidebarFocus = "channel:department:engineering";
+    const handler = new LifecycleHandler(c as unknown as TuiController);
+    expect(handler.handleInput("\r")).toEqual({ consume: true });
+    expect(c.submitter.submit).toHaveBeenCalledWith("/channel read --channel-kind department --channel-id engineering");
   });
 });

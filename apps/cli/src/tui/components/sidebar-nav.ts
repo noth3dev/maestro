@@ -2,6 +2,7 @@ import type { ApprovalDialogSummary, ConfirmationResult } from "../confirmation.
 import { applyApprovalAction } from "./approval-dialog-click.js";
 import { compactReviewAcknowledgement } from "../entry-helpers.js";
 import { renderPendingDecisionDetails, type TuiShellState } from "./shell.js";
+import { MAX_SIDEBAR_CHANNELS } from "./sidebar-channels.js";
 
 export interface SidebarNavRow {
   id: string;
@@ -118,9 +119,16 @@ export function activateSidebarRow(host: SidebarNavHost, id: string): void {
   }
 }
 
-/** Focus order spans nav rows then the rendered (capped) goal rows. */
-export function sidebarFocusRows(goals: readonly { goalId: string }[] = []): { id: string }[] {
-  return [...NAV_ROWS.map((row) => ({ id: row.id })), ...goals.slice(0, MAX_SIDEBAR_GOALS).map((goal) => ({ id: goal.goalId }))];
+/** Focus order follows paint order: nav rows, then channels, then goals. */
+export function sidebarFocusRows(
+  goals: readonly { goalId: string }[] = [],
+  channelKeys: readonly string[] = [],
+): { id: string }[] {
+  return [
+    ...NAV_ROWS.map((row) => ({ id: row.id })),
+    ...channelKeys.slice(0, MAX_SIDEBAR_CHANNELS).map((id) => ({ id })),
+    ...goals.slice(0, MAX_SIDEBAR_GOALS).map((goal) => ({ id: goal.goalId })),
+  ];
 }
 
 /**

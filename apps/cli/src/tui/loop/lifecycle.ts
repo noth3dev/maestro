@@ -5,6 +5,7 @@ import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
 import { toggleSidebar } from "../components/sidebar.js";
 import { activateSidebarRow, isSidebarNavActive, moveSidebarFocus, NAV_ROWS, sidebarFocusRows } from "../components/sidebar-nav.js";
+import { activateSidebarChannel, channelRowKey } from "../components/sidebar-channels.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -130,12 +131,19 @@ export class LifecycleHandler {
     }
     if (isSidebarNavActive(c)) {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
-        c.sidebarFocus = moveSidebarFocus(c.sidebarFocus, matchesKey(data, "up") ? -1 : 1, sidebarFocusRows(c.sidebarGoals));
+        c.sidebarFocus = moveSidebarFocus(
+          c.sidebarFocus,
+          matchesKey(data, "up") ? -1 : 1,
+          sidebarFocusRows(c.sidebarGoals, c.sidebarChannels.map((read) => channelRowKey(read))),
+        );
         c.view.render();
         return { consume: true };
       }
       if (matchesKey(data, "enter")) {
-        if (c.sidebarFocus !== undefined) activateSidebarRow(c, c.sidebarFocus);
+        if (c.sidebarFocus !== undefined) {
+          activateSidebarRow(c, c.sidebarFocus);
+          activateSidebarChannel(c, c.sidebarFocus);
+        }
         return { consume: true };
       }
       if (matchesKey(data, "escape")) {
