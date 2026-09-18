@@ -85,3 +85,37 @@ export const ConversationEventQuerySchema = z
   })
   .strict();
 export type ConversationEventQuery = z.infer<typeof ConversationEventQuerySchema>;
+
+/** Maximum persisted conversation text in bytes; mirrors ConversationTurnInputSchema's max on write paths. */
+export const MAX_PERSISTED_TEXT_BYTES = 60_000;
+
+/** Truncate to a byte budget without splitting surrogate pairs. */
+export function boundedText(text: string, maxBytes = MAX_PERSISTED_TEXT_BYTES): string {
+  if (Buffer.byteLength(text, "utf8") <= maxBytes) return text;
+  let end = Math.min(text.length, maxBytes);
+  while (end > 0 && Buffer.byteLength(text.slice(0, end), "utf8") > maxBytes) end -= 1;
+  if (end < text.length && end > 0) {
+    const previous = text.charCodeAt(end - 1);
+    const next = text.charCodeAt(end);
+    if (previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end -= 1;
+  }
+  return text.slice(0, end);
+}
+
+export function terminalEventType(status: Conversation["status"]): ConversationEvent["eventType"] {
+  return status === "succeeded"
+    ? "turn_completed"
+    : status === "cancelled"
+      ? "turn_cancelled"
+      : status === "unknown"
+        ? "turn_unknown"
+        : "turn_failed";
+}
+
+export function turnStatus(status: Conversation["status"]): "completed" | "failed" | "cancelled" | "unknown" {
+  return status === "succeeded" ? "completed" : status === "failed" ? "failed" : status === "cancelled" ? "cancelled" : "unknown";
+}
+
+export function cancellationContent(status: Conversation["status"]): string {
+  return status === "cancelled" ? "Conversation turn cancelled" : "Conversation turn outcome is unavailable";
+}

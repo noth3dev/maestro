@@ -52,15 +52,12 @@ export {
 };
 import {
   assertSafeText,
-  boundedText,
-  cancellationContent,
   modelFromRow,
   now,
   statusFromObservation,
-  terminalEventType,
-  turnStatus,
   type ConversationRow,
 } from "./conversation/text.js";
+import { boundedText, cancellationContent, terminalEventType, turnStatus } from "@maestro/contracts";
 
 export interface ConversationService {
   listModels(operator: OperatorContext): Promise<readonly ModelCatalogEntry[]>;
