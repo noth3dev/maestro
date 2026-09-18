@@ -1,11 +1,12 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
-import { accessSync, constants, existsSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Entry } from "@napi-rs/keyring";
 import { ApiError, createApiClient } from "@maestro/api-client";
+import { resolveCodexAppServerCommand } from "@maestro/model-provider-openai";
 import { startEmbeddedDatabase, type EmbeddedDatabaseHandle } from "@maestro/persistence";
 import type { ConnectionEnvironment, ConnectionState } from "./connection.js";
 import { ensureLocalControlPlane } from "./local-control-plane.js";
@@ -740,26 +741,6 @@ async function ensureDockerDatabase(options: {
 function dockerUnavailableReason(detail: string): string {
   if (/not found|cannot connect|is the docker daemon running/i.test(detail)) return "Docker is required for local automatic setup but is not available; install/start Docker or set MAESTRO_LOCAL_DATABASE_URL";
   return "Docker PostgreSQL could not be started; run `docker ps -a` and check the maestro-local-postgres container";
-}
-
-export function resolveCodexAppServerCommand(configuredCommand?: string, pathValue = process.env.PATH): string | undefined {
-  const explicit = configuredCommand?.trim();
-  if (explicit !== undefined && explicit !== "") return explicit;
-  const pathEntries = pathValue?.split(delimiter) ?? [];
-  const commandNames = process.platform === "win32" ? ["codex.exe", "codex.cmd", "codex.bat", "codex"] : ["codex"];
-  for (const entry of pathEntries) {
-    for (const name of commandNames) {
-      const candidate = join(entry === "" ? "." : entry, name);
-      try {
-        if (!statSync(candidate).isFile()) continue;
-        accessSync(candidate, constants.X_OK);
-        return candidate;
-      } catch {
-        // Continue searching the remaining PATH entries.
-      }
-    }
-  }
-  return undefined;
 }
 
 function resolveModelGatewayEntry(env: ConnectionEnvironment): string | undefined {

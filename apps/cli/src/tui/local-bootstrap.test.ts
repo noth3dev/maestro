@@ -3,7 +3,8 @@ import { startEmbeddedDatabase } from "@maestro/persistence";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveCodexAppServerCommand, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { resolveCodexAppServerCommand } from "@maestro/model-provider-openai";
 
 function secretStore(initial?: string): LocalSecretStore {
   let value = initial;
