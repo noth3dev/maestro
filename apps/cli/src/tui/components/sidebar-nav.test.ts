@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  activateSidebarRow,
   applySidebarNavAction,
   moveSidebarFocus,
   NAV_ROWS,
+  resolveSidebarGoalClick,
   resolveSidebarNavClick,
   showHome,
+  sidebarFocusRows,
 } from "./sidebar-nav.js";
+import { renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "./sidebar.js";
+
+// eslint-disable-next-line no-control-regex
+const stripAnsi = (value: string): string => value.replace(/\u001b\[[0-9;]*m/g, "");
 
 describe("sidebar nav rows", () => {
   it("exposes only mapped read navigation", () => {
@@ -59,6 +66,7 @@ describe("sidebar nav actions", () => {
     compactReview: undefined as string | undefined,
     terminal: { columns: 120, rows: 30 },
     contentWidth: () => 120,
+    sidebarGoals: [] as Array<{ goalId: string }>,
   };
 }
 
@@ -108,5 +116,117 @@ describe("sidebar nav actions", () => {
     applySidebarNavAction(pending, "inbox");
     expect(h.view.append).toHaveBeenCalledOnce();
     expect(String(h.view.append.mock.calls[0]![0])).toContain("deploy release");
+  });
+});
+
+describe("sidebar row activation", () => {
+  const goals = [
+    { goalId: "11111111-2222-4333-8444-555555555555" },
+    { goalId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" },
+  ];
+
+  function host() {
+    return {
+      submitter: { submit: vi.fn() },
+      splash: { restore: vi.fn() },
+      tui: { requestRender: vi.fn() },
+      view: { append: vi.fn(), appendWarning: vi.fn(), render: vi.fn(), syncPendingDecisionState: vi.fn() },
+      pendingConfirmation: undefined as undefined,
+      state: { pendingDecisions: [] as Array<{ identity: string; tier: string; action: string; actor: string }> },
+      compactReview: undefined as string | undefined,
+      terminal: { columns: 120, rows: 30 },
+      contentWidth: () => 120,
+      sidebarGoals: goals,
+    };
+  }
+
+  it("submits goal select for a cached goal id", () => {
+    const h = host();
+    activateSidebarRow(h, goals[0]!.goalId);
+    expect(h.submitter.submit).toHaveBeenCalledWith(`/goal select --goal-id ${goals[0]!.goalId}`);
+  });
+
+  it("still routes nav ids through the nav actions", () => {
+    const h = host();
+    activateSidebarRow(h, "channel");
+    expect(h.submitter.submit).toHaveBeenCalledWith("/channel list");
+  });
+
+  it("ignores ids that are neither nav rows nor cached goals", () => {
+    const h = host();
+    activateSidebarRow(h, "99999999-2222-4333-8444-555555555555");
+    expect(h.submitter.submit).not.toHaveBeenCalled();
+    expect(h.view.append).not.toHaveBeenCalled();
+  });
+});
+
+describe("sidebar focus rows", () => {
+  it("combines nav ids with cached goal ids", () => {
+    expect(sidebarFocusRows([]).map((row) => row.id)).toEqual(["home", "inbox", "channel", "evlog", "billing", "luthiery"]);
+    expect(sidebarFocusRows([{ goalId: "goal-1" }, { goalId: "goal-2" }]).map((row) => row.id)).toEqual([
+      "home",
+      "inbox",
+      "channel",
+      "evlog",
+      "billing",
+      "luthiery",
+      "goal-1",
+      "goal-2",
+    ]);
+  });
+
+  it("caps goals at the rendered limit", () => {
+    const many = Array.from({ length: 9 }, (_, index) => ({ goalId: `goal-${index}` }));
+    expect(sidebarFocusRows(many).length).toBe(6 + 5);
+  });
+});
+
+describe("resolveSidebarGoalClick", () => {
+  const goals = [
+    { goalId: "11111111-2222-4333-8444-555555555555", state: "running" },
+    { goalId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", state: "paused" },
+  ];
+
+  function lines() {
+    const goalSection = renderGoalSection(goals, undefined, undefined);
+    return renderSidebar(SIDEBAR_WIDTH, [renderNavSection(NAV_ROWS, undefined), goalSection!]);
+  }
+
+  function rowIndex(rendered: readonly string[], fragment: string): number {
+    return rendered.findIndex((line) => stripAnsi(line).includes(fragment));
+  }
+
+  it("maps goal rows to ids and ignores nav rows and chrome", () => {
+    const rendered = lines();
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "11111111"))).toBe(goals[0]!.goalId);
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "aaaaaaaa"))).toBe(goals[1]!.goalId);
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "home"))).toBeUndefined();
+    expect(resolveSidebarGoalClick(rendered, goals, 3, 0)).toBeUndefined();
+    expect(resolveSidebarGoalClick(rendered, goals, 3, -1)).toBeUndefined();
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rendered.length)).toBeUndefined();
+  });
+
+  it("ignores clicks beyond the rendered text", () => {
+    const rendered = lines();
+    expect(resolveSidebarGoalClick(rendered, goals, 99, rowIndex(rendered, "11111111"))).toBeUndefined();
+  });
+
+  it("never matches a full goal id rendered outside the goals block", () => {
+    const goalSection = renderGoalSection(goals, undefined, undefined);
+    const rendered = renderSidebar(SIDEBAR_WIDTH, [
+      { title: "status", rows: [{ label: "goal", value: goals[0]!.goalId }] },
+      renderNavSection(NAV_ROWS, undefined),
+      goalSection!,
+    ]);
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "status") + 1)).toBeUndefined();
+  });
+
+  it("ignores goal rows whose slice was truncated away", () => {
+    const rendered = lines();
+    const target = rowIndex(rendered, "11111111");
+    expect(target).toBeGreaterThanOrEqual(0);
+    const truncated = [...rendered];
+    truncated[target] = "  • …";
+    expect(resolveSidebarGoalClick(truncated, goals, 3, target)).toBeUndefined();
   });
 });

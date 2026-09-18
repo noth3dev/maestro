@@ -1,5 +1,5 @@
 import { fitPlain, tuiTheme } from "../theme.js";
-import { moveSidebarFocus } from "./sidebar-nav.js";
+import { MAX_SIDEBAR_GOALS, moveSidebarFocus } from "./sidebar-nav.js";
 
 export const SIDEBAR_WIDTH = 26;
 export const SIDEBAR_MIN_COLUMNS = 100;
@@ -79,9 +79,48 @@ export function renderSidebar(width: number, sections: readonly SidebarSection[]
 }
 
 /** Nav rows for a section, focus-marked without disturbing other groups. */
-export function renderNavSection(rows: readonly { id: string; label: string }[], focusedId: string | undefined): SidebarSection {
+export function renderNavSection(
+  rows: readonly { id: string; label: string }[],
+  focusedId: string | undefined,
+  badges: Record<string, string> = {},
+): SidebarSection {
   return {
     title: "views",
-    rows: rows.map((row) => ({ label: row.label, id: row.id, selectable: true, focused: focusedId === row.id })),
+    rows: rows.map((row) => ({
+      label: badges[row.id] === undefined ? row.label : `${row.label} ${badges[row.id]}`,
+      id: row.id,
+      selectable: true,
+      focused: focusedId === row.id,
+    })),
   };
+}
+
+export interface SidebarGoal {
+  goalId: string;
+  state: string;
+}
+
+function goalRowLabel(goal: SidebarGoal, selected: boolean): string {
+  return `${selected ? "• " : ""}${goal.goalId.slice(0, 8)} · ${goal.state}`;
+}
+
+/**
+ * Cached goal rows for keyboard/mouse switching. Hidden while the dashboard
+ * cache is empty; capped so the sidebar keeps its fixed height budget.
+ */
+export function renderGoalSection(
+  goals: readonly SidebarGoal[],
+  selectedId: string | undefined,
+  focusedId: string | undefined,
+): SidebarSection | undefined {
+  if (goals.length === 0) return undefined;
+  const visible = goals.slice(0, MAX_SIDEBAR_GOALS);
+  const rows: SidebarRow[] = visible.map((goal) => ({
+    label: goalRowLabel(goal, goal.goalId === selectedId),
+    id: goal.goalId,
+    selectable: true,
+    focused: goal.goalId === focusedId,
+  }));
+  if (goals.length > visible.length) rows.push({ label: `+${goals.length - visible.length} more`, selectable: false });
+  return { title: "goals", rows };
 }

@@ -1,14 +1,14 @@
 import { Box, CombinedAutocompleteProvider, HStack, ProcessTerminal, ScrollView, Text, TuiAltScreen, VStack } from "@earendil-works/pi-tui";
-import type { GoalEvent } from "@maestro/api-client";
+import type { GoalEvent, GoalResult } from "@maestro/api-client";
 import type { TaskContract } from "@maestro/contracts";
 import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
-import { applySidebarNavAction, NAV_ROWS, resolveSidebarNavClick } from "../components/sidebar-nav.js";
+import { activateSidebarRow, NAV_ROWS, resolveSidebarGoalClick, resolveSidebarNavClick } from "../components/sidebar-nav.js";
 import { createClickRegion } from "../components/mouse.js";
-import { renderStatusSection, toSidebarStatus } from "../components/shell.js";
-import { contentWidth, isSidebarVisible, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
+import { pendingCount, renderStatusSection, toSidebarStatus } from "../components/shell.js";
+import { contentWidth, isSidebarVisible, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -27,6 +27,7 @@ import { renderUnifiedStreamEntries } from "../conversation-transcript.js";
 import type { ConversationTranscriptState } from "../conversation-transcript.js";
 import { createConversationTranscript } from "../conversation-transcript.js";
 import { workspaceIdentity } from "../workspace.js";
+import { selectedConversationGoalId } from "../dashboard-state.js";
 import { refreshDashboardState } from "../dashboard-refresh.js";
 import { readDashboard } from "../commands/read-commands.js";
 import type { InteractiveTuiOptions } from "../startup.js";
@@ -87,6 +88,8 @@ export class TuiController {
   lastRenderedTerminalRows: number;
   sidebarVisible = true;
   sidebarFocus: string | undefined = undefined;
+  /** Dashboard goal cache backing the sidebar goals section (setRecovery only). */
+  sidebarGoals: GoalResult[] = [];
 
   /** Main-pane width: full terminal minus the visible sidebar. */
   contentWidth(): number {
@@ -218,6 +221,7 @@ export class TuiController {
           ...(dashboard.selectedGoal === undefined ? {} : { goalState: dashboard.selectedGoal.state }),
           ...(dashboard.workerCount === undefined ? {} : { activeWorkers: dashboard.workerCount }),
         });
+        this.sidebarGoals = dashboard.goals;
       },
       render: this.view.render,
     });
@@ -281,13 +285,24 @@ export class TuiController {
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, this.footer]);
-    const sidebarLines = (width: number) =>
-      renderSidebar(width, [...renderStatusSection(toSidebarStatus(state), width), renderNavSection(NAV_ROWS, this.sidebarFocus)]);
+    const sidebarLines = (width: number) => {
+      const pending = pendingCount(state);
+      const goalSection = renderGoalSection(
+        this.sidebarGoals,
+        selectedConversationGoalId(state.goal, this.session?.goalId),
+        this.sidebarFocus,
+      );
+      return renderSidebar(width, [
+        ...renderStatusSection(toSidebarStatus(state), width),
+        renderNavSection(NAV_ROWS, this.sidebarFocus, pending > 0 ? { inbox: `(${pending})` } : {}),
+        ...(goalSection === undefined ? [] : [goalSection]),
+      ]);
+    };
     const sidebarRegion = createClickRegion({
       lines: sidebarLines,
-      resolve: (lines, x, y) => resolveSidebarNavClick(lines, x, y),
+      resolve: (lines, x, y) => resolveSidebarNavClick(lines, x, y) ?? resolveSidebarGoalClick(lines, this.sidebarGoals, x, y),
       onAction: (id) => {
-        applySidebarNavAction(this, id);
+        activateSidebarRow(this, id);
       },
     });
     const mainColumn = new VStack([

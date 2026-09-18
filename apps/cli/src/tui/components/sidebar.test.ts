@@ -3,12 +3,15 @@ import { HStack, Text, TuiAltScreen, VStack, visibleWidth } from "@earendil-work
 import {
   contentWidth,
   isSidebarVisible,
+  renderGoalSection,
+  renderNavSection,
   renderSidebar,
   SIDEBAR_MIN_COLUMNS,
   SIDEBAR_WIDTH,
   toggleSidebar,
   type SidebarSection,
 } from "./sidebar.js";
+import { NAV_ROWS } from "./sidebar-nav.js";
 import { StubTerminal } from "./stub-terminal.js";
 
 function plain(value: string): string {
@@ -51,6 +54,64 @@ describe("sidebar shell", () => {
     const lines = renderSidebar(SIDEBAR_WIDTH, sections);
     for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
     expect(plain(lines[2]!)).toContain("openai");
+  });
+});
+
+describe("sidebar nav badges", () => {
+  it("appends the inbox pending count to the label and omits it at zero", () => {
+    const section = renderNavSection(NAV_ROWS, "home", { inbox: "(3)" });
+    expect(section.title).toBe("views");
+    expect(section.rows.find((row) => row.id === "inbox")?.label).toBe("inbox (3)");
+    expect(section.rows.find((row) => row.id === "home")?.label).toBe("home");
+    const cleared = renderNavSection(NAV_ROWS, "home", {});
+    expect(cleared.rows.find((row) => row.id === "inbox")?.label).toBe("inbox");
+  });
+
+  it("keeps badged rows within the fixed width", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [renderNavSection(NAV_ROWS, "inbox", { inbox: "(12)" })]);
+    for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
+    expect(plain(lines.join("\n"))).toContain("inbox (12)");
+  });
+});
+
+describe("sidebar goal section", () => {
+  const goals = [
+    { goalId: "11111111-2222-4333-8444-555555555555", state: "running" },
+    { goalId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", state: "paused" },
+  ];
+
+  it("lists id slices with state and marks the selected goal", () => {
+    const section = renderGoalSection(goals, goals[0]!.goalId, undefined);
+    expect(section?.title).toBe("goals");
+    expect(section?.rows.map((row) => row.label)).toEqual(["• 11111111 · running", "aaaaaaaa · paused"]);
+    expect(section?.rows.map((row) => row.id)).toEqual([goals[0]!.goalId, goals[1]!.goalId]);
+    for (const row of section?.rows ?? []) expect(row.selectable).toBe(true);
+  });
+
+  it("marks focus without disturbing the selection marker", () => {
+    const section = renderGoalSection(goals, goals[0]!.goalId, goals[1]!.goalId);
+    expect(section?.rows[0]?.focused).toBe(false);
+    expect(section?.rows[1]?.focused).toBe(true);
+    expect(section?.rows[0]?.label).toContain("•");
+  });
+
+  it("returns undefined when there are no cached goals", () => {
+    expect(renderGoalSection([], undefined, undefined)).toBeUndefined();
+  });
+
+  it("caps at five rows with a non-selectable trailer", () => {
+    const many = Array.from({ length: 7 }, (_, index) => ({ goalId: `0000000${index}-2222-4333-8444-555555555555`, state: "running" }));
+    const section = renderGoalSection(many, undefined, undefined);
+    expect(section?.rows.length).toBe(6);
+    expect(section?.rows.slice(0, 5).every((row) => row.selectable === true)).toBe(true);
+    expect(section?.rows[5]).toMatchObject({ label: "+2 more", selectable: false });
+  });
+
+  it("keeps goal rows within the fixed width", () => {
+    const section = renderGoalSection(goals, goals[0]!.goalId, goals[1]!.goalId);
+    const lines = renderSidebar(SIDEBAR_WIDTH, [section!]);
+    for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
+    expect(plain(lines.join("\n"))).toContain("11111111 · running");
   });
 });
 

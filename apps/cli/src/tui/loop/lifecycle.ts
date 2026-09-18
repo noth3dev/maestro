@@ -4,7 +4,7 @@ import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
 import { toggleSidebar } from "../components/sidebar.js";
-import { applySidebarNavAction, isSidebarNavActive, moveSidebarFocus, NAV_ROWS } from "../components/sidebar-nav.js";
+import { activateSidebarRow, isSidebarNavActive, moveSidebarFocus, NAV_ROWS, sidebarFocusRows } from "../components/sidebar-nav.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
 import {
   isSplashRestoreShortcut,
@@ -130,12 +130,12 @@ export class LifecycleHandler {
     }
     if (isSidebarNavActive(c)) {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
-        c.sidebarFocus = moveSidebarFocus(c.sidebarFocus, matchesKey(data, "up") ? -1 : 1, NAV_ROWS);
+        c.sidebarFocus = moveSidebarFocus(c.sidebarFocus, matchesKey(data, "up") ? -1 : 1, sidebarFocusRows(c.sidebarGoals));
         c.view.render();
         return { consume: true };
       }
       if (matchesKey(data, "enter")) {
-        if (c.sidebarFocus !== undefined) applySidebarNavAction(c, c.sidebarFocus);
+        if (c.sidebarFocus !== undefined) activateSidebarRow(c, c.sidebarFocus);
         return { consume: true };
       }
       if (matchesKey(data, "escape")) {
@@ -143,7 +143,12 @@ export class LifecycleHandler {
         c.view.render();
         return { consume: true };
       }
-      return { consume: true };
+      // Control keys keep their existing global behavior (cancel, shortcuts):
+      // execution falls out of this block to the branches below. Only
+      // printable input is swallowed so typing never reaches the editor while
+      // sidebar focus is shown. Compares bytes, never key names, so no
+      // control-byte literal is needed here.
+      if (data.charCodeAt(0) !== 27 && !(data.length === 1 && data < " ")) return { consume: true };
     }
     if (matchesKey(data, "ctrl+g")) {
       void c.submitter.submit("/goals list");

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createSplashController,
+  pendingCount,
   renderInputPlaceholder,
   renderSetupSteps,
   renderShell,
@@ -482,5 +483,17 @@ describe("sidebar status section", () => {
   it("shows none for an unselected model", () => {
     const [section] = renderStatusSection(toSidebarStatus(state), 26);
     expect(section!.rows.find((row) => row.label === "model")?.value).toBe("none");
+  });
+
+  it("counts pending decisions before the approvals snapshot", () => {
+    expect(
+      pendingCount({
+        ...state,
+        pendingDecisions: [{ identity: "effect-1", tier: "You", action: "deploy", actor: "worker-1" }],
+        approvals: { kind: "value", value: 9 },
+      }),
+    ).toBe(1);
+    expect(pendingCount({ ...state, approvals: { kind: "value", value: 4 } })).toBe(4);
+    expect(pendingCount(state)).toBe(0);
   });
 });

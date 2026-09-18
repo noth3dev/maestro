@@ -18,6 +18,9 @@ export const NAV_ROWS: readonly SidebarNavRow[] = [
   { id: "luthiery", label: "luthiery", action: { kind: "submit", text: "/luthiery list" } },
 ];
 
+/** Rendered goal rows stay capped so keyboard, mouse, and paint agree. */
+export const MAX_SIDEBAR_GOALS = 5;
+
 export function moveSidebarFocus(
   current: string | undefined,
   direction: 1 | -1,
@@ -59,6 +62,8 @@ export interface SidebarNavHost {
   readonly state: TuiShellState;
   readonly terminal: { readonly columns: number; readonly rows: number };
   contentWidth(): number;
+  /** Dashboard goal cache backing the goals section; ids only, never parsed from paint. */
+  readonly sidebarGoals: readonly { goalId: string }[];
   readonly view: {
     append(line: string): void;
     appendWarning(text: string): void;
@@ -96,6 +101,49 @@ export function applySidebarNavAction(host: SidebarNavHost, id: string): void {
     return;
   }
   activateInbox(host);
+}
+
+/**
+ * Single dispatcher for sidebar activation (keyboard Enter and mouse click).
+ * Nav ids run nav actions; cached goal ids submit a goal select; anything
+ * else is a no-op so truncated paint can never trigger a foreign command.
+ */
+export function activateSidebarRow(host: SidebarNavHost, id: string): void {
+  if (NAV_ROWS.some((row) => row.id === id)) {
+    applySidebarNavAction(host, id);
+    return;
+  }
+  if (host.sidebarGoals.some((goal) => goal.goalId === id)) {
+    void host.submitter.submit(`/goal select --goal-id ${id}`);
+  }
+}
+
+/** Focus order spans nav rows then the rendered (capped) goal rows. */
+export function sidebarFocusRows(goals: readonly { goalId: string }[] = []): { id: string }[] {
+  return [...NAV_ROWS.map((row) => ({ id: row.id })), ...goals.slice(0, MAX_SIDEBAR_GOALS).map((goal) => ({ id: goal.goalId }))];
+}
+
+/**
+ * Map a click to a cached goal id. Scoped to the goals block by title offset
+ * (never by label search), with an id-slice guard so truncated rows no-op.
+ */
+export function resolveSidebarGoalClick(
+  lines: readonly string[],
+  goals: readonly { goalId: string }[],
+  x: number,
+  y: number,
+): string | undefined {
+  if (!Number.isInteger(y) || y < 0 || y >= lines.length) return undefined;
+  const titleIndex = lines.findIndex((line) => stripAnsi(line).trim() === "goals");
+  if (titleIndex === -1) return undefined;
+  const offset = y - titleIndex - 1;
+  const visible = goals.slice(0, MAX_SIDEBAR_GOALS);
+  if (offset < 0 || offset >= visible.length) return undefined;
+  const text = stripAnsi(lines[y] ?? "");
+  if (!Number.isInteger(x) || x < 0 || x >= text.length) return undefined;
+  const goal = visible[offset]!;
+  if (!text.includes(goal.goalId.slice(0, 8))) return undefined;
+  return goal.goalId;
 }
 
 export interface SidebarFocusHost {

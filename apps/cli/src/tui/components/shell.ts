@@ -73,7 +73,7 @@ function workerText(state: Pick<TuiShellState, "workers">): string {
   return stateText(state.workers, (value) => `${value} worker${value === 1 ? "" : "s"}`);
 }
 
-function pendingCount(state: TuiShellState): number {
+export function pendingCount(state: TuiShellState): number {
   if (state.pendingDecisions !== undefined) return state.pendingDecisions.length;
   return state.approvals.kind === "value" ? state.approvals.value : 0;
 }
