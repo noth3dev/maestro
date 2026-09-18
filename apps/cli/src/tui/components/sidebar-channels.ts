@@ -116,12 +116,17 @@ function stripAnsi(value: string): string {
   return value.replace(/\[[0-9;]*m/g, "");
 }
 
+/** Title comparison without paint or the pane divider. */
+function titleText(value: string): string {
+  return stripAnsi(value).replace(/┃$/, "").trim();
+}
+
 /**
- * Map a click to a channel key or the refresh row. Blocks render
- * consecutively, so the first block title anchors the layout and each later
- * title is verified against paint; any divergence resolves to undefined
- * instead of a foreign row. A display-name prefix guard keeps truncated rows
- * a no-op (truncation cuts the trailing count first).
+ * Map a click to a channel key or the refresh row. Each block title is
+ * located independently in paint order, so blank gap lines between sections
+ * never disturb offsets; a missing title fails closed to undefined. A
+ * display-name prefix guard keeps truncated rows a no-op (truncation cuts
+ * the trailing count first). The divider column is chrome.
  */
 export function resolveSidebarChannelClick(
   lines: readonly string[],
@@ -132,26 +137,23 @@ export function resolveSidebarChannelClick(
   if (!Number.isInteger(y) || y < 0 || y >= lines.length) return undefined;
   const layout = layoutChannelBlocks(reads);
   if (layout.length === 0) return undefined;
-  let cursor = lines.findIndex((line) => stripAnsi(line).trim() === layout[0]!.title);
-  if (cursor === -1) return undefined;
-  cursor += 1;
-  for (const [index, block] of layout.entries()) {
-    if (index > 0) {
-      if (stripAnsi(lines[cursor] ?? "").trim() !== block.title) return undefined;
-      cursor += 1;
-    }
-    if (y >= cursor && y < cursor + block.reads.length) {
+  let cursor = 0;
+  for (const block of layout) {
+    const titleIndex = lines.findIndex((line, index) => index >= cursor && titleText(line) === block.title);
+    if (titleIndex === -1) return undefined;
+    const rowStart = titleIndex + 1;
+    if (y >= rowStart && y < rowStart + block.reads.length) {
       const text = stripAnsi(lines[y] ?? "");
-      if (!Number.isInteger(x) || x < 0 || x >= text.length) return undefined;
-      const read = block.reads[y - cursor]!;
+      if (!Number.isInteger(x) || x < 0 || x >= text.length - 1) return undefined;
+      const read = block.reads[y - rowStart]!;
       if (!text.includes(read.channel.displayName.slice(0, 8))) return undefined;
       return channelRowKey(read);
     }
-    cursor += block.reads.length;
+    cursor = rowStart + block.reads.length;
   }
   if (y !== cursor) return undefined;
   const text = stripAnsi(lines[y] ?? "");
-  if (!Number.isInteger(x) || x < 0 || x >= text.length) return undefined;
+  if (!Number.isInteger(x) || x < 0 || x >= text.length - 1) return undefined;
   return text.includes("refresh") ? CHANNEL_REFRESH_ROW_ID : undefined;
 }
 

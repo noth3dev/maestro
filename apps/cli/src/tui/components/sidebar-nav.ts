@@ -37,7 +37,12 @@ export function moveSidebarFocus(
 
 function stripAnsi(value: string): string {
   // eslint-disable-next-line no-control-regex
-  return value.replace(/\u001b\[[0-9;]*m/g, "");
+  return value.replace(/\[[0-9;]*m/g, "");
+}
+
+/** Title comparison without paint or the pane divider. */
+function titleText(value: string): string {
+  return stripAnsi(value).replace(/┃$/, "").trim();
 }
 
 function escapeRegExp(value: string): string {
@@ -53,7 +58,7 @@ function escapeRegExp(value: string): string {
 export function resolveSidebarNavClick(lines: readonly string[], x: number, y: number): string | undefined {
   if (!Number.isInteger(y) || y < 0 || y >= lines.length) return undefined;
   const text = stripAnsi(lines[y] ?? "");
-  if (!Number.isInteger(x) || x < 0 || x >= text.length) return undefined;
+  if (!Number.isInteger(x) || x < 0 || x >= text.length - 1) return undefined;
   for (const row of NAV_ROWS) {
     if (new RegExp(`\\b${escapeRegExp(row.label)}\\b`).test(text)) return row.id;
   }
@@ -150,13 +155,13 @@ export function resolveSidebarGoalClick(
   y: number,
 ): string | undefined {
   if (!Number.isInteger(y) || y < 0 || y >= lines.length) return undefined;
-  const titleIndex = lines.findIndex((line) => stripAnsi(line).trim() === "goals");
+  const titleIndex = lines.findIndex((line) => titleText(line) === "goals");
   if (titleIndex === -1) return undefined;
   const offset = y - titleIndex - 1;
   const visible = goals.slice(0, MAX_SIDEBAR_GOALS);
   if (offset < 0 || offset >= visible.length) return undefined;
   const text = stripAnsi(lines[y] ?? "");
-  if (!Number.isInteger(x) || x < 0 || x >= text.length) return undefined;
+  if (!Number.isInteger(x) || x < 0 || x >= text.length - 1) return undefined;
   const goal = visible[offset]!;
   if (!text.includes(goal.goalId.slice(0, 8))) return undefined;
   return goal.goalId;

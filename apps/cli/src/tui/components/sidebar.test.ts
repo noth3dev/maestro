@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HStack, Text, TuiAltScreen, VStack, visibleWidth } from "@earendil-works/pi-tui";
+import { fitPlain, tuiTheme } from "../theme.js";
 import {
   contentWidth,
   isSidebarVisible,
@@ -22,12 +23,58 @@ function plain(value: string): string {
 }
 
 describe("sidebar shell", () => {
-  it("renders a fixed-width bordered shell with a title", () => {
-    const lines = renderSidebar(SIDEBAR_WIDTH);
+  const divider = "┃";
+  const gap = " ".repeat(SIDEBAR_WIDTH - 1) + divider;
+
+  it("renders an open pane with a divider column and no box chrome", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [{ title: "status", rows: [{ label: "model", value: "gpt-5" }] }]);
     expect(SIDEBAR_WIDTH).toBe(26);
-    expect(lines.length).toBeGreaterThanOrEqual(3);
     for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
-    expect(plain(lines[1]!)).toContain("sidebar");
+    const text = lines.map(plain).join("\n");
+    expect(text.includes("─")).toBe(false);
+    expect(text.includes("sidebar")).toBe(false);
+    for (const line of lines) expect(plain(line).endsWith(divider)).toBe(true);
+  });
+
+  it("paints section titles in the accent color without a focus gutter", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [
+      { title: "views", rows: [{ label: "search", id: "home", selectable: true }] },
+    ]);
+    const title = lines.find((line) => plain(line).includes("views"))!;
+    expect(title).toBe(tuiTheme.primary(fitPlain("views", SIDEBAR_WIDTH - 1).padEnd(SIDEBAR_WIDTH - 1)) + tuiTheme.border(divider));
+    expect(plain(title).includes("›")).toBe(false);
+  });
+
+  it("paints focused rows with a gutter while unfocused rows stay plain", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [
+      {
+        title: "views",
+        rows: [
+          { label: "search", id: "home", selectable: true, focused: true },
+          { label: "inbox", id: "inbox", selectable: true, focused: false },
+        ],
+      },
+    ]);
+    const focused = lines.find((line) => plain(line).includes("search"))!;
+    expect(focused).toBe(
+      tuiTheme.primary(`› ${fitPlain("search", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1)) + tuiTheme.border(divider),
+    );
+    const calm = lines.find((line) => plain(line).includes("inbox"))!;
+    expect(calm).toBe(
+      tuiTheme.text(`  ${fitPlain("inbox", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1)) + tuiTheme.border(divider),
+    );
+  });
+
+  it("separates sections with one blank padded gap", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [
+      { title: "a", rows: [{ label: "x", value: "1" }] },
+      { title: "b", rows: [{ label: "y", value: "2" }] },
+    ]);
+    const texts = lines.map(plain);
+    const second = texts.findIndex((text) => text.includes("b"));
+    expect(second).toBeGreaterThan(0);
+    expect(texts[second - 1]).toBe(gap);
+    expect(texts.filter((text) => text === gap).length).toBe(1);
   });
 
   it("truncates without throwing at narrow widths", () => {
@@ -55,7 +102,7 @@ describe("sidebar shell", () => {
     const sections: SidebarSection[] = [{ rows: [{ label: "model", value: "openai/very-long-model-name-here" }] }];
     const lines = renderSidebar(SIDEBAR_WIDTH, sections);
     for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
-    expect(plain(lines[2]!)).toContain("openai");
+    expect(plain(lines[0]!)).toContain("openai");
   });
 });
 
@@ -246,8 +293,9 @@ describe("sidebar layout mechanics", () => {
     const tui = new TuiAltScreen(terminal);
     screens.push(tui);
     let shown = true;
+    const section: SidebarSection = { title: "views", rows: [{ label: "search", id: "home", selectable: true }] };
     const sidebar = {
-      render: (width: number) => renderSidebar(width),
+      render: (width: number) => renderSidebar(width, [section]),
       invalidate: () => undefined,
     };
     tui.setLayoutRoot(
@@ -263,12 +311,13 @@ describe("sidebar layout mechanics", () => {
       { component: new VStack([{ component: new Text("main"), basis: "auto" }]), basis: 0, grow: 1, minSize: 0 },
     ]).render(120);
     for (const line of frame) expect(visibleWidth(line)).toBe(120);
-    expect(plain(frame[1]!)).toContain("sidebar");
+    expect(plain(frame[1]!)).toContain("search");
+    expect(plain(frame[1]!)).toContain("┃");
     shown = false;
     const hidden = new HStack([
       { component: sidebar, basis: SIDEBAR_WIDTH, shrink: 0, minSize: 0, visible: () => shown },
       { component: new VStack([{ component: new Text("main"), basis: "auto" }]), basis: 0, grow: 1, minSize: 0 },
     ]).render(120);
-    expect(plain(hidden.join("\n"))).not.toContain("sidebar");
+    expect(plain(hidden.join("\n"))).not.toContain("search");
   });
 });
