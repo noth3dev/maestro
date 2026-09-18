@@ -40,6 +40,9 @@ jobs:
       - name: Check migration numbering
         run: npm run migrations:check
 
+      - name: Check import boundaries
+        run: npm run boundaries:check
+
   test:
     name: Vitest with PostgreSQL 17
     runs-on: ubuntu-latest
