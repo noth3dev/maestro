@@ -743,13 +743,15 @@ function dockerUnavailableReason(detail: string): string {
   return "Docker PostgreSQL could not be started; run `docker ps -a` and check the maestro-local-postgres container";
 }
 
-function resolveModelGatewayEntry(env: ConnectionEnvironment): string | undefined {
+function resolveModelGatewayEntry(env: ConnectionEnvironment, moduleDirectory = dirname(fileURLToPath(import.meta.url))): string | undefined {
   const explicit = env.MAESTRO_MODEL_GATEWAY_ENTRY?.trim();
   if (explicit !== undefined && explicit !== "") return resolve(explicit);
   const cwdCandidate = resolve(process.cwd(), "apps", "model-gateway", "dist", "main.js");
   try { if (requireFile(cwdCandidate)) return cwdCandidate; } catch { /* Continue to the installed-layout candidate. */ }
-  const installedCandidate = resolve(dirname(fileURLToPath(import.meta.url)), "../../../model-gateway/dist/main.js");
-  try { if (requireFile(installedCandidate)) return installedCandidate; } catch { /* No local bundled model gateway. */ }
+  const installedCandidate = resolve(moduleDirectory, "../../../model-gateway/dist/main.js");
+  try { if (requireFile(installedCandidate)) return installedCandidate; } catch { /* Continue to the packaged-layout candidate. */ }
+  const packagedCandidate = resolvePackagedAppEntry(moduleDirectory, "model-gateway");
+  try { if (requireFile(packagedCandidate)) return packagedCandidate; } catch { /* No local bundled model gateway. */ }
   return undefined;
 }
 
@@ -757,13 +759,20 @@ export function resolveInstalledControlPlaneEntry(moduleDirectory = dirname(file
   return resolve(moduleDirectory, "../../../control-plane/dist/main.js");
 }
 
-function resolveControlPlaneEntry(env: ConnectionEnvironment): string | undefined {
+/** App entry for the packages/<pkg>/dist layout (this module's own home). */
+export function resolvePackagedAppEntry(moduleDirectory: string, app: "control-plane" | "model-gateway"): string {
+  return resolve(moduleDirectory, `../../../apps/${app}/dist/main.js`);
+}
+
+function resolveControlPlaneEntry(env: ConnectionEnvironment, moduleDirectory = dirname(fileURLToPath(import.meta.url))): string | undefined {
   const explicit = env.MAESTRO_CONTROL_PLANE_ENTRY?.trim();
   if (explicit !== undefined && explicit !== "") return resolve(explicit);
   const cwdCandidate = resolve(process.cwd(), "apps", "control-plane", "dist", "main.js");
   try { if (requireFile(cwdCandidate)) return cwdCandidate; } catch { /* Continue to the installed-layout candidate. */ }
-  const installedCandidate = resolveInstalledControlPlaneEntry();
-  try { if (requireFile(installedCandidate)) return installedCandidate; } catch { /* No local bundled Control Plane. */ }
+  const installedCandidate = resolveInstalledControlPlaneEntry(moduleDirectory);
+  try { if (requireFile(installedCandidate)) return installedCandidate; } catch { /* Continue to the packaged-layout candidate. */ }
+  const packagedCandidate = resolvePackagedAppEntry(moduleDirectory, "control-plane");
+  try { if (requireFile(packagedCandidate)) return packagedCandidate; } catch { /* No local bundled Control Plane. */ }
   return undefined;
 }
 
