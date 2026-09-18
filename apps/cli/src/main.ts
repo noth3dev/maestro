@@ -5,8 +5,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { openExternalUrl } from "./external-url.js";
 import { ApiError, createApiClient, type GoalEvent, type GoalResult } from "@maestro/api-client";
 import { startInteractiveTui } from "./tui/entry.js";
-import { resolveConnection } from "./tui/connection.js";
-import { resolveLocalConnection } from "./tui/local-bootstrap.js";
+import { resolveConnection, resolveLocalConnection } from "@maestro/local-backend";
 import type { CertifyWorkerInput } from "@maestro/contracts";
 import { MAESTRO_VERSION } from "./version.js";
 

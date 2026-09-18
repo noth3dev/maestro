@@ -1,5 +1,5 @@
 import type { Workspace } from "../workspace.js";
-import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "../local-bootstrap.js";
+import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "@maestro/local-backend";
 import type { OrganizationReadModel } from "../panels/organization-panel.js";
 import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
 import type { ConversationActivityEvent } from "@maestro/contracts";

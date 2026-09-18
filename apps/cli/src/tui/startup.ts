@@ -1,8 +1,6 @@
 import { createApiClient, type ApiClient } from "@maestro/api-client";
 import { resolveWorkspace, workspaceIdentity, type Workspace } from "./workspace.js";
-import { resolveConnection } from "./connection.js";
-import { ensureLocalControlPlane } from "./local-control-plane.js";
-import { resolveLocalConnection, type LocalBootstrapStepEvent } from "./local-bootstrap.js";
+import { ensureLocalControlPlane, resolveConnection, resolveLocalConnection, type LocalBootstrapStepEvent } from "@maestro/local-backend";
 import { discoverWorkspaceProject, discoverWorkspaceProjectFromControlPlane } from "./commands/read-commands.js";
 import { loadWorkspaceSession, attachWorkspaceSession, saveWorkspaceSession } from "./session.js";
 import type { TuiShellState } from "./components/shell.js";

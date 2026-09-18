@@ -93,7 +93,7 @@ export {
   hydrateOrganizationOnReconnect,
   resolveConfiguredModel,
 } from "./entry-hydration.js";
-import type { LocalBootstrapStepEvent } from "./local-bootstrap.js";
+import type { LocalBootstrapStepEvent } from "@maestro/local-backend";
 
 export async function startInteractiveTui(options: InteractiveTuiOptions): Promise<number> {
   const terminal = new ProcessTerminal();

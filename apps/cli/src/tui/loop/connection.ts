@@ -1,7 +1,6 @@
 import { createApiClient } from "@maestro/api-client";
 import { resolveRetryWorkspace } from "../retry-workspace.js";
-import { ensureLocalControlPlane } from "../local-control-plane.js";
-import { resolveLocalConnection } from "../local-bootstrap.js";
+import { ensureLocalControlPlane, resolveLocalConnection } from "@maestro/local-backend";
 import { shouldAutoBootstrapLocal } from "../startup.js";
 import { hydrateOrganizationOnReconnect } from "../entry-hydration.js";
 import { reconnectWorkspaceProject } from "../project-reconnect.js";

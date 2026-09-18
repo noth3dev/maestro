@@ -1,5 +1,4 @@
-import { resolveLocalConnection, type LocalBootstrapOptions } from "../../cli/dist/tui/local-bootstrap.js";
-import type { ConnectionEnvironment, ConnectionState } from "../../cli/dist/tui/connection.js";
+import { resolveLocalConnection, type ConnectionEnvironment, type ConnectionState, type LocalBootstrapOptions } from "@maestro/local-backend";
 import type { ConnectionConfig } from "./store.js";
 
 export interface CarnegieBootstrapResult {

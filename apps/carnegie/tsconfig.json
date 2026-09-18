@@ -11,5 +11,5 @@
   },
   "include": ["electron/**/*.ts", "electron/**/*.cts", "src/lib/**/*.ts"],
   "exclude": ["node_modules", "src/lib/**/*.test.ts"],
-  "references": [{ "path": "../../packages/api-client" }, { "path": "../../packages/contracts" }]
+  "references": [{ "path": "../../packages/api-client" }, { "path": "../../packages/contracts" }, { "path": "../../packages/local-backend" }]
 }

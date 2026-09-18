@@ -27,7 +27,7 @@ import { refreshDashboardState } from "../dashboard-refresh.js";
 import { readDashboard } from "../commands/read-commands.js";
 import type { InteractiveTuiOptions } from "../startup.js";
 import type { initializeTui } from "../startup.js";
-import type { LocalBootstrapStepEvent } from "../local-bootstrap.js";
+import type { LocalBootstrapStepEvent } from "@maestro/local-backend";
 import { TuiView } from "./view.js";
 import { ActivitySync } from "./activity.js";
 import { AuthFlows } from "./auth.js";

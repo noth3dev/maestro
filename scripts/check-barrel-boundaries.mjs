@@ -92,11 +92,6 @@ const EXCEPTIONS = [
     reason: "compares TUI command output against the API surface",
   },
   {
-    importer: "apps/carnegie/electron/bootstrap.ts",
-    specifier: "../../cli/dist/tui/local-bootstrap.js",
-    reason: "PROD EXCEPTION: local-backend orchestration owned by CLI; extract to a package as its own finding",
-  },
-  {
     importer: "packages/persistence/src/worker.integration.test.ts",
     specifier: "../../../apps/control-plane/src/ensemble-candidate-catalog.js",
     reason: "worker-store integration through control-plane admission; catalog home undecided",
