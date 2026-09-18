@@ -5,12 +5,12 @@ import {
   channelRowKey,
   loadSidebarChannels,
   MAX_SIDEBAR_CHANNELS,
-  renderChannelSection,
+  renderChannelSections,
   resolveSidebarChannelClick,
   sidebarChannelSyncAction,
 } from "./sidebar-channels.js";
 import { renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "./sidebar.js";
-import { NAV_ROWS } from "./sidebar-nav.js";
+import { NAV_ROWS, resolveSidebarNavClick } from "./sidebar-nav.js";
 import type { ChannelRead } from "@maestro/api-client";
 
 // eslint-disable-next-line no-control-regex
@@ -66,40 +66,104 @@ describe("channel row keys", () => {
   });
 });
 
-describe("renderChannelSection", () => {
-  it("lists display names with message counts plus a refresh trailer", () => {
-    const section = renderChannelSection(reads, undefined);
-    expect(section?.title).toBe("channels");
-    expect(section?.rows.map((row) => row.label)).toEqual(["#engineering (3)", "#general (2)", "refresh"]);
-    expect(section?.rows.map((row) => row.id)).toEqual([
-      "channel:department:engineering",
-      "channel:organization:general",
-      CHANNEL_REFRESH_ROW_ID,
+describe("renderChannelSections", () => {
+  const mixed = [
+    read("department", "quality"),
+    read("organization", "general"),
+    read("encore", "metronome"),
+    read("department", "engineering", { messages: 3 }),
+    read("department", "product"),
+  ];
+
+  function labels(sections: ReturnType<typeof renderChannelSections>): string[][] {
+    return sections.map((section) => section.rows.map((row) => row.label));
+  }
+
+  it("groups reads in mockup order with the org block first", () => {
+    const sections = renderChannelSections(mixed, undefined);
+    expect(sections.map((section) => section.title)).toEqual([
+      "channels",
+      "encore",
+      "product group",
+      "tech group",
+      "assurance group",
     ]);
-    for (const row of section?.rows ?? []) expect(row.selectable).toBe(true);
+    expect(labels(sections)).toEqual([
+      ["#general (2)"],
+      ["#metronome (2)"],
+      ["#product (2)"],
+      ["#engineering (3)"],
+      ["#quality (2)", "refresh"],
+    ]);
+    for (const section of sections) for (const row of section.rows) expect(row.selectable).toBe(true);
   });
 
-  it("marks focus without disturbing other rows", () => {
-    const section = renderChannelSection(reads, "channel:organization:general");
-    expect(section?.rows[0]?.focused).toBe(false);
-    expect(section?.rows[1]?.focused).toBe(true);
-    expect(section?.rows[2]?.focused).toBe(false);
+  it("marks focus exactly once across groups", () => {
+    const sections = renderChannelSections(mixed, "channel:department:engineering");
+    const focused = sections.flatMap((section) => section.rows).filter((row) => row.focused === true);
+    expect(focused.map((row) => row.id)).toEqual(["channel:department:engineering"]);
   });
 
-  it("returns undefined when the cache is empty", () => {
-    expect(renderChannelSection([], undefined)).toBeUndefined();
+  it("returns no sections when the cache is empty", () => {
+    expect(renderChannelSections([], undefined)).toEqual([]);
   });
 
-  it("caps rows at the rendered limit with the refresh trailer last", () => {
-    const many = Array.from({ length: 12 }, (_, index) => read("department", `dept-${index}`));
-    const section = renderChannelSection(many, undefined);
-    expect(section?.rows.length).toBe(MAX_SIDEBAR_CHANNELS + 1);
-    expect(section?.rows[MAX_SIDEBAR_CHANNELS]).toMatchObject({ label: "refresh", id: CHANNEL_REFRESH_ROW_ID });
+  it("omits groups with no reads", () => {
+    const sections = renderChannelSections([read("organization", "general")], undefined);
+    expect(sections.map((section) => section.title)).toEqual(["channels"]);
+  });
+
+  it("parks unknown department scopes in the top block", () => {
+    const sections = renderChannelSections([read("department", "future-dept")], undefined);
+    expect(sections.map((section) => section.title)).toEqual(["channels"]);
+    expect(sections[0]!.rows.map((row) => row.id)).toEqual(["channel:department:future-dept", CHANNEL_REFRESH_ROW_ID]);
+  });
+
+  it("renders no concertmaster row", () => {
+    const sections = renderChannelSections(mixed, undefined);
+    const text = renderSidebar(SIDEBAR_WIDTH, sections)
+      .map(stripAnsi)
+      .join("\n");
+    expect(text.includes("concertmaster")).toBe(false);
+  });
+
+  it("caps globally in mockup order with the refresh trailer last", () => {
+    const many = [
+      read("organization", "general"),
+      read("organization", "head-council"),
+      read("encore", "encore-council"),
+      read("encore", "metronome"),
+      read("department", "product"),
+      read("department", "design"),
+      read("department", "engineering"),
+      read("department", "security"),
+      read("department", "research"),
+      read("department", "quality"),
+      read("department", "operations"),
+      read("department", "infrastructure"),
+    ];
+    const sections = renderChannelSections(many, undefined);
+    const rows = sections.flatMap((section) => section.rows);
+    expect(rows.length).toBe(MAX_SIDEBAR_CHANNELS + 1);
+    expect(rows.slice(0, MAX_SIDEBAR_CHANNELS).every((row) => row.selectable === true)).toBe(true);
+    expect(rows[MAX_SIDEBAR_CHANNELS]).toMatchObject({ label: "refresh", id: CHANNEL_REFRESH_ROW_ID });
+    const ids = rows.slice(0, MAX_SIDEBAR_CHANNELS).map((row) => row.id);
+    expect(ids).toEqual([
+      "channel:organization:general",
+      "channel:organization:head-council",
+      "channel:encore:encore-council",
+      "channel:encore:metronome",
+      "channel:department:product",
+      "channel:department:design",
+      "channel:department:engineering",
+      "channel:department:security",
+    ]);
+    expect(sections.map((section) => section.title)).toEqual(["channels", "encore", "product group", "tech group"]);
   });
 
   it("keeps rows within the fixed width", () => {
-    const section = renderChannelSection([read("department", "safety-compliance", { messages: 123 })], undefined);
-    const lines = renderSidebar(SIDEBAR_WIDTH, [section!]);
+    const sections = renderChannelSections([read("department", "safety-compliance", { messages: 123 })], undefined);
+    const lines = renderSidebar(SIDEBAR_WIDTH, sections);
     for (const line of lines) expect(stripAnsi(line).length).toBeLessThanOrEqual(SIDEBAR_WIDTH);
     expect(stripAnsi(lines.join("\n"))).toContain("#safety-compliance");
   });
@@ -117,8 +181,8 @@ describe("sidebarChannelSyncAction", () => {
 
 describe("resolveSidebarChannelClick", () => {
   function lines() {
-    const section = renderChannelSection(reads, undefined);
-    return renderSidebar(SIDEBAR_WIDTH, [renderNavSection(NAV_ROWS, undefined), section!]);
+    const sections = renderChannelSections(reads, undefined);
+    return renderSidebar(SIDEBAR_WIDTH, [renderNavSection(NAV_ROWS, undefined), ...sections]);
   }
 
   function rowIndex(rendered: readonly string[], fragment: string): number {
@@ -155,13 +219,20 @@ describe("resolveSidebarChannelClick", () => {
   });
 
   it("never matches a goal name rendered outside the channels block", () => {
-    const section = renderChannelSection(reads, undefined);
+    const sections = renderChannelSections(reads, undefined);
     const rendered = renderSidebar(SIDEBAR_WIDTH, [
       { title: "status", rows: [{ label: "goal", value: "#engineering launch" }] },
       renderNavSection(NAV_ROWS, undefined),
-      section!,
+      ...sections,
     ]);
     expect(resolveSidebarChannelClick(rendered, reads, 3, rowIndex(rendered, "status") + 1)).toBeUndefined();
+  });
+
+  it("leaves group titles unmapped", () => {
+    const rendered = lines();
+    expect(resolveSidebarChannelClick(rendered, reads, 3, rowIndex(rendered, "tech group"))).toBeUndefined();
+    expect(resolveSidebarNavClick(rendered, 3, rowIndex(rendered, "tech group"))).toBeUndefined();
+    expect(resolveSidebarNavClick(rendered, 3, rowIndex(rendered, "channels"))).toBeUndefined();
   });
 });
 

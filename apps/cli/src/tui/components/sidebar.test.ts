@@ -13,7 +13,7 @@ import {
   type SidebarSection,
 } from "./sidebar.js";
 import { NAV_ROWS, resolveSidebarGoalClick, resolveSidebarNavClick } from "./sidebar-nav.js";
-import { renderChannelSection, resolveSidebarChannelClick } from "./sidebar-channels.js";
+import { renderChannelSections, resolveSidebarChannelClick } from "./sidebar-channels.js";
 import { StubTerminal } from "./stub-terminal.js";
 
 function plain(value: string): string {
@@ -171,7 +171,7 @@ describe("sidebar section composition", () => {
   function composed() {
     return renderSidebar(SIDEBAR_WIDTH, [
       renderNavSection(NAV_ROWS, undefined),
-      renderChannelSection(channels as never, undefined)!,
+      ...renderChannelSections(channels as never, undefined),
       renderGoalSection(goals, undefined, undefined)!,
       renderFooterSection(),
     ]);

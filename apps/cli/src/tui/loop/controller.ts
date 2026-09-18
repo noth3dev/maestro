@@ -9,7 +9,7 @@ import { activateSidebarRow, NAV_ROWS, resolveSidebarGoalClick, resolveSidebarNa
 import {
   activateSidebarChannel,
   loadSidebarChannels,
-  renderChannelSection,
+  renderChannelSections,
   resolveSidebarChannelClick,
   sidebarChannelSyncAction,
 } from "../components/sidebar-channels.js";
@@ -341,12 +341,12 @@ export class TuiController {
         this.sidebarChannels = [];
         void this.refreshSidebarChannels();
       }
-      const channelSection = renderChannelSection(this.sidebarChannels, this.sidebarFocus);
+      const channelSections = renderChannelSections(this.sidebarChannels, this.sidebarFocus);
       const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
       return renderSidebar(width, [
         ...renderStatusSection(toSidebarStatus(state), width),
         renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state)),
-        ...(channelSection === undefined ? [] : [channelSection]),
+        ...channelSections,
         ...(goalSection === undefined ? [] : [goalSection]),
         renderFooterSection(),
       ]);
