@@ -57,12 +57,73 @@ describe("sidebar shell", () => {
     ]);
     const focused = lines.find((line) => plain(line).includes("search"))!;
     expect(focused).toBe(
-      tuiTheme.primary(`› ${fitPlain("search", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1)) + tuiTheme.border(divider),
+      tuiTheme.selected(tuiTheme.primary(`› ${fitPlain("search", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1))) +
+        tuiTheme.border(divider),
     );
     const calm = lines.find((line) => plain(line).includes("inbox"))!;
     expect(calm).toBe(
       tuiTheme.text(`  ${fitPlain("inbox", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1)) + tuiTheme.border(divider),
     );
+  });
+
+  function withEnv(env: { noColor?: string; colorTerm?: string }, fn: () => void): void {
+    const prevNoColor = process.env.NO_COLOR;
+    const prevColorTerm = process.env.COLORTERM;
+    try {
+      if (env.noColor === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = env.noColor;
+      if (env.colorTerm === undefined) delete process.env.COLORTERM;
+      else process.env.COLORTERM = env.colorTerm;
+      fn();
+    } finally {
+      if (prevNoColor === undefined) delete process.env.NO_COLOR;
+      else process.env.NO_COLOR = prevNoColor;
+      if (prevColorTerm === undefined) delete process.env.COLORTERM;
+      else process.env.COLORTERM = prevColorTerm;
+    }
+  }
+
+  function focusedLine(): string {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [
+      { title: "views", rows: [{ label: "search", id: "home", selectable: true, focused: true }] },
+    ]);
+    return lines.find((line) => plain(line).includes("search"))!;
+  }
+
+  it("keeps only the gutter in no-color mode", () => {
+    withEnv({ noColor: "1" }, () => {
+      const line = focusedLine();
+      expect(line).toBe(`› ${fitPlain("search", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1) + "┃");
+      expect(line.includes("")).toBe(false);
+    });
+  });
+
+  it("wraps the full row in reverse video in color modes", () => {
+    for (const colorTerm of ["truecolor", undefined]) {
+      withEnv({ colorTerm }, () => {
+        const line = focusedLine();
+        expect(line.charCodeAt(0)).toBe(27);
+        expect(line.includes("[7m")).toBe(true);
+        expect(line.endsWith("[39m")).toBe(true);
+      });
+    }
+  });
+
+  it("never paints the divider inverse and never fills backgrounds", () => {
+    for (const colorTerm of ["truecolor", undefined]) {
+      withEnv({ colorTerm }, () => {
+        const text = renderSidebar(SIDEBAR_WIDTH, [
+          { title: "views", rows: [{ label: "search", id: "home", selectable: true, focused: true }] },
+        ]).join("\n");
+        expect(text.match(/48;[25]|4[0-7]m/)).toBeNull();
+        expect(text.match(/\[7m/g)?.length).toBe(1);
+      });
+    }
+  });
+
+  it("never bars non-selectable rows even when flagged focused", () => {
+    const lines = renderSidebar(SIDEBAR_WIDTH, [{ rows: [{ label: "model", value: "gpt-5", focused: true }] }]);
+    expect(lines.join("\n").includes("[7m")).toBe(false);
   });
 
   it("separates sections with one blank padded gap", () => {
