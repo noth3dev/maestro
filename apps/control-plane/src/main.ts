@@ -137,6 +137,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     evidenceCaptureService,
     personaGoalEvidenceService,
     personaInspectionService,
+    withGoalLease,
   } = composeFoundationServices({ pool, config, overrides, authorityRepository, modelGateway });
   const {
     headParticipationService,
@@ -149,7 +150,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     concertmasterReportService,
     metronomeService,
     encoreService,
-  } = composeExecutionServices({ pool, config, overrides, goalService, executionKernel, authorityExecutor, modelGateway });
+  } = composeExecutionServices({ pool, config, overrides, withGoalLease, executionKernel, authorityExecutor, modelGateway });
   const app = buildServer({
     goalService,
     headParticipationService,
@@ -316,13 +317,13 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       : createMetronomeLoop({
           pool,
           kernel: executionKernel,
-          withGoalLease: goalService.withGoalLease!,
+          withGoalLease,
           intervalMs: config.metronomeIntervalMs,
           ...(drainCapacityQueues === undefined ? {} : { drainCapacityQueues }),
         });
   const capacityQueueLoop =
     metronomeLoop === undefined && drainCapacityQueues !== undefined
-      ? createMetronomeLoop({ pool, withGoalLease: goalService.withGoalLease!, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
+      ? createMetronomeLoop({ pool, withGoalLease, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
       : undefined;
   let closed = false;
 

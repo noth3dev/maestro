@@ -33,6 +33,19 @@ export interface GoalService {
   ): Promise<T>;
 }
 
+export type GoalLeaseOperation = NonNullable<GoalService["withGoalLease"]>;
+
+/**
+ * Resolve the internal lease seam, failing closed when a composition built a
+ * GoalService without it. Replaces non-null assertions at composition sites
+ * with one explicit check so a miswired service fails at startup, not on
+ * first use with an obscure TypeError.
+ */
+export function requireGoalLease(service: Pick<GoalService, "withGoalLease">): GoalLeaseOperation {
+  if (service.withGoalLease === undefined) throw new DurableStoreUnavailableError();
+  return service.withGoalLease;
+}
+
 class GoalServiceError extends Error {
   constructor(message: string) { super(message); this.name = new.target.name; }
 }

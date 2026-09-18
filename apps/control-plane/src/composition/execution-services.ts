@@ -34,14 +34,14 @@ export interface ExecutionServicesDeps {
   pool: Pool;
   config: MaestroConfig;
   overrides: ControlPlaneOverrides;
-  goalService: ReturnType<typeof composeFoundationServices>["goalService"];
+  withGoalLease: ReturnType<typeof composeFoundationServices>["withGoalLease"];
   executionKernel: ExecutionKernelPort;
   authorityExecutor: AuthorizedEffectExecutor;
   modelGateway?: ModelGatewayPort | undefined;
 }
 
 export function composeExecutionServices(deps: ExecutionServicesDeps) {
-  const { pool, config, overrides, goalService, executionKernel, authorityExecutor, modelGateway } = deps;
+  const { pool, config, overrides, withGoalLease, executionKernel, authorityExecutor, modelGateway } = deps;
   const nativeAdmission =
     overrides.nativeAdmission ??
     (modelGateway === undefined ? undefined : (input: NativeAdmissionInput) => createHostNativeAdmission(config, input));
@@ -53,16 +53,16 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
   const headParticipationService = createHeadParticipationService({
     pool,
     kernel: executionKernel,
-    withGoalLease: goalService.withGoalLease!,
+    withGoalLease,
     ...(nativeAdmission === undefined ? {} : { createAdmission: (input) => nativeAdmission({ purpose: "head", ...input }) }),
   });
-  const councilService = createCouncilService({ pool, withGoalLease: goalService.withGoalLease! });
-  const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease: goalService.withGoalLease! });
-  const missionBundleService = createMissionBundleService({ pool, withGoalLease: goalService.withGoalLease! });
+  const councilService = createCouncilService({ pool, withGoalLease });
+  const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease });
+  const missionBundleService = createMissionBundleService({ pool, withGoalLease });
   const gitIntegrationService = createGitIntegrationService({
     pool,
     workspaceRoot: config.worktreeRoot,
-    withGoalLease: goalService.withGoalLease!,
+    withGoalLease,
     createGitPort: (context) =>
       overrides.gitPort ?? createLocalGitPort({ authority: authorityExecutor, context, workspaceRoot: config.worktreeRoot }),
     getControlEpoch: async (projectId, goalId) => (await getGoalControl(pool, projectId, goalId)).controlEpoch,
@@ -125,7 +125,7 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
     pool,
     kernel: executionKernel,
     workspaceRoot: config.worktreeRoot,
-    withGoalLease: goalService.withGoalLease!,
+    withGoalLease,
     prepareWorkerWorktree: (workerId, input, operatorId, commandId) =>
       gitIntegrationService.createWorkerWorktree(workerId, input, operatorId, commandId),
     ...(config.maxConcurrentWorkersPerProject === undefined
@@ -133,13 +133,13 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
       : { maxConcurrentWorkersPerProject: config.maxConcurrentWorkersPerProject }),
     ...(capacity === undefined ? {} : { capacity }),
   });
-  const certificationService = createCertificationService({ pool, withGoalLease: goalService.withGoalLease! });
-  const concertmasterReportService = createConcertmasterReportService({ pool, withGoalLease: goalService.withGoalLease! });
-  const metronomeService = createMetronomeService({ pool, withGoalLease: goalService.withGoalLease! });
+  const certificationService = createCertificationService({ pool, withGoalLease });
+  const concertmasterReportService = createConcertmasterReportService({ pool, withGoalLease });
+  const metronomeService = createMetronomeService({ pool, withGoalLease });
   const encoreService = createEncoreService({
     pool,
     kernel: executionKernel,
-    withGoalLease: goalService.withGoalLease!,
+    withGoalLease,
     ...(nativeAdmission === undefined ? {} : { createAdmission: (input) => nativeAdmission({ purpose: "encore", ...input }) }),
   });
   return {

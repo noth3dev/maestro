@@ -22,7 +22,7 @@ import { createCapabilityApprovalService } from "../capability-approval-service.
 import { createEvidenceCaptureService, EvidenceCaptureGoalBindingError } from "../evidence-capture-service.js";
 import { createPersonaGoalEvidenceService } from "../persona-goal-evidence-service.js";
 import { createPersonaInspectionService } from "../persona-inspection-service.js";
-import { createDurableGoalService } from "../goal-service.js";
+import { createDurableGoalService, requireGoalLease } from "../goal-service.js";
 import { createDurableTaskContractService } from "../task-contract-service.js";
 import { createPostgresConversationService } from "../conversation-service.js";
 
@@ -95,6 +95,7 @@ export function composeFoundationServices(deps: FoundationServicesDeps) {
     actorId: config.actorId,
     leaseOwnerId: config.leaseOwnerId,
   });
+  const withGoalLease = requireGoalLease(goalService);
   const authenticator: OperatorAuthenticator = {
     authenticateBearerSecret: (secret) => authenticateLocalOperator(pool, secret),
   };
@@ -153,11 +154,12 @@ export function composeFoundationServices(deps: FoundationServicesDeps) {
     },
   });
   const personaGoalEvidenceService = createPersonaGoalEvidenceService({ pool });
-  const personaInspectionService = createPersonaInspectionService({ pool, withGoalLease: goalService.withGoalLease! });
+  const personaInspectionService = createPersonaInspectionService({ pool, withGoalLease });
   return {
     taskContractService,
     conversationService,
     goalService,
+    withGoalLease,
     authenticator,
     criticalActionService,
     capabilityApprovalService,
