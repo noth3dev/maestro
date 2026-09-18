@@ -67,6 +67,11 @@ describe("resolveSidebarNavClick", () => {
     expect(resolveSidebarNavClick(["  searc"], 3, 0)).toBeUndefined();
     expect(resolveSidebarNavClick(["  evidence lo"], 3, 0)).toBeUndefined();
   });
+
+  it("treats the divider column as chrome", () => {
+    expect(resolveSidebarNavClick([`  search${" ".repeat(17)}┃`], 25, 0)).toBeUndefined();
+    expect(resolveSidebarNavClick([`  search${" ".repeat(17)}┃`], 3, 0)).toBe("home");
+  });
 });
 
 describe("sidebar nav actions", () => {
@@ -226,7 +231,7 @@ describe("resolveSidebarGoalClick", () => {
     const rendered = lines();
     expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "11111111"))).toBe(goals[0]!.goalId);
     expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "aaaaaaaa"))).toBe(goals[1]!.goalId);
-    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "home"))).toBeUndefined();
+    expect(resolveSidebarGoalClick(rendered, goals, 3, rowIndex(rendered, "search"))).toBeUndefined();
     expect(resolveSidebarGoalClick(rendered, goals, 3, 0)).toBeUndefined();
     expect(resolveSidebarGoalClick(rendered, goals, 3, -1)).toBeUndefined();
     expect(resolveSidebarGoalClick(rendered, goals, 3, rendered.length)).toBeUndefined();
@@ -254,5 +259,12 @@ describe("resolveSidebarGoalClick", () => {
     const truncated = [...rendered];
     truncated[target] = "  • …";
     expect(resolveSidebarGoalClick(truncated, goals, 3, target)).toBeUndefined();
+  });
+
+  it("treats the divider column as chrome", () => {
+    const rendered = lines();
+    const target = rowIndex(rendered, "11111111");
+    expect(resolveSidebarGoalClick(rendered, goals, 3, target)).toBe(goals[0]!.goalId);
+    expect(resolveSidebarGoalClick(rendered, goals, stripAnsi(rendered[target]!).length - 1, target)).toBeUndefined();
   });
 });

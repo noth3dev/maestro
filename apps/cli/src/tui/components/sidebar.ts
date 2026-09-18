@@ -64,18 +64,23 @@ function renderRow(row: SidebarRow, width: number): string {
 }
 
 /**
- * Fixed-width bordered shell; sections slot between title and bottom rule.
- * Later findings append inbox/channel/footer groups here.
+ * Open pane in the opencode SplitBorder manner: no box, one heavy vertical
+ * divider at the content edge, one blank padded gap between sections, and
+ * accent section titles. Content narrows by the divider cell; every line
+ * keeps the full width so the divider column stays chrome for clicks.
  */
 export function renderSidebar(width: number, sections: readonly SidebarSection[] = []): string[] {
   if (width <= 0) return [];
-  const rule = tuiTheme.border("─".repeat(width));
+  const inner = Math.max(0, width - 1);
+  const divider = tuiTheme.border("┃");
+  const gap = " ".repeat(inner);
   const body: string[] = [];
-  for (const section of sections) {
-    if (section.title !== undefined) body.push(tuiTheme.muted(fitPlain(section.title, width).padEnd(width)));
-    for (const row of section.rows) body.push(renderRow(row, width));
+  for (const [index, section] of sections.entries()) {
+    if (index > 0) body.push(gap);
+    if (section.title !== undefined) body.push(tuiTheme.primary(fitPlain(section.title, inner).padEnd(inner)));
+    for (const row of section.rows) body.push(renderRow(row, inner));
   }
-  return [rule, tuiTheme.primary(fitPlain(" sidebar", width).padEnd(width)), ...body, rule];
+  return body.map((line) => `${line}${divider}`);
 }
 
 /** Nav rows for a section, focus-marked without disturbing other groups. */

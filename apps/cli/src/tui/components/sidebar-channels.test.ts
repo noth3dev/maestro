@@ -234,6 +234,28 @@ describe("resolveSidebarChannelClick", () => {
     expect(resolveSidebarNavClick(rendered, 3, rowIndex(rendered, "tech group"))).toBeUndefined();
     expect(resolveSidebarNavClick(rendered, 3, rowIndex(rendered, "channels"))).toBeUndefined();
   });
+
+  it("treats the divider column as chrome", () => {
+    const rendered = lines();
+    const target = rowIndex(rendered, "#engineering");
+    expect(resolveSidebarChannelClick(rendered, reads, 3, target)).toBe("channel:department:engineering");
+    expect(resolveSidebarChannelClick(rendered, reads, stripAnsi(rendered[target]!).length - 1, target)).toBeUndefined();
+  });
+
+  it("tolerates blank gap lines between blocks", () => {
+    const rendered = lines();
+    const titleIdx = rowIndex(rendered, "tech group");
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    const gapped = [...rendered.slice(0, titleIdx), `${" ".repeat(25)}┃`, ...rendered.slice(titleIdx)];
+    expect(resolveSidebarChannelClick(gapped, reads, 3, rowIndex(gapped, "#engineering"))).toBe(
+      "channel:department:engineering",
+    );
+  });
+
+  it("fails closed when a block title is missing", () => {
+    const rendered = lines().filter((line) => !stripAnsi(line).includes("tech group"));
+    expect(resolveSidebarChannelClick(rendered, reads, 3, rowIndex(rendered, "#engineering"))).toBeUndefined();
+  });
 });
 
 describe("activateSidebarChannel", () => {
