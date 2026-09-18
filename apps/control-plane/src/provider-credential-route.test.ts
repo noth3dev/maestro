@@ -163,3 +163,102 @@ describe("provider account login routes", () => {
     await app.close();
   });
 });
+
+describe("provider account login status and cancel branches", () => {
+  const headers = { authorization: "Bearer test-secret", "content-type": "application/json" };
+  const base = { loginId: "durable-login-1", requestId: "request-1", operatorId: operator.operatorId, ownerId: "control-plane-test", providerId: "openai-codex" as const, providerLoginId: "provider-login-1", authUrl: "https://chatgpt.com/login" };
+  function storeFor(record: unknown, overrides: Record<string, unknown> = {}) {
+    return {
+      reserveStart: vi.fn(), completeStart: vi.fn(), failStart: vi.fn(),
+      get: vi.fn(async () => record), getByRequest: vi.fn(), updateState: vi.fn(async () => record),
+      claimOperation: vi.fn(async () => "operation-token"), releaseOperation: vi.fn(async () => {}), recoverStarting: vi.fn(async () => 0),
+      ...overrides,
+    } as unknown as AccountLoginStore;
+  }
+  function serviceFor(gateway: Record<string, unknown>) {
+    return { bind: vi.fn(), revoke: vi.fn(), ...gateway } as unknown as ProviderCredentialService;
+  }
+
+  it("reports a starting record as pending without touching the gateway", async () => {
+    const starting = { ...base, providerLoginId: null, authUrl: null, state: "starting" as const, message: null };
+    const accountLoginStatus = vi.fn();
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ accountLoginStatus }), accountLoginStore: storeFor(starting) });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/status", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", state: "pending" });
+    expect(accountLoginStatus).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("echoes a settled record with its message", async () => {
+    const cancelled = { ...base, state: "cancelled" as const, message: "operator cancelled" };
+    const accountLoginStatus = vi.fn();
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ accountLoginStatus }), accountLoginStore: storeFor(cancelled) });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/status", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", state: "cancelled", message: "operator cancelled" });
+    expect(accountLoginStatus).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("echoes instead of conflicting when a lost claim re-reads a settled record", async () => {
+    const pending = { ...base, state: "pending" as const, message: null };
+    const accountLoginStatus = vi.fn();
+    const store = storeFor(pending, {
+      get: vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce({ ...pending, state: "succeeded" as const, message: null }),
+      claimOperation: vi.fn(async () => undefined),
+    });
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ accountLoginStatus }), accountLoginStore: store });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/status", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ providerId: "openai-codex", loginId: "durable-login-1", state: "succeeded" });
+    expect(accountLoginStatus).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("cancels a pending login through the gateway", async () => {
+    const pending = { ...base, state: "pending" as const, message: null };
+    const cancelled = { ...base, state: "cancelled" as const, message: null };
+    const cancelAccountLogin = vi.fn(async () => {});
+    const updateState = vi.fn(async () => cancelled);
+    const releaseOperation = vi.fn(async () => {});
+    const store = storeFor(pending, { updateState, releaseOperation });
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ cancelAccountLogin }), accountLoginStore: store });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/cancel", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ cancelled: true });
+    expect(cancelAccountLogin).toHaveBeenCalledWith({ operatorId: operator.operatorId, requestId: expect.any(String), providerId: "openai-codex", loginId: "provider-login-1" });
+    expect(updateState).toHaveBeenCalledWith("durable-login-1", operator.operatorId, "cancelled", undefined, expect.any(String), "operation-token");
+    expect(releaseOperation).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("reports a lost gateway session on cancel without failing", async () => {
+    const pending = { ...base, state: "pending" as const, message: null };
+    const unknown = { ...base, state: "unknown" as const, message: "Gateway login session was lost during restart" };
+    const cancelAccountLogin = vi.fn(async () => {
+      throw new ModelGatewayClientError("account_login_session_unknown", 409, "gone");
+    });
+    const updateState = vi.fn(async () => unknown);
+    const store = storeFor(pending, { updateState });
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ cancelAccountLogin }), accountLoginStore: store });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/cancel", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ cancelled: false });
+    expect(updateState).toHaveBeenCalledWith("durable-login-1", operator.operatorId, "unknown", "Gateway login session was lost during restart", expect.any(String), "operation-token");
+    await app.close();
+  });
+
+  it("answers cancel on a settled record without touching the gateway", async () => {
+    const cancelled = { ...base, state: "cancelled" as const, message: null };
+    const cancelAccountLogin = vi.fn();
+    const claimOperation = vi.fn();
+    const app = buildServer({ goalService, authenticator, providerCredentials: serviceFor({ cancelAccountLogin }), accountLoginStore: storeFor(cancelled, { claimOperation }) });
+    const response = await app.inject({ method: "POST", url: "/v1/provider-account-logins/cancel", headers, payload: { providerId: "openai-codex", loginId: "durable-login-1" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ cancelled: true });
+    expect(cancelAccountLogin).not.toHaveBeenCalled();
+    expect(claimOperation).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
