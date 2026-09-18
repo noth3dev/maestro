@@ -5,6 +5,7 @@ import { createCommandRegistry } from "../commands/registry.js";
 import { createCommandAutocompleteItems, createSlashCommandAutocompleteProvider } from "../commands/autocomplete.js";
 import { reconcileTuiSession, type RecoverySummary } from "../recovery.js";
 import { createDecisionRegion, createDynamicRegion } from "../components/regions.js";
+import { renderStatusSection, toSidebarStatus } from "../components/shell.js";
 import { contentWidth, isSidebarVisible, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
@@ -277,7 +278,7 @@ export class TuiController {
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
     const dock = new VStack([composer, this.footer]);
-    const sidebarRegion = createDynamicRegion((width) => renderSidebar(width));
+    const sidebarRegion = createDynamicRegion((width) => renderSidebar(width, renderStatusSection(toSidebarStatus(state), width)));
     const mainColumn = new VStack([
       { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
       { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },

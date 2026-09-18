@@ -7,6 +7,7 @@ import {
   SIDEBAR_MIN_COLUMNS,
   SIDEBAR_WIDTH,
   toggleSidebar,
+  type SidebarSection,
 } from "./sidebar.js";
 import { StubTerminal } from "./stub-terminal.js";
 
@@ -26,9 +27,30 @@ describe("sidebar shell", () => {
 
   it("truncates without throwing at narrow widths", () => {
     for (const width of [0, 1, 10, 25]) {
-      const lines = renderSidebar(width);
+      const lines = renderSidebar(width, []);
       for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(Math.max(0, width));
     }
+  });
+
+  it("renders row groups between chrome with fixed label column", () => {
+    const sections: SidebarSection[] = [
+      { title: "status", rows: [{ label: "model", value: "gpt-5" }, { label: "goal", value: "auth-refactor · running" }] },
+      { rows: [{ label: "conn", value: "connected" }] },
+    ];
+    const lines = renderSidebar(SIDEBAR_WIDTH, sections);
+    for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
+    const text = lines.map(plain).join("\n");
+    expect(text).toContain("status");
+    expect(text).toContain("model");
+    expect(text).toContain("gpt-5");
+    expect(text).toContain("conn");
+  });
+
+  it("truncates long values to the remaining cells", () => {
+    const sections: SidebarSection[] = [{ rows: [{ label: "model", value: "openai/very-long-model-name-here" }] }];
+    const lines = renderSidebar(SIDEBAR_WIDTH, sections);
+    for (const line of lines) expect(visibleWidth(line)).toBe(SIDEBAR_WIDTH);
+    expect(plain(lines[2]!)).toContain("openai");
   });
 });
 

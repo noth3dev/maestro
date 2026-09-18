@@ -1,4 +1,6 @@
+import { basename } from "node:path";
 import type { Workspace } from "../workspace.js";
+import type { SidebarSection } from "./sidebar.js";
 import { LOCAL_BOOTSTRAP_STEP_ORDER, type LocalBootstrapStepEvent, type LocalBootstrapStepName } from "@maestro/local-backend";
 import type { OrganizationReadModel } from "../panels/organization-panel.js";
 import { getZeroArgumentNoGoalActions } from "../commands/registry.js";
@@ -59,7 +61,7 @@ function stateText<T>(state: AsyncState<T>, format: (value: T) => string): strin
   return format(state.value);
 }
 
-function goalText(state: TuiShellState): string {
+function goalText(state: Pick<TuiShellState, "goal">): string {
   return stateText(state.goal, (value) => `${value.name} · ${value.state}`);
 }
 
@@ -67,7 +69,7 @@ function goalStateText(state: TuiShellState): string {
   return stateText(state.goal, (value) => value.state);
 }
 
-function workerText(state: TuiShellState): string {
+function workerText(state: Pick<TuiShellState, "workers">): string {
   return stateText(state.workers, (value) => `${value} worker${value === 1 ? "" : "s"}`);
 }
 
@@ -76,14 +78,14 @@ function pendingCount(state: TuiShellState): number {
   return state.approvals.kind === "value" ? state.approvals.value : 0;
 }
 
-function budgetText(state: TuiShellState): string {
+function budgetText(state: Pick<TuiShellState, "budget">): string {
   if (state.budget.kind !== "value") return stateText(state.budget, String);
   const spent = (state.budget.value.spentCents / 100).toFixed(2);
   const ceiling = (state.budget.value.ceilingCents / 100).toFixed(2);
   return `$${spent}/$${ceiling}`;
 }
 
-function connectionMessage(state: TuiShellState): string | undefined {
+function connectionMessage(state: Pick<TuiShellState, "connection">): string | undefined {
   if (state.connection.kind === "connected") return undefined;
   if (state.connection.kind === "connecting") return "gateway connecting";
   return state.connection.message;
@@ -123,6 +125,46 @@ export function renderStatusRow(state: TuiShellState, width: number): string {
   const baseWidth = Math.max(0, width - pending.length);
   const left = fitPlain(base, baseWidth).padEnd(baseWidth, " ");
   return `${tuiTheme.text(left)}${pendingPaint(fitPlain(pending, width - baseWidth))}`;
+}
+
+export interface SidebarStatus {
+  workspace: Workspace;
+  model?: string | undefined;
+  connection: TuiShellState["connection"];
+  goal: TuiShellState["goal"];
+  workers: TuiShellState["workers"];
+  budget: TuiShellState["budget"];
+}
+
+export function toSidebarStatus(state: TuiShellState): SidebarStatus {
+  return {
+    workspace: state.workspace,
+    model: state.model,
+    connection: state.connection,
+    goal: state.goal,
+    workers: state.workers,
+    budget: state.budget,
+  };
+}
+
+/** Labeled session rows for the sidebar; keyboard/mouse nav groups arrive later. */
+export function renderStatusSection(status: SidebarStatus, width: number): SidebarSection[] {
+  void width;
+  const connection = status.connection.kind === "connected" ? "connected" : connectionMessage(status);
+  const dir = basename(status.workspace.gitRoot ?? status.workspace.cwd);
+  return [
+    {
+      title: "status",
+      rows: [
+        { label: "model", value: status.model ?? "none" },
+        { label: "goal", value: goalText(status) },
+        { label: "workers", value: workerText(status) },
+        { label: "budget", value: budgetText(status) },
+        { label: "conn", value: connection ?? "connected" },
+        { label: "dir", value: dir === "" ? "/" : dir },
+      ],
+    },
+  ];
 }
 
 function pendingDecisionRows(state: TuiShellState): PendingDecision[] {

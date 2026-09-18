@@ -7,8 +7,10 @@ import {
   renderSplash,
   renderStatusHeader,
   renderStatusRegion,
+  renderStatusSection,
   renderTuiFooter,
   renderTuiLayout,
+  toSidebarStatus,
   type SetupStep,
   type TuiShellState,
 } from "./shell.js";
@@ -435,5 +437,50 @@ describe("Maestro TUI shell", () => {
     const frame = renderTuiLayout(state, 120, 30, { showSplash: true });
     expect(frame.status).toHaveLength(1);
     expect(frame.splash.findIndex((line) => line.includes("Concertmaster ready"))).toBe(1);
+  });
+});
+
+describe("sidebar status section", () => {
+  const full = {
+    ...state,
+    model: "openai/gpt-5",
+    mode: "maestro" as const,
+    goal: { kind: "value", value: { goalId: "goal-1", name: "auth-refactor", state: "running" } } as const,
+    workers: { kind: "value", value: 3 } as const,
+    budget: { kind: "value", value: { spentCents: 124, ceilingCents: 500 } } as const,
+  };
+
+  it("renders labeled session rows for a connected value state", () => {
+    const [section] = renderStatusSection(toSidebarStatus(full), 26);
+    expect(section).toBeDefined();
+    const text = section!.rows.map((row) => `${row.label}=${row.value ?? ""}`).join("\n");
+    expect(text).toContain("model=openai/gpt-5");
+    expect(text).toContain("goal=auth-refactor · running");
+    expect(text).toContain("workers=3 workers");
+    expect(text).toContain("budget=$1.24/$5.00");
+    expect(text).toContain("conn=connected");
+    expect(text).toContain("dir=acme");
+  });
+
+  it("reports loading, empty, and error states honestly", () => {
+    const [section] = renderStatusSection(
+      toSidebarStatus({ ...state, goal: { kind: "loading" }, workers: { kind: "empty" }, budget: { kind: "error", message: "boom" } }),
+      26,
+    );
+    const text = section!.rows.map((row) => `${row.label}=${row.value ?? ""}`).join("\n");
+    expect(text).toContain("goal=loading");
+    expect(text).toContain("workers=none");
+    expect(text).toContain("budget=error: boom");
+  });
+
+  it("shortens the workspace to its basename", () => {
+    const [section] = renderStatusSection(toSidebarStatus({ ...state, workspace: { cwd: "/work/some/long/path/acme" } }), 26);
+    const dir = section!.rows.find((row) => row.label === "dir");
+    expect(dir?.value).toBe("acme");
+  });
+
+  it("shows none for an unselected model", () => {
+    const [section] = renderStatusSection(toSidebarStatus(state), 26);
+    expect(section!.rows.find((row) => row.label === "model")?.value).toBe("none");
   });
 });
