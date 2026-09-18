@@ -92,7 +92,12 @@ export function composeProviderCredentials(deps: ProviderAccessDeps): ProviderCr
       gateway.bindCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
     revoke: (input: { operatorId: string; requestId: string; providerId: "openai" | "anthropic" }) =>
       gateway.revokeCredential!({ ...input, operatorId: config.modelGatewayOperatorId }),
-    list: async () => foldProviderModes(await modelGateway.listModels({ operatorId: config.modelGatewayOperatorId })),
+    // A gateway without listModels cannot back reads: omit list so the route
+    // fail-closes (DurableStoreUnavailableError), mirroring the all-or-none
+    // account-login surface below.
+    ...(gateway.listModels === undefined
+      ? {}
+      : { list: async () => foldProviderModes(await gateway.listModels!({ operatorId: config.modelGatewayOperatorId })) }),
     ...(gateway.startAccountLogin === undefined || gateway.accountLoginStatus === undefined || gateway.cancelAccountLogin === undefined
       ? {}
       : {

@@ -182,6 +182,13 @@ describe("composeProviderCredentials", () => {
     expect(credentialProviders).toEqual(settingsProviders);
   });
 
+  it("omits list when the gateway cannot list models so the route fails closed", () => {
+    const { listModels: _omit, ...noList } = fakeGateway();
+    const service = composeProviderCredentials({ pool: fakePool(), config, modelGateway: noList as ModelGatewayPort })!;
+    expect(service.list).toBeUndefined();
+    expect(typeof service.bind).toBe("function");
+    expect(typeof service.revoke).toBe("function");
+  });
   it("keeps the account-login surface without logoutAccount when the gateway lacks only that", () => {
     const { logoutAccount: _logout, ...noLogout } = fakeGateway();
     const service = composeProviderCredentials({ pool: fakePool(), config, modelGateway: noLogout as ModelGatewayPort })!;
