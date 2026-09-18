@@ -1,0 +1,20 @@
+{
+  "name": "@maestro/local-backend",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@maestro/api-client": "*",
+    "@maestro/contracts": "*",
+    "@maestro/model-provider-openai": "*",
+    "@maestro/persistence": "*",
+    "@napi-rs/keyring": "^2.0.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}

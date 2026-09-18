@@ -53,6 +53,9 @@
       "path": "packages/persistence"
     },
     {
+      "path": "packages/local-backend"
+    },
+    {
       "path": "apps/discord"
     }
   ],
