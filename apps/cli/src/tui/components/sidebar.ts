@@ -4,8 +4,8 @@ import { MAX_SIDEBAR_GOALS, moveSidebarFocus } from "./sidebar-nav.js";
 export const SIDEBAR_WIDTH = 26;
 export const SIDEBAR_MIN_COLUMNS = 100;
 
-export function isSidebarVisible(explicit: boolean, columns: number): boolean {
-  return explicit && columns >= SIDEBAR_MIN_COLUMNS;
+export function isSidebarVisible(explicit: boolean, columns: number, suppressed = false): boolean {
+  return !suppressed && explicit && columns >= SIDEBAR_MIN_COLUMNS;
 }
 
 export function contentWidth(columns: number, sidebarVisible: boolean): number {

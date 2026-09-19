@@ -1,0 +1,19 @@
+{
+  "session": "maestro-e4-73334-120x40-b73db43d-68f1-481a-bfef-dbff01fac0d3",
+  "columns": 120,
+  "rows": 40,
+  "noColor": true,
+  "environment": {
+    "TERM": "screen-256color",
+    "NO_COLOR": "1"
+  },
+  "scenario": "help",
+  "frames": [
+    {
+      "name": "help",
+      "ansiSha256": "7594bd1f33850f72ffa85e61531e82a36472cc6843342da7da474fe58f4d43de",
+      "plainSha256": "b37c70ac1eb25f93ad5a8515c4a12406c9f6066b8b849fb81953dec193154211"
+    }
+  ],
+  "reproducible": true
+}

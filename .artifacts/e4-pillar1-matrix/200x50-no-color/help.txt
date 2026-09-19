@@ -1,0 +1,50 @@
+status                   ┃⚠ Control Plane connection is not configured · Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart
+model    none            ┃◆ System
+goal     none            ┃
+workers  none            ┃Commands: /help list [read] · /clear [clear the visible transcript] · /exit [exit the TUI] · /quit [exit the TUI] · /version [show the Maestro version] · /copy [copy the
+budget   none            ┃latest transcript line] · /admin project-access [critical] · /critical-action request [write] · /critical-action approve-and-run [critical] · /task-contract create [write] ·
+conn     Control Plane c…┃/task-contract get [read] · /task-contract amend [write] · /task-contract select-roles [write] · /task-contract confirm [write] · /task-contract launch [write] · /goals list
+dir      e4-pillar1      ┃[read] · /projects list [read] · /capability select-full-access-mode [critical] · /projection read [read] · /channel list [read] · /channel read [read] · /channel post
+                         ┃[write] · /goal create [write] · /goal get [read] · /goal select [write] · /goal transition [write] · /goal pause [write] · /goal resume [write] · /goal stop [write] · /goal
+views                    ┃emergency-stop [critical] · /billing get [read] · /luthiery list [read] · /budget get [read] · /head activate [write] · /council create [write] · /council get [read] ·
+  search                 ┃/council submit-brief [write] · /council reveal [write] · /council decide [write] · /department-plan create [write] · /department-plan get [read] · /department-plan revise
+  inbox                  ┃[write] · /mission-bundle create [write] · /mission-bundle get [read] · /worker spawn [write] · /worker get [read] · /worker list [read] · /worker observe [write] · /worker
+  channel                ┃cancel [write] · /worker message [write] · /worker accept [write] · /worker certify [write] · /worker certify-conditional [write] · /workers get [read] · /workers list [read]
+  evidence log           ┃· /git status [read] · /git goal-branch [write] · /git department-branch [write] · /git worker-worktree [write] · /git goal-revision [write] · /git worker-advance [write] ·
+  billing                ┃/metronome-challenges list [read] · /encore-council list [read] · /certifications list [read] · /concertmaster-report get [read] · /concertmaster-report generate [write] ·
+  luthiery               ┃/metronome scan [write] · /metronome challenge [write] · /metronome correct [write] · /metronome safe-pause [critical] · /metronome resolve [write] · /encore review [write] ·
+                         ┃/certification list [read] · /certification certify [write] · /evidence list [read] · /evidence bundle [read] · /evidence capture [write] · /approval approve-and-run
+keys                     ┃[critical] · /events list [read] · /events stream [read] · /login openai-codex [write] · /login openai [write] · /login anthropic [write] · /logout openai-codex [write] ·
+up/dn    move · enter op…┃/logout openai [write] · /logout anthropic [write] · /models list [read] · /models use [write] · /model list [read] · /model use [write] · /mode list [read] · /mode flashmob
+esc      unfocus · ctrl+b┃[write] · /mode maestro [write] · /mode standard [write] · /flashmob toggle [write] · /conversation create [write] · /conversation turn [write] · /conversation get [read] ·
+                          /conversation cancel [write] · /session list [read] · /session attach [write] · /session new [write] · /session retry [write] · /improvement-digests list [read] · Ctrl+G
+                          [list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] · Ctrl+A [review pending decisions] · Ctrl+/ [restore the home splash]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                          Session
+                          No saved Maestro session for this workspace
+                          ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+                          │ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart                                                                                                                           │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+                          │ ›                                                                                                                                                                          │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+                          ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                          Or enable local autostart; restart

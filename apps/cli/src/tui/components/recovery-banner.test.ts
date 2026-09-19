@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderRecoveryBanner } from "./recovery-banner.js";
+import { renderBlockedSetupPanel, renderRecoveryBanner } from "./recovery-banner.js";
 
 describe("recovery banner", () => {
   it("renders attached cursor state linearly", () => {
@@ -21,4 +21,22 @@ describe("recovery banner", () => {
 
     expect(renderRecoveryBanner(summaries[0], 80).at(-1)).toBe("TUI exit does not cancel server-owned work.");
   });
+  it("caps a new-session recovery card instead of stretching it across the pane", () => {
+    const lines = renderBlockedSetupPanel({ kind: "new", message: "No saved Maestro session for this workspace" }, 120);
+    expect(lines.every((line) => line.length <= 120)).toBe(true);
+    expect(lines.every((line) => line.trimStart().length <= 72)).toBe(true);
+  });
+
+  it("renders a bounded, horizontally centered blocked setup panel", () => {
+    const summary = { kind: "new", message: "No saved Maestro session for this workspace" } as const;
+    const narrow = renderBlockedSetupPanel(summary, 80);
+    const wide = renderBlockedSetupPanel(summary, 200);
+    expect(narrow.some((line) => line.includes("Setup required"))).toBe(true);
+    expect(narrow.every((line) => line.length <= 80)).toBe(true);
+    expect(wide.every((line) => line.length <= 200)).toBe(true);
+    expect(wide[0]?.match(/^ +/)?.[0].length).toBeGreaterThan(narrow[0]?.match(/^ +/)?.[0].length ?? 0);
+    expect(narrow.join("\n")).toContain("MAESTRO_API_URL");
+    expect(narrow.join("\n")).toContain("restart");
+  });
+
 });

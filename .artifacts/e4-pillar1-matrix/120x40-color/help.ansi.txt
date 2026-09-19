@@ -1,0 +1,40 @@
+[33mstatus                   [90m┃[33m⚠ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart[39m
+model    none            [90m┃[33m/task-contract amend [write] · /task-contract select-roles [write] · /task-contract confirm
+[39mgoal     none            [90m┃[33m[write] · /task-contract launch [write] · /goals list [read] · /projects list [read] ·
+[39mworkers  none            [90m┃[33m/capability select-full-access-mode [critical] · /projection read [read] · /channel list
+[39mbudget   none            [90m┃[33m[read] · /channel read [read] · /channel post [write] · /goal create [write] · /goal get
+[39mconn     Control Plane c…[90m┃[33m[read] · /goal select [write] · /goal transition [write] · /goal pause [write] · /goal resume
+[39mdir      e4-pillar1      [90m┃[33m[write] · /goal stop [write] · /goal emergency-stop [critical] · /billing get [read] ·
+[39m                         [90m┃[33m/luthiery list [read] · /budget get [read] · /head activate [write] · /council create [write]
+views                    [90m┃[33m· /council get [read] · /council submit-brief [write] · /council reveal [write] · /council
+[39m  search                 [90m┃[33mdecide [write] · /department-plan create [write] · /department-plan get [read] ·
+[39m  inbox                  [90m┃[33m/department-plan revise [write] · /mission-bundle create [write] · /mission-bundle get [read]
+[39m  channel                [90m┃[33m· /worker spawn [write] · /worker get [read] · /worker list [read] · /worker observe [write] ·
+[39m  evidence log           [90m┃[33m/worker cancel [write] · /worker message [write] · /worker accept [write] · /worker certify
+[39m  billing                [90m┃[33m[write] · /worker certify-conditional [write] · /workers get [read] · /workers list [read] ·
+[39m  luthiery               [90m┃[33m/git status [read] · /git goal-branch [write] · /git department-branch [write] · /git
+[39m                         [90m┃[33mworker-worktree [write] · /git goal-revision [write] · /git worker-advance [write] ·
+keys                     [90m┃[33m/metronome-challenges list [read] · /encore-council list [read] · /certifications list [read]
+[39mup/dn    move · enter op…[90m┃[33m· /concertmaster-report get [read] · /concertmaster-report generate [write] · /metronome scan
+[39mesc      unfocus · ctrl+b[90m┃[33m[write] · /metronome challenge [write] · /metronome correct [write] · /metronome safe-pause
+[39m                          [33m[critical] · /metronome resolve [write] · /encore review [write] · /certification list [read]
+[39m                          [33m· /certification certify [write] · /evidence list [read] · /evidence bundle [read] · /evidence
+[39m                          [33mcapture [write] · /approval approve-and-run [critical] · /events list [read] · /events stream
+[39m                          [33m[read] · /login openai-codex [write] · /login openai [write] · /login anthropic [write] ·
+[39m                          [33m/logout openai-codex [write] · /logout openai [write] · /logout anthropic [write] · /models
+[39m                          [33mlist [read] · /models use [write] · /model list [read] · /model use [write] · /mode list
+[39m                          [33m[read] · /mode flashmob [write] · /mode maestro [write] · /mode standard [write] · /flashmob
+[39m                          [33mtoggle [write] · /conversation create [write] · /conversation turn [write] · /conversation get
+[39m                          [33m[read] · /conversation cancel [write] · /session list [read] · /session attach [write] ·
+[39m                          [33m/session new [write] · /session retry [write] · /improvement-digests list [read] · Ctrl+G
+[39m                          [33m[list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] · Ctrl+A [review pending
+[39m                          [33mdecisions] · Ctrl+/ [restore the home splash][39m
+                          Session
+                          No saved Maestro session for this workspace
+                          [90m╭────────────────────────────────────────────────────────────────────────────────────────────╮
+[39m                          [90m│[39m [90mSet MAESTRO_API_URL + MAESTRO_API_TOKEN; restart[39m                                           [90m│
+[39m                          [90m│[39m [33m──────────────────────────────────────────────────────────────────────────────────────────[39m [90m│
+[39m                          [90m│[39m [33m› [7m[39m [0m                                                                                        [90m│
+[39m                          [90m│[39m [33m──────────────────────────────────────────────────────────────────────────────────────────[39m [90m│
+[39m                          [90m╰────────────────────────────────────────────────────────────────────────────────────────────╯
+[39m                          [90mOr enable local autostart; restart

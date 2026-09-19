@@ -1,0 +1,50 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                ╭──────────────────────────────────────────────────────────────────────╮
+                                                                │ Setup required                                                       │
+                                                                │ No saved Maestro session for this workspace                          │
+                                                                │ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart                     │
+                                                                │ Or enable local autostart; restart                                   │
+                                                                ╰──────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

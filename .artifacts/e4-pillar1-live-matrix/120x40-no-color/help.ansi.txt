@@ -1,0 +1,40 @@
+status                   ┃maestro · ad813d92-38d4-401d-b957-14d49c813932 · draft · 0 workers
+model    none            ┃[write] · /task-contract launch [write] · /goals list [read] · /projects list [read] ·
+goal     ad813d92-38d4-4…┃/capability select-full-access-mode [critical] · /projection read [read] · /channel list
+workers  0 workers       ┃[read] · /channel read [read] · /channel post [write] · /goal create [write] · /goal get
+budget   $0.00/$0.00     ┃[read] · /goal select [write] · /goal transition [write] · /goal pause [write] · /goal resume
+conn     connected       ┃[write] · /goal stop [write] · /goal emergency-stop [critical] · /billing get [read] ·
+dir      e4-pillar1      ┃/luthiery list [read] · /budget get [read] · /head activate [write] · /council create [write]
+                         ┃· /council get [read] · /council submit-brief [write] · /council reveal [write] · /council
+views                    ┃decide [write] · /department-plan create [write] · /department-plan get [read] ·
+  search                 ┃/department-plan revise [write] · /mission-bundle create [write] · /mission-bundle get [read]
+  inbox                  ┃· /worker spawn [write] · /worker get [read] · /worker list [read] · /worker observe [write] ·
+  channel                ┃/worker cancel [write] · /worker message [write] · /worker accept [write] · /worker certify
+  evidence log           ┃[write] · /worker certify-conditional [write] · /workers get [read] · /workers list [read] ·
+  billing                ┃/git status [read] · /git goal-branch [write] · /git department-branch [write] · /git
+  luthiery               ┃worker-worktree [write] · /git goal-revision [write] · /git worker-advance [write] ·
+                         ┃/metronome-challenges list [read] · /encore-council list [read] · /certifications list [read]
+channels                 ┃· /concertmaster-report get [read] · /concertmaster-report generate [write] · /metronome scan
+  #head-council (0)      ┃[write] · /metronome challenge [write] · /metronome correct [write] · /metronome safe-pause
+  refresh                ┃[critical] · /metronome resolve [write] · /encore review [write] · /certification list [read]
+                         ┃· /certification certify [write] · /evidence list [read] · /evidence bundle [read] · /evidence
+goals                    ┃capture [write] · /approval approve-and-run [critical] · /events list [read] · /events stream
+  • ad813d92 · draft     ┃[read] · /login openai-codex [write] · /login openai [write] · /login anthropic [write] ·
+                         ┃/logout openai-codex [write] · /logout openai [write] · /logout anthropic [write] · /models
+keys                     ┃list [read] · /models use [write] · /model list [read] · /model use [write] · /mode list
+up/dn    move · enter op…┃[read] · /mode flashmob [write] · /mode maestro [write] · /mode standard [write] · /flashmob
+esc      unfocus · ctrl+b┃toggle [write] · /conversation create [write] · /conversation turn [write] · /conversation get
+                          [read] · /conversation cancel [write] · /session list [read] · /session attach [write] ·
+                          /session new [write] · /session retry [write] · /improvement-digests list [read] · Ctrl+G
+                          [list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] · Ctrl+A [review pending
+                          decisions] · Ctrl+/ [restore the home splash]
+                          Session attached
+                          Project: 0cd55190-279a-4f1a-b418-85f99f42a1c6 · Event cursor: 0
+                          TUI exit does not cancel server-owned work.
+                          ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+                          │ message to Concertmaster · Enter to send                                                   │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          │ › [7m [0m                                                                                        │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+                          / commands · ctrl+g goals · /help

@@ -14,7 +14,7 @@ import {
   sidebarChannelSyncAction,
 } from "../components/sidebar-channels.js";
 import { createClickRegion } from "../components/mouse.js";
-import { renderStatusSection, sidebarNavBadges, toSidebarStatus } from "../components/shell.js";
+import { isBlockedSetupState as isBlockedSetupPresentation, renderStatusSection, sidebarNavBadges, toSidebarStatus } from "../components/shell.js";
 import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
@@ -29,7 +29,7 @@ import { createConversationTurnBoundary } from "../conversation-turn-boundary.js
 import { createAutomaticProviderSignInGate } from "../entry-helpers.js";
 import { createTuiRuntime } from "../runtime.js";
 import { renderProviderLoginDialog, type AccountLoginProviderSelection } from "../components/provider-login-dialog.js";
-import { renderRecoveryBanner } from "../components/recovery-banner.js";
+import { renderBlockedSetupPanel, renderRecoveryBanner } from "../components/recovery-banner.js";
 import { renderUnifiedStreamEntries } from "../conversation-transcript.js";
 import type { ConversationTranscriptState } from "../conversation-transcript.js";
 import { createConversationTranscript } from "../conversation-transcript.js";
@@ -103,8 +103,12 @@ export class TuiController {
   sidebarChannelsGeneration = 0;
 
   /** Main-pane width: full terminal minus the visible sidebar. */
+  isBlockedSetupState(): boolean {
+    return isBlockedSetupPresentation(this.state, this.recovery.kind, this.conversation.messages.length > 0, this.activity.length > 0);
+  }
+
   contentWidth(): number {
-    return contentWidth(this.terminal.columns, this.sidebarVisible);
+    return contentWidth(this.terminal.columns, this.sidebarVisible && !this.isBlockedSetupState());
   }
 
   conversation: ConversationTranscriptState = createConversationTranscript();
@@ -303,8 +307,20 @@ export class TuiController {
         applyApprovalAction(this, action);
       },
     });
+    const blockedRecoveryRegion = createDynamicRegion((width) => {
+      if (!this.isBlockedSetupState() || terminal.rows < 16 || this.recovery.kind !== "new") return [];
+      const panel = renderBlockedSetupPanel(this.recovery, width);
+      const availableHeight = Math.max(panel.length, terminal.rows - (this.isBlockedSetupState() ? 0 : 1));
+      const topPadding = Math.max(0, Math.floor((availableHeight - panel.length) / 2));
+      const bottomPadding = Math.max(0, availableHeight - panel.length - topPadding);
+      return [
+        ...Array.from({ length: topPadding }, () => ""),
+        ...panel,
+        ...Array.from({ length: bottomPadding }, () => ""),
+      ];
+    });
     const noticeRegion = createDynamicRegion(() => {
-      if (terminal.rows < 16 && this.accountLoginSelection === undefined) return [];
+      if (this.isBlockedSetupState() || terminal.rows < 16 && this.accountLoginSelection === undefined) return [];
       return terminal.rows < 16 ? [] : [...renderRecoveryBanner(this.recovery, this.contentWidth())];
     });
     // Clickable provider-login options: selecting a row is the same action as
@@ -326,7 +342,10 @@ export class TuiController {
     );
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
-    const dock = new VStack([composer, this.footer]);
+    const dock = new VStack([
+      { component: composer, basis: "auto", shrink: 1, minSize: 1, visible: () => !this.isBlockedSetupState() },
+      { component: this.footer, basis: "auto", shrink: 0, minSize: 1, visible: () => !this.isBlockedSetupState() },
+    ]);
     const sidebarLines = (width: number) => {
       const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
       // Render-time tag sync (the dynamic-region precedent in view.ts
@@ -362,9 +381,11 @@ export class TuiController {
         activateSidebarChannel(this, id);
       },
     });
+    const visibleStatusRegion = createDynamicRegion((width) => (this.isBlockedSetupState() ? [] : this.statusRegion.render(width)));
     const mainColumn = new VStack([
-      { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
-      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
+      { component: visibleStatusRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => !this.isBlockedSetupState() },
+      { component: blockedRecoveryRegion, basis: 0, grow: 1, minSize: 0, visible: () => this.isBlockedSetupState() && terminal.rows >= 16 },
+      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 && !this.isBlockedSetupState() },
       { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
       {
         component: approvalClickRegion,
@@ -387,7 +408,7 @@ export class TuiController {
         minSize: 0,
         visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
       },
-      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+      { component: dock, basis: "auto", shrink: 1, minSize: 1, visible: () => !this.isBlockedSetupState() },
     ]);
     tui.setLayoutRoot(
       new HStack([
@@ -396,7 +417,7 @@ export class TuiController {
           basis: SIDEBAR_WIDTH,
           shrink: 0,
           minSize: 0,
-          visible: () => isSidebarVisible(this.sidebarVisible, terminal.columns),
+          visible: () => isSidebarVisible(this.sidebarVisible, terminal.columns, this.isBlockedSetupState()),
         },
         { component: mainColumn, basis: 0, grow: 1, minSize: 0 },
       ]),

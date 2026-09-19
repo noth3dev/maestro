@@ -1,0 +1,24 @@
+⚠ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart
+Session
+No saved Maestro session for this workspace
+  No activity yet.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Or enable local autostart; restart

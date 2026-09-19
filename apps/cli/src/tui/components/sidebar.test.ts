@@ -381,4 +381,9 @@ describe("sidebar layout mechanics", () => {
     ]).render(120);
     expect(plain(hidden.join("\n"))).not.toContain("search");
   });
+  it("hides the navigation pane while setup is required", () => {
+    expect(isSidebarVisible(true, 120, true)).toBe(false);
+    expect(isSidebarVisible(true, 120, false)).toBe(true);
+  });
+
 });

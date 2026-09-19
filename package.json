@@ -13,6 +13,7 @@
     "check": "npm run build && npm test",
     "build": "tsc -b && npm run typecheck:renderer --workspace @maestro/carnegie",
     "worktree:add": "node scripts/create-worktree.mjs",
+    "tui:capture": "node scripts/tui-capture.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "migrations:check": "node scripts/check-migration-numbers.mjs",

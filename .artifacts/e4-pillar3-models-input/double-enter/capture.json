@@ -1,0 +1,68 @@
+{
+  "session": "maestro-e4-109081-120x40-cedc0b6d-701d-4040-aea5-4fed91ce6251",
+  "columns": 120,
+  "rows": 40,
+  "noColor": false,
+  "environment": {
+    "TERM": "screen-256color"
+  },
+  "scenario": [
+    {
+      "type": "wait",
+      "milliseconds": 1000
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "/",
+        "m",
+        "o",
+        "d",
+        "e",
+        "l",
+        "s",
+        " ",
+        "l",
+        "i",
+        "s",
+        "t"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "capture",
+      "name": "typed"
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "Enter",
+        "Enter"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 2000
+    },
+    {
+      "type": "capture",
+      "name": "after-double-enter"
+    }
+  ],
+  "frames": [
+    {
+      "name": "typed",
+      "ansiSha256": "01020f82d2ee1bac83e7281979231c5bcaf6fed81fc733d4c3d7c4bb4ed3fda9",
+      "plainSha256": "7fee8679ed7562373d8fdba0f9b2dc45af88a8af1f55cd498c093b681da8d5b6"
+    },
+    {
+      "name": "after-double-enter",
+      "ansiSha256": "56eccfe1e55e614b662eb554cf9caaab95a227505129bdd2007b92a1ba659042",
+      "plainSha256": "2dd3346768e0ab51f692964fc7edad629c9b1a4be442636fa6824f61c0952954"
+    }
+  ],
+  "submission": "two Enter key events: autocomplete confirmation, then command submit"
+}

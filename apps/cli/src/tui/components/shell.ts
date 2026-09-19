@@ -73,6 +73,21 @@ function workerText(state: Pick<TuiShellState, "workers">): string {
   return stateText(state.workers, (value) => `${value} worker${value === 1 ? "" : "s"}`);
 }
 
+export function isBlockedSetupState(
+  state: Pick<TuiShellState, "connection" | "setupSteps">,
+  recoveryKind: "new" | "unavailable" | "attached" | "stale",
+  hasTranscript: boolean,
+  hasActivity: boolean,
+): boolean {
+  return (
+    state.connection.kind === "setup-required" &&
+    recoveryKind === "new" &&
+    (state.setupSteps === undefined || state.setupSteps.length === 0) &&
+    !hasTranscript &&
+    !hasActivity
+  );
+}
+
 export function pendingCount(state: TuiShellState): number {
   if (state.pendingDecisions !== undefined) return state.pendingDecisions.length;
   return state.approvals.kind === "value" ? state.approvals.value : 0;
@@ -123,8 +138,7 @@ function pendingPaint(text: string): string {
 /** One-line status, ordered by what can change the operator's next action. */
 export function renderStatusRow(state: TuiShellState, width: number): string {
   if (state.connection.kind === "setup-required") {
-    const detail = width >= 100 ? `⚠ ${state.connection.message} · ${setupRequiredGuidance(width)}` : `⚠ ${setupRequiredGuidance(width)}`;
-    return tuiTheme.warning(fitPlain(detail, width));
+    return tuiTheme.warning(fitPlain(`⚠ ${setupRequiredGuidance(width)}`, width));
   }
   const connection = connectionMessage(state);
   if (connection !== undefined) return tuiTheme.warning(fitPlain(`⚠ ${connection} · retry with ctrl+r`, width));

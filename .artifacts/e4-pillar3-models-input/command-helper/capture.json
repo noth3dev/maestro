@@ -1,0 +1,35 @@
+{
+  "session": "maestro-e4-111309-120x40-d1bd3d89-0d5a-43ee-afdc-7aafecd8dc9d",
+  "columns": 120,
+  "rows": 40,
+  "noColor": false,
+  "environment": {
+    "TERM": "screen-256color"
+  },
+  "scenario": [
+    {
+      "type": "wait",
+      "milliseconds": 1000
+    },
+    {
+      "type": "command",
+      "command": "/models list"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 2000
+    },
+    {
+      "type": "capture",
+      "name": "command-helper"
+    }
+  ],
+  "frames": [
+    {
+      "name": "command-helper",
+      "ansiSha256": "bf1a4da097c03b2cfa25c56b6820eea19ca5f59a1e2fed9a5192e91999c05541",
+      "plainSha256": "17175c0d6ea60b3c20bd409370ae8b52276c3830af34641571d246bab45982a6"
+    }
+  ],
+  "submission": "command helper closes autocomplete then submits"
+}

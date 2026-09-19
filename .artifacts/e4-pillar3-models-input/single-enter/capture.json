@@ -1,0 +1,64 @@
+{
+  "session": "maestro-e4-107033-120x40-517fb3c2-e6ea-4639-9ce6-a788929f51f2",
+  "columns": 120,
+  "rows": 40,
+  "noColor": false,
+  "environment": {
+    "TERM": "screen-256color"
+  },
+  "scenario": [
+    {
+      "type": "wait",
+      "milliseconds": 1000
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "/",
+        "m",
+        "o",
+        "d",
+        "e",
+        "l",
+        "s",
+        " ",
+        "l",
+        "i",
+        "s",
+        "t"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "capture",
+      "name": "typed"
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 800
+    },
+    {
+      "type": "capture",
+      "name": "after-single-enter"
+    }
+  ],
+  "frames": [
+    {
+      "name": "typed",
+      "ansiSha256": "29b0d3e8086f085acd23dabcba0e6aaee3d8d639ebf00548675a0b9b6025e22b",
+      "plainSha256": "1a420bcf35090790b9bbf49d57d8a3717f1ba508c94c0da81ddc7b373da0224b"
+    },
+    {
+      "name": "after-single-enter",
+      "ansiSha256": "abbc7f6c55d1da71ef8c69e2d7a5260cb2d2330c12580766761a020284d71756",
+      "plainSha256": "710b97014ecbb33c55e5d888d2b5f3cceec5fbdd5e1090b4759f0f0226b328ee"
+    }
+  ]
+}

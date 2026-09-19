@@ -1,0 +1,23 @@
+
+> build
+> tsc -b && npm run typecheck:renderer --workspace @maestro/carnegie
+
+
+> typecheck:renderer
+> tsc -p tsconfig.renderer.json --noEmit
+
+src/accessibility.playwright.ts(1,30): error TS2307: Cannot find module '@playwright/test' or its corresponding type declarations.
+src/accessibility.playwright.ts(8,59): error TS7031: Binding element 'page' implicitly has an 'any' type.
+src/accessibility.playwright.ts(8,65): error TS7031: Binding element 'baseURL' implicitly has an 'any' type.
+src/accessibility.playwright.ts(10,28): error TS7006: Parameter 'value' implicitly has an 'any' type.
+src/accessibility.playwright.ts(20,88): error TS7031: Binding element 'page' implicitly has an 'any' type.
+src/accessibility.playwright.ts(20,94): error TS7031: Binding element 'baseURL' implicitly has an 'any' type.
+src/accessibility.playwright.ts(49,77): error TS7031: Binding element 'page' implicitly has an 'any' type.
+src/accessibility.playwright.ts(49,83): error TS7031: Binding element 'baseURL' implicitly has an 'any' type.
+npm error Lifecycle script `typecheck:renderer` failed with error:
+npm error code 2
+npm error path /home/ubuntu/projects/ms/.worktrees/e4-pillar1/apps/carnegie
+npm error workspace @maestro/carnegie
+npm error location /home/ubuntu/projects/ms/.worktrees/e4-pillar1/apps/carnegie
+npm error command failed
+npm error command sh -c tsc -p tsconfig.renderer.json --noEmit

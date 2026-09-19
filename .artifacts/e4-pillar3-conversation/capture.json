@@ -1,0 +1,64 @@
+{
+  "session": "maestro-e4-119177-120x40-3e7c3444-67d1-42d9-81c9-92686f2d9e10",
+  "columns": 120,
+  "rows": 40,
+  "noColor": false,
+  "environment": {
+    "TERM": "screen-256color"
+  },
+  "scenario": [
+    {
+      "type": "wait",
+      "milliseconds": 1000
+    },
+    {
+      "type": "command",
+      "command": "/models use --model openai-codex/gpt-5.6-luna"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "model-selected"
+    },
+    {
+      "type": "command",
+      "command": "/session new"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1000
+    },
+    {
+      "type": "text",
+      "text": "In one short sentence, what is your current readiness for a safe local Maestro task?"
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 12000
+    },
+    {
+      "type": "capture",
+      "name": "agent-response"
+    }
+  ],
+  "frames": [
+    {
+      "name": "model-selected",
+      "ansiSha256": "4409c1d2d77d4c9721d0023111ed53776a479dc5b40735755308ef5e4f213285",
+      "plainSha256": "dbb14602265c689508d7dacb91a03724518a7bea483a82a53987371b1c4f9913"
+    },
+    {
+      "name": "agent-response",
+      "ansiSha256": "49a35a71da7a0979b2a85b6913799c40811c28ecb86499c1e4a0261a24d4a52b",
+      "plainSha256": "7a266577ed7b20569952de019e42fe6dbb94a0b21ca68200873ef582b5a61410"
+    }
+  ],
+  "scenario_note": "real live model selection, new session, and natural-language turn; no logout or credential mutation"
+}

@@ -1,0 +1,30 @@
+{
+  "captured_at_commit": {
+    "openai/codex": "595cc91e8cbb1c2ca822d0311dcf12709410c582",
+    "PrimeIntellect-ai/prime-agent": "63d88319bf5870cf609fef01f9042bbf431d7df2",
+    "NousResearch/hermes-agent": "469296c748e58aaafca0e8e9d2a49309ba591579",
+    "anomalyco/opencode": "fee476bb90043a1012abda156dd9af9e5c71b19d"
+  },
+  "comparisons": {
+    "openai/codex": "test-tui requires interactive PTY use and separate text and Enter writes; this supports the capture harness input boundary and avoids burst ambiguity.",
+    "PrimeIntellect-ai/prime-agent": "TUI components return width-bounded lines and receive focused input through handleInput; this supports checking every captured frame width and focus behavior.",
+    "NousResearch/hermes-agent": "visual-snapshot forces a fixed viewport before capture and preview-capture rejects empty/destroyed captures; this supports fixed-size evidence and fail-closed capture handling.",
+    "anomalyco/opencode": "visual-stability capture records repeated CDP frames with timestamps, while terminal-composer-focus tests focus routing and explicit terminal/composer boundaries; this supports repeatable capture plus focus-state checks."
+  },
+  "files": {
+    "openai/codex": [
+      ".codex/skills/test-tui/SKILL.md"
+    ],
+    "PrimeIntellect-ai/prime-agent": [
+      "packages/coding-agent/docs/tui.md"
+    ],
+    "NousResearch/hermes-agent": [
+      "apps/desktop/e2e/visual-snapshot.ts",
+      "apps/desktop/electron/preview-capture.ts"
+    ],
+    "anomalyco/opencode": [
+      "packages/app/e2e/utils/visual-stability/capture.ts",
+      "packages/app/e2e/regression/terminal-composer-focus.spec.ts"
+    ]
+  }
+}

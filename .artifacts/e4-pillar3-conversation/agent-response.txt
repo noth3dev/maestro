@@ -1,0 +1,40 @@
+status                   ┃maestro · ad813d92-38d4-401d-b957-14d49c813932 · draft · 0 workers
+model    openai-codex/gp…┃  ● #167  GoalCreated
+goal     ad813d92-38d4-4…┃✓ System
+workers  0 workers       ┃
+budget   $0.00/$0.00     ┃New Concertmaster conversation started. Durable Goal state was preserved.
+conn     connected       ┃✓ System
+dir      e4-pillar1      ┃
+                         ┃Concertmaster conversation d1486ed9-bf53-45eb-a883-a013c82820ad · openai-codex/gpt-5.6-luna
+views                    ┃You
+  search                 ┃
+  inbox                  ┃In one short sentence, what is your current readiness for a safe local Maestro task?
+  channel                ┃✓ Maestro
+  evidence log           ┃
+  billing                ┃Ready for a safe, read-only local Maestro task; filesystem writes and external actions are
+  luthiery               ┃unavailable without authorization.
+                         ┃
+channels                 ┃
+  #general (0)           ┃
+  #head-council (0)      ┃
+                         ┃
+encore                   ┃
+  #encore-council (0)    ┃
+  refresh                ┃
+                         ┃
+goals                    ┃
+  • ad813d92 · draft     ┃
+                         ┃
+keys                     ┃
+up/dn    move · enter op…┃
+esc      unfocus · ctrl+b┃
+                          Session attached
+                          Project: 0cd55190-279a-4f1a-b418-85f99f42a1c6 · Event cursor: 0
+                          TUI exit does not cancel server-owned work.
+                          ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+                          │ message to Concertmaster · Enter to send                                                   │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          │ ›                                                                                          │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+                          / commands · ctrl+g goals · /help

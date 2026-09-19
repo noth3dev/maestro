@@ -1,0 +1,24 @@
+⚠ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart
+[critical] · /metronome resolve [write] · /encore review [write] ·
+/certification list [read] · /certification certify [write] · /evidence list
+[read] · /evidence bundle [read] · /evidence capture [write] · /approval
+approve-and-run [critical] · /events list [read] · /events stream [read] ·
+/login openai-codex [write] · /login openai [write] · /login anthropic [write] ·
+/logout openai-codex [write] · /logout openai [write] · /logout anthropic
+[write] · /models list [read] · /models use [write] · /model list [read] ·
+/model use [write] · /mode list [read] · /mode flashmob [write] · /mode maestro
+[write] · /mode standard [write] · /flashmob toggle [write] · /conversation
+create [write] · /conversation turn [write] · /conversation get [read] ·
+/conversation cancel [write] · /session list [read] · /session attach [write] ·
+/session new [write] · /session retry [write] · /improvement-digests list [read]
+· Ctrl+G [list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] ·
+Ctrl+A [review pending decisions] · Ctrl+/ [restore the home splash]
+Session
+No saved Maestro session for this workspace
+╭──────────────────────────────────────────────────────────────────────────────╮
+│ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart                             │
+│ ──────────────────────────────────────────────────────────────────────────── │
+│ › [7m [0m                                                                          │
+│ ──────────────────────────────────────────────────────────────────────────── │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Or enable local autostart; restart

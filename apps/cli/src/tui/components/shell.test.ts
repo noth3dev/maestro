@@ -9,6 +9,7 @@ import {
   renderStatusHeader,
   renderStatusRegion,
   renderStatusSection,
+  isBlockedSetupState,
   renderTuiFooter,
   renderTuiLayout,
   sidebarNavBadges,
@@ -215,8 +216,9 @@ describe("Maestro TUI shell", () => {
       { ...state, connection: { kind: "setup-required", message: "Control Plane connection is not configured" } },
       200,
     ).join("\n");
-    expect(output).toContain("Control Plane connection is not configured");
+    expect(output).toContain("MAESTRO_API_URL + MAESTRO_API_TOKEN");
     expect(output).toContain("⚠");
+    expect(output).not.toContain("retry with ctrl+r");
   });
 
   it("renders explicit loading and error states instead of fake values", () => {
@@ -515,4 +517,20 @@ describe("sidebar status section", () => {
     expect(sidebarNavBadges({ ...state, budget: { kind: "error", message: "boom" } })).toEqual({});
     expect(sidebarNavBadges({ ...state, budget: { kind: "value", value: { spentCents: 100, ceilingCents: 0 } } })).toEqual({});
   });
+  it("keeps setup-required warning copy stable across supported widths", () => {
+    const setupRequired = { ...state, connection: { kind: "setup-required", message: "Control Plane connection is not configured" } } as TuiShellState;
+    const widths = [80, 120, 200];
+    const outputs = widths.map((width) => stripAnsi(renderStatusHeader(setupRequired, width).join("\n")));
+    expect(outputs.every((output) => output.includes("MAESTRO_API_URL + MAESTRO_API_TOKEN"))).toBe(true);
+    outputs.forEach((output, index) => expect(output.length).toBeLessThanOrEqual(widths[index] ?? 0));
+  });
+
+  it("blocks only an empty setup-required new session", () => {
+    const setupRequired = { ...state, connection: { kind: "setup-required", message: "Control Plane is not configured" } } as TuiShellState;
+    expect(isBlockedSetupState(setupRequired, "new", false, false)).toBe(true);
+    expect(isBlockedSetupState(setupRequired, "new", true, false)).toBe(false);
+    expect(isBlockedSetupState({ ...setupRequired, setupSteps: [{ step: "control-plane-up", status: "started" }] }, "new", false, false)).toBe(false);
+    expect(isBlockedSetupState(setupRequired, "attached", false, false)).toBe(false);
+  });
+
 });

@@ -132,7 +132,8 @@ export class LifecycleHandler {
     // The focus block also requires effective visibility: a focused but
     // narrowed sidebar keeps its focus value (widening restores seamlessly)
     // while keys fall through to the existing global handling below.
-    if (isSidebarNavActive(c) && isSidebarVisible(c.sidebarVisible, c.terminal.columns)) {
+    const sidebarSuppressed = c.isBlockedSetupState?.() === true;
+    if (isSidebarNavActive(c) && isSidebarVisible(c.sidebarVisible, c.terminal.columns, sidebarSuppressed)) {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
         c.sidebarFocus = moveSidebarFocus(
           c.sidebarFocus,

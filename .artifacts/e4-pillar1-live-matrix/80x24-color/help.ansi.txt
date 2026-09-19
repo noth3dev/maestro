@@ -1,0 +1,24 @@
+maestro · ad813d92-38d4-401d-b957-14d49c813932 · draft · 0 workers
+[33m/certification list [read] · /certification certify [write] · /evidence list
+[read] · /evidence bundle [read] · /evidence capture [write] · /approval
+approve-and-run [critical] · /events list [read] · /events stream [read] ·
+/login openai-codex [write] · /login openai [write] · /login anthropic [write] ·
+/logout openai-codex [write] · /logout openai [write] · /logout anthropic
+[write] · /models list [read] · /models use [write] · /model list [read] ·
+/model use [write] · /mode list [read] · /mode flashmob [write] · /mode maestro
+[write] · /mode standard [write] · /flashmob toggle [write] · /conversation
+create [write] · /conversation turn [write] · /conversation get [read] ·
+/conversation cancel [write] · /session list [read] · /session attach [write] ·
+/session new [write] · /session retry [write] · /improvement-digests list [read]
+· Ctrl+G [list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] ·
+Ctrl+A [review pending decisions] · Ctrl+/ [restore the home splash][39m
+Session attached
+Project: 0cd55190-279a-4f1a-b418-85f99f42a1c6 · Event cursor: 0
+TUI exit does not cancel server-owned work.
+[90m╭──────────────────────────────────────────────────────────────────────────────╮
+│[39m [90mmessage to Concertmaster · Enter to send[39m                                     [90m│
+│[39m [33m────────────────────────────────────────────────────────────────────────────[39m [90m│
+│[39m [33m› [7m[39m [0m                                                                          [90m│
+│[39m [33m────────────────────────────────────────────────────────────────────────────[39m [90m│
+╰──────────────────────────────────────────────────────────────────────────────╯
+/ commands · ctrl+g goals · /help[39m

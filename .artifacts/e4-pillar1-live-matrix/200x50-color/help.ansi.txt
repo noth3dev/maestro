@@ -1,0 +1,50 @@
+[33mstatus                   [90m┃[39mmaestro · ad813d92-38d4-401d-b957-14d49c813932 · draft · 0 workers · $0.00/$0.00
+model    none            [90m┃[30m  ● #167  GoalCreated[39m
+goal     ad813d92-38d4-4…[90m┃[33m◆ System[39m
+workers  0 workers       [90m┃[39m
+budget   $0.00/$0.00     [90m┃[33mCommands: /help list [read] · /clear [clear the visible transcript] · /exit [exit the TUI] · /quit [exit the TUI] · /version [show the Maestro version] · /copy [copy the
+[39mconn     connected       [90m┃[33mlatest transcript line] · /admin project-access [critical] · /critical-action request [write] · /critical-action approve-and-run [critical] · /task-contract create [write] ·
+[39mdir      e4-pillar1      [90m┃[33m/task-contract get [read] · /task-contract amend [write] · /task-contract select-roles [write] · /task-contract confirm [write] · /task-contract launch [write] · /goals list
+[39m                         [90m┃[33m[read] · /projects list [read] · /capability select-full-access-mode [critical] · /projection read [read] · /channel list [read] · /channel read [read] · /channel post
+views                    [90m┃[33m[write] · /goal create [write] · /goal get [read] · /goal select [write] · /goal transition [write] · /goal pause [write] · /goal resume [write] · /goal stop [write] · /goal
+[39m  search                 [90m┃[33memergency-stop [critical] · /billing get [read] · /luthiery list [read] · /budget get [read] · /head activate [write] · /council create [write] · /council get [read] ·
+[39m  inbox                  [90m┃[33m/council submit-brief [write] · /council reveal [write] · /council decide [write] · /department-plan create [write] · /department-plan get [read] · /department-plan revise
+[39m  channel                [90m┃[33m[write] · /mission-bundle create [write] · /mission-bundle get [read] · /worker spawn [write] · /worker get [read] · /worker list [read] · /worker observe [write] · /worker
+[39m  evidence log           [90m┃[33mcancel [write] · /worker message [write] · /worker accept [write] · /worker certify [write] · /worker certify-conditional [write] · /workers get [read] · /workers list [read]
+[39m  billing                [90m┃[33m· /git status [read] · /git goal-branch [write] · /git department-branch [write] · /git worker-worktree [write] · /git goal-revision [write] · /git worker-advance [write] ·
+[39m  luthiery               [90m┃[33m/metronome-challenges list [read] · /encore-council list [read] · /certifications list [read] · /concertmaster-report get [read] · /concertmaster-report generate [write] ·
+[39m                         [90m┃[33m/metronome scan [write] · /metronome challenge [write] · /metronome correct [write] · /metronome safe-pause [critical] · /metronome resolve [write] · /encore review [write] ·
+channels                 [90m┃[33m/certification list [read] · /certification certify [write] · /evidence list [read] · /evidence bundle [read] · /evidence capture [write] · /approval approve-and-run
+[39m  #head-council (0)      [90m┃[33m[critical] · /events list [read] · /events stream [read] · /login openai-codex [write] · /login openai [write] · /login anthropic [write] · /logout openai-codex [write] ·
+[39m                         [90m┃[33m/logout openai [write] · /logout anthropic [write] · /models list [read] · /models use [write] · /model list [read] · /model use [write] · /mode list [read] · /mode flashmob
+encore                   [90m┃[33m[write] · /mode maestro [write] · /mode standard [write] · /flashmob toggle [write] · /conversation create [write] · /conversation turn [write] · /conversation get [read] ·
+[39m  #encore-council (0)    [90m┃[33m/conversation cancel [write] · /session list [read] · /session attach [write] · /session new [write] · /session retry [write] · /improvement-digests list [read] · Ctrl+G
+[39m  refresh                [90m┃[33m[list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] · Ctrl+A [review pending decisions] · Ctrl+/ [restore the home splash][39m
+                         [90m┃[39m
+[33mgoals                    [90m┃[39m
+  • ad813d92 · draft     [90m┃[39m
+                         [90m┃[39m
+[33mkeys                     [90m┃[39m
+up/dn    move · enter op…[90m┃[39m
+esc      unfocus · ctrl+b[90m┃[39m
+
+
+
+
+
+
+
+
+
+
+
+                          Session attached
+                          Project: 0cd55190-279a-4f1a-b418-85f99f42a1c6 · Event cursor: 0
+                          TUI exit does not cancel server-owned work.
+                          [90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+[39m                          [90m│[39m [90mmessage to Concertmaster · Enter to send[39m                                                                                                                                   [90m│
+[39m                          [90m│[39m [33m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [90m│
+[39m                          [90m│[39m [33m› [7m[39m [0m                                                                                                                                                                        [90m│
+[39m                          [90m│[39m [33m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [90m│
+[39m                          [90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+[39m                          [90m/ commands · ctrl+g goals · /help[39m

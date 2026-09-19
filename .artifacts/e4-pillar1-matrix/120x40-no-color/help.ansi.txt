@@ -1,0 +1,40 @@
+status                   ┃⚠ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart
+model    none            ┃/task-contract amend [write] · /task-contract select-roles [write] · /task-contract confirm
+goal     none            ┃[write] · /task-contract launch [write] · /goals list [read] · /projects list [read] ·
+workers  none            ┃/capability select-full-access-mode [critical] · /projection read [read] · /channel list
+budget   none            ┃[read] · /channel read [read] · /channel post [write] · /goal create [write] · /goal get
+conn     Control Plane c…┃[read] · /goal select [write] · /goal transition [write] · /goal pause [write] · /goal resume
+dir      e4-pillar1      ┃[write] · /goal stop [write] · /goal emergency-stop [critical] · /billing get [read] ·
+                         ┃/luthiery list [read] · /budget get [read] · /head activate [write] · /council create [write]
+views                    ┃· /council get [read] · /council submit-brief [write] · /council reveal [write] · /council
+  search                 ┃decide [write] · /department-plan create [write] · /department-plan get [read] ·
+  inbox                  ┃/department-plan revise [write] · /mission-bundle create [write] · /mission-bundle get [read]
+  channel                ┃· /worker spawn [write] · /worker get [read] · /worker list [read] · /worker observe [write] ·
+  evidence log           ┃/worker cancel [write] · /worker message [write] · /worker accept [write] · /worker certify
+  billing                ┃[write] · /worker certify-conditional [write] · /workers get [read] · /workers list [read] ·
+  luthiery               ┃/git status [read] · /git goal-branch [write] · /git department-branch [write] · /git
+                         ┃worker-worktree [write] · /git goal-revision [write] · /git worker-advance [write] ·
+keys                     ┃/metronome-challenges list [read] · /encore-council list [read] · /certifications list [read]
+up/dn    move · enter op…┃· /concertmaster-report get [read] · /concertmaster-report generate [write] · /metronome scan
+esc      unfocus · ctrl+b┃[write] · /metronome challenge [write] · /metronome correct [write] · /metronome safe-pause
+                          [critical] · /metronome resolve [write] · /encore review [write] · /certification list [read]
+                          · /certification certify [write] · /evidence list [read] · /evidence bundle [read] · /evidence
+                          capture [write] · /approval approve-and-run [critical] · /events list [read] · /events stream
+                          [read] · /login openai-codex [write] · /login openai [write] · /login anthropic [write] ·
+                          /logout openai-codex [write] · /logout openai [write] · /logout anthropic [write] · /models
+                          list [read] · /models use [write] · /model list [read] · /model use [write] · /mode list
+                          [read] · /mode flashmob [write] · /mode maestro [write] · /mode standard [write] · /flashmob
+                          toggle [write] · /conversation create [write] · /conversation turn [write] · /conversation get
+                          [read] · /conversation cancel [write] · /session list [read] · /session attach [write] ·
+                          /session new [write] · /session retry [write] · /improvement-digests list [read] · Ctrl+G
+                          [list Goals] · Ctrl+E [list events] · Ctrl+R [retry the session] · Ctrl+A [review pending
+                          decisions] · Ctrl+/ [restore the home splash]
+                          Session
+                          No saved Maestro session for this workspace
+                          ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+                          │ Set MAESTRO_API_URL + MAESTRO_API_TOKEN; restart                                           │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          │ › [7m [0m                                                                                        │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+                          Or enable local autostart; restart
