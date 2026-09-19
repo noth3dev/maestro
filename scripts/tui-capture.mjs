@@ -149,6 +149,40 @@ async function captureFrame(runTmux, target, name) {
   return { name, ansi, plain, ansiSha256: sha256(ansi), plainSha256: sha256(plain) };
 }
 
+function composerContainsCommand(frame, command) {
+  return frame.plain.split(/\r?\n/).some((line) => line.includes(`› ${command}`) || line.includes(`›${command}`));
+}
+
+async function waitForReadiness(runTmux, target, marker, wait, timeoutMilliseconds = 5_000) {
+  const pollMilliseconds = 50;
+  const maxPolls = Math.max(1, Math.ceil(timeoutMilliseconds / pollMilliseconds));
+  for (let poll = 0; poll < maxPolls; poll += 1) {
+    const frame = await captureFrame(runTmux, target, "readiness-probe");
+    if (frame.plain.includes(marker)) return;
+    await wait(pollMilliseconds);
+  }
+  throw new Error(`TUI readiness marker did not appear within ${timeoutMilliseconds}ms: ${marker}`);
+}
+
+async function submitCommand(runTmux, target, command, wait, timeoutMilliseconds = 1_000) {
+  await sendText(runTmux, target, command);
+  await sendKeys(runTmux, target, "Enter");
+  await wait(50);
+  let probe = await captureFrame(runTmux, target, "command-submit-probe");
+  if (!composerContainsCommand(probe, command)) return;
+
+  // The first Enter accepted argument completion but left the exact command in the composer.
+  await sendKeys(runTmux, target, "Enter");
+  const pollMilliseconds = 50;
+  const maxPolls = Math.max(1, Math.ceil(timeoutMilliseconds / pollMilliseconds));
+  for (let poll = 0; poll < maxPolls; poll += 1) {
+    await wait(pollMilliseconds);
+    probe = await captureFrame(runTmux, target, "command-submit-settle");
+    if (!composerContainsCommand(probe, command)) return;
+  }
+  throw new Error(`TUI command did not submit within ${timeoutMilliseconds}ms: ${command}`);
+}
+
 /**
  * Start one real TUI process in one real tmux pane, drive a named/custom
  * scenario, and return the ANSI-preserving and plain rendered frames.
@@ -173,7 +207,8 @@ export async function captureScenario(options) {
   let cleanupError;
   let result;
   const steps = resolveScenario(options.scenario ?? "home");
-  const startupWait = options.startupWaitMilliseconds ?? 1_500;
+  const startupWait = options.startupWaitMilliseconds ?? (options.liveEnvironment === true ? 3_000 : 1_500);
+  const readinessMarker = options.readinessMarker ?? (options.liveEnvironment === true ? "Session attached" : undefined);
   const homeDirectory = options.liveEnvironment === true ? undefined : await mkdtemp(join(tmpdir(), "maestro-e4-home-"));
   const childEnvironment =
     options.liveEnvironment === true
@@ -196,6 +231,9 @@ export async function captureScenario(options) {
     );
     await runTmux(["has-session", "-t", session]);
     if (startupWait > 0) await wait(startupWait);
+    if (readinessMarker !== undefined) {
+      await waitForReadiness(runTmux, target, readinessMarker, wait, options.readinessTimeoutMilliseconds);
+    }
     for (const [index, step] of steps.entries()) {
       if (step.type === "wait") {
         if (step.milliseconds > 0) await wait(step.milliseconds);
@@ -204,12 +242,7 @@ export async function captureScenario(options) {
       } else if (step.type === "keys") {
         await sendKeys(runTmux, target, step.keys);
       } else if (step.type === "command") {
-        await sendText(runTmux, target, step.command);
-        // Argument completion consumes the first Enter for commands such as
-        // `/models list`. Close it explicitly, then submit the exact command.
-        await sendKeys(runTmux, target, "Escape");
-        await wait(50);
-        await sendKeys(runTmux, target, "Enter");
+        await submitCommand(runTmux, target, step.command, wait, options.commandSubmitTimeoutMilliseconds);
       } else if (step.type === "capture") {
         frames.push(await captureFrame(runTmux, target, step.name ?? `frame-${index + 1}`));
       }
@@ -270,11 +303,14 @@ export async function assertReproducible(options) {
 export async function captureMatrix(options = {}) {
   const sizes = options.sizes ?? DEFAULT_TUI_CAPTURE_SIZES;
   const colorModes = options.colorModes ?? [false, true];
+  const reproducible = options.reproducible ?? true;
   const results = [];
   for (const size of sizes) {
     for (const noColor of colorModes) {
-      const reproducible = await assertReproducible({ ...options, ...size, noColor });
-      results.push({ ...reproducible.first, reproducible: true });
+      const capture = reproducible
+        ? (await assertReproducible({ ...options, ...size, noColor })).first
+        : await captureScenario({ ...options, ...size, noColor });
+      results.push({ ...capture, reproducible });
     }
   }
   return results;
@@ -338,6 +374,7 @@ function parseCli(argv) {
     scenario: "home",
     matrix: false,
     reproducible: false,
+    noReproducibility: false,
     noColor: false,
     live: false,
     outputDirectory: undefined,
@@ -347,6 +384,7 @@ function parseCli(argv) {
     const arg = argv[index];
     if (arg === "--matrix") values.matrix = true;
     else if (arg === "--reproducible") values.reproducible = true;
+    else if (arg === "--no-reproducibility") values.noReproducibility = true;
     else if (arg === "--no-color") {
       values.noColor = true;
       values.colorModes = [true];
@@ -366,6 +404,9 @@ function parseCli(argv) {
     else if (arg === "--help" || arg === "-h") values.help = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
+  if (values.reproducible && values.noReproducibility) {
+    throw new Error("--reproducible and --no-reproducibility are mutually exclusive");
+  }
   return values;
 }
 
@@ -379,6 +420,7 @@ function cliHelp() {
     "  --color                 Matrix color mode only",
     "  --no-color              Set NO_COLOR=1 (matrix no-color mode only)",
     "  --reproducible          Capture one scenario twice and compare hashes",
+    "  --no-reproducibility    Capture a matrix once without claiming stable output",
     "  --live                  Preserve the current operator environment/login state",
     "  --columns <n>           Single-capture terminal width (default: 120)",
     "  --rows <n>              Single-capture terminal height (default: 40)",
@@ -399,6 +441,7 @@ async function main() {
       sizes: values.sizes,
       colorModes: values.colorModes,
       liveEnvironment: values.live,
+      reproducible: !values.noReproducibility,
     });
     if (values.outputDirectory !== undefined) await writeMatrixResults(results, values.outputDirectory);
     process.stdout.write(

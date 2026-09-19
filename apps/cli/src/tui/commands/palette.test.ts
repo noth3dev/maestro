@@ -63,6 +63,8 @@ it("prints shortcut labels through the /help and Ctrl+K dispatch paths", () => {
     expect(helpOutput.join("\n")).toContain(label);
     expect(ctrlKOutput.join("\n")).toContain(label);
   }
+  expect(helpOutput.join("\n")).toContain("More commands above · PgUp/PgDn scroll");
+  expect(ctrlKOutput.join("\n")).toContain("More commands above · PgUp/PgDn scroll");
 });
 
 it("does not reserve literal question marks for the command palette", () => {

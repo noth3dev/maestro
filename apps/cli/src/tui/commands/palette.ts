@@ -10,21 +10,25 @@ const RAW_KEYBOARD_SHORTCUTS: readonly AutocompleteItem[] = [
 ];
 
 export function createCommandPalette(): AutocompleteItem[] {
-  const commands = createCommandRegistry().all().flatMap((command) => {
-    if (command.actionless) {
-      return [{ value: `/${command.name}`, label: `/${command.name}`, description: command.description }];
-    }
-    return command.actions.map((action) => {
-      const value = `/${command.name} ${action.name}`;
-      return { value, label: value, description: action.kind };
+  const commands = createCommandRegistry()
+    .all()
+    .flatMap((command) => {
+      if (command.actionless) {
+        return [{ value: `/${command.name}`, label: `/${command.name}`, description: command.description }];
+      }
+      return command.actions.map((action) => {
+        const value = `/${command.name} ${action.name}`;
+        return { value, label: value, description: action.kind };
+      });
     });
-  });
   return [...commands, ...RAW_KEYBOARD_SHORTCUTS];
 }
 
-
 export function dispatchCommandPaletteInput(input: string, write: (text: string) => void): boolean {
   if (input !== "help" && !matchesKey(input, "ctrl+k")) return false;
-  write(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+  const entries = createCommandPalette()
+    .map((item) => `${item.label} [${item.description}]`)
+    .join(" · ");
+  write(`Commands: ${entries} · More commands above · PgUp/PgDn scroll`);
   return true;
 }

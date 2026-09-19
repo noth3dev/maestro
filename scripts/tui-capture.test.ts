@@ -69,10 +69,86 @@ describe("tui capture pipeline", () => {
     expect(result.frames[0]).toMatchObject({ name: "after-help", plain: "frame\n" });
     expect(result.frames[0]?.ansi).toContain("\u001b[31m");
     expect(tmux.calls).toContainEqual(["send-keys", "-t", expect.any(String), "-l", "/help"]);
-    expect(tmux.calls).toContainEqual(["send-keys", "-t", expect.any(String), "Escape"]);
-    expect(tmux.calls).toContainEqual(["send-keys", "-t", expect.any(String), "Enter"]);
+    expect(tmux.calls).not.toContainEqual(["send-keys", "-t", expect.any(String), "Escape"]);
+    expect(tmux.calls.filter((call) => call[0] === "send-keys" && call.at(-1) === "Enter")).toHaveLength(1);
     expect(tmux.calls.some((call) => call[0] === "new-session" && call.includes("80") && call.includes("24"))).toBe(true);
     expect(tmux.calls.at(-1)?.[0]).toBe("kill-session");
+  });
+
+  it("submits a command after observable completion and settles the composer", async () => {
+    const calls: string[][] = [];
+    const sessions = new Set<string>();
+    let paneCaptures = 0;
+    const runTmux: Run = async (args) => {
+      calls.push([...args]);
+      const targetIndex = args.indexOf("-t");
+      const sessionIndex = args.indexOf("-s");
+      const target = (targetIndex >= 0 ? args[targetIndex + 1] : sessionIndex >= 0 ? args[sessionIndex + 1] : "") ?? "";
+      const session = target.split(":", 1)[0] ?? target;
+      if (args[0] === "new-session") {
+        sessions.add(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "has-session" && !sessions.has(session)) throw new Error("session does not exist");
+      if (args[0] === "kill-session") {
+        sessions.delete(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "capture-pane") {
+        const commandStillInComposer = paneCaptures < 2;
+        paneCaptures += 1;
+        const plain = commandStillInComposer ? "│ › /models list\n" : "│ › \n";
+        return { stdout: args.includes("-e") ? plain.replace("/models", "\u001b[31m/models\u001b[0m") : plain };
+      }
+      return { stdout: "" };
+    };
+
+    await captureScenario({
+      columns: 120,
+      rows: 40,
+      scenario: [{ type: "command", command: "/models list" }],
+      runTmux,
+      wait: async () => undefined,
+      startupWaitMilliseconds: 0,
+      command: ["node", "dist/main.js"],
+    });
+
+    expect(calls.filter((call) => call[0] === "send-keys" && call.at(-1) === "Enter")).toHaveLength(2);
+    expect(calls.some((call) => call.at(-1) === "Escape")).toBe(false);
+  });
+
+  it("fails closed when a command remains in the composer after the submit retry", async () => {
+    const sessions = new Set<string>();
+    const runTmux: Run = async (args) => {
+      const targetIndex = args.indexOf("-t");
+      const sessionIndex = args.indexOf("-s");
+      const target = (targetIndex >= 0 ? args[targetIndex + 1] : sessionIndex >= 0 ? args[sessionIndex + 1] : "") ?? "";
+      const session = target.split(":", 1)[0] ?? target;
+      if (args[0] === "new-session") {
+        sessions.add(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "has-session" && !sessions.has(session)) throw new Error("session does not exist");
+      if (args[0] === "kill-session") {
+        sessions.delete(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "capture-pane") return { stdout: "│ › /models list\n" };
+      return { stdout: "" };
+    };
+
+    await expect(
+      captureScenario({
+        columns: 120,
+        rows: 40,
+        scenario: [{ type: "command", command: "/models list" }],
+        runTmux,
+        wait: async () => undefined,
+        startupWaitMilliseconds: 0,
+        commandSubmitTimeoutMilliseconds: 100,
+        command: ["node", "dist/main.js"],
+      }),
+    ).rejects.toThrow(/did not submit/);
   });
 
   it("captures the full six-case size and color matrix", async () => {
@@ -163,16 +239,131 @@ describe("tui capture pipeline", () => {
       return { stdout: "" };
     };
 
-    await expect(captureScenario({
+    await expect(
+      captureScenario({
+        columns: 80,
+        rows: 24,
+        scenario: [{ type: "capture", name: "never-reached" }],
+        runTmux,
+        wait: async () => undefined,
+        startupWaitMilliseconds: 0,
+        command: ["node", "dist/main.js"],
+      }),
+    ).rejects.toThrow("tmux client disconnected after session creation");
+    expect(calls.at(-1)?.[0]).toBe("kill-session");
+  });
+
+  it("waits for the live readiness marker before running scenario steps", async () => {
+    const waits: number[] = [];
+    const sessions = new Set<string>();
+    let paneCaptures = 0;
+    let readinessSeen = false;
+    const runTmux: Run = async (args) => {
+      const targetIndex = args.indexOf("-t");
+      const sessionIndex = args.indexOf("-s");
+      const target = (targetIndex >= 0 ? args[targetIndex + 1] : sessionIndex >= 0 ? args[sessionIndex + 1] : "") ?? "";
+      const session = target.split(":", 1)[0] ?? target;
+      if (args[0] === "new-session") {
+        sessions.add(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "has-session" && !sessions.has(session)) throw new Error("session does not exist");
+      if (args[0] === "kill-session") {
+        sessions.delete(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "capture-pane") {
+        paneCaptures += 1;
+        if (paneCaptures >= 5) readinessSeen = true;
+        return { stdout: readinessSeen ? "Session attached\n" : "booting\n" };
+      }
+      if (args[0] === "send-keys") expect(readinessSeen).toBe(true);
+      return { stdout: "" };
+    };
+
+    await captureScenario({
       columns: 80,
       rows: 24,
-      scenario: [{ type: "capture", name: "never-reached" }],
+      liveEnvironment: true,
+      readinessTimeoutMilliseconds: 500,
+      scenario: [
+        { type: "command", command: "/help" },
+        { type: "capture", name: "live" },
+      ],
       runTmux,
-      wait: async () => undefined,
+      wait: async (milliseconds) => waits.push(milliseconds),
       startupWaitMilliseconds: 0,
       command: ["node", "dist/main.js"],
-    })).rejects.toThrow("tmux client disconnected after session creation");
-    expect(calls.at(-1)?.[0]).toBe("kill-session");
+    });
+
+    expect(paneCaptures).toBeGreaterThanOrEqual(6);
+    expect(waits).toContain(50);
+  });
+
+  it("fails closed and cleans up when live readiness never appears", async () => {
+    const sessions = new Set<string>();
+    let killSessionCalls = 0;
+    const runTmux: Run = async (args) => {
+      const targetIndex = args.indexOf("-t");
+      const sessionIndex = args.indexOf("-s");
+      const target = (targetIndex >= 0 ? args[targetIndex + 1] : sessionIndex >= 0 ? args[sessionIndex + 1] : "") ?? "";
+      const session = target.split(":", 1)[0] ?? target;
+      if (args[0] === "new-session") {
+        sessions.add(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "has-session" && !sessions.has(session)) throw new Error("session does not exist");
+      if (args[0] === "kill-session") {
+        killSessionCalls += 1;
+        sessions.delete(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "capture-pane") return { stdout: "booting\n" };
+      return { stdout: "" };
+    };
+
+    await expect(
+      captureScenario({
+        columns: 80,
+        rows: 24,
+        liveEnvironment: true,
+        readinessTimeoutMilliseconds: 100,
+        scenario: [{ type: "capture", name: "never-reached" }],
+        runTmux,
+        wait: async () => undefined,
+        startupWaitMilliseconds: 0,
+        command: ["node", "dist/main.js"],
+      }),
+    ).rejects.toThrow(/readiness marker did not appear/);
+    expect(killSessionCalls).toBe(1);
+  });
+
+  it("uses a longer default startup window only for live captures", async () => {
+    const captureStartupWait = async (liveEnvironment: boolean) => {
+      const waits: number[] = [];
+      let hasSessionCalls = 0;
+      const runTmux: Run = async (args) => {
+        if (args[0] === "has-session") {
+          if (hasSessionCalls++ === 0) throw new Error("session does not exist");
+          return { stdout: "" };
+        }
+        if (args[0] === "capture-pane") return { stdout: liveEnvironment ? "Session attached\n" : "frame\n" };
+        return { stdout: "" };
+      };
+      await captureScenario({
+        columns: 80,
+        rows: 24,
+        liveEnvironment,
+        scenario: [{ type: "capture", name: "frame" }],
+        runTmux,
+        wait: async (milliseconds) => waits.push(milliseconds),
+        command: ["node", "dist/main.js"],
+      });
+      return waits[0];
+    };
+
+    await expect(captureStartupWait(false)).resolves.toBe(1_500);
+    await expect(captureStartupWait(true)).resolves.toBe(3_000);
   });
 
   it("captures every required size and color mode only after reproducibility checks", async () => {
@@ -222,6 +413,43 @@ describe("tui capture pipeline", () => {
       [200, 50, true],
     ]);
     expect(captureCount).toBe(24);
+  });
+
+  it("captures a dynamic matrix once without claiming reproducibility", async () => {
+    let captureCount = 0;
+    const sessions = new Set<string>();
+    const runTmux: Run = async (args) => {
+      const targetIndex = args.indexOf("-t");
+      const sessionIndex = args.indexOf("-s");
+      const target = (targetIndex >= 0 ? args[targetIndex + 1] : sessionIndex >= 0 ? args[sessionIndex + 1] : "") ?? "";
+      const session = target.split(":", 1)[0] ?? target;
+      if (args[0] === "new-session") {
+        sessions.add(session);
+        return { stdout: "" };
+      }
+      if (args[0] === "has-session" && !sessions.has(session)) throw new Error("session does not exist");
+      if (args[0] === "kill-session") sessions.delete(session);
+      if (args[0] === "capture-pane") {
+        captureCount += 1;
+        return { stdout: args.includes("-e") ? "\u001b[31mdynamic\u001b[0m\n" : "dynamic\n" };
+      }
+      return { stdout: "" };
+    };
+
+    const cases = await captureMatrix({
+      scenario: [{ type: "capture", name: "frame" }],
+      sizes: [{ columns: 80, rows: 24 }],
+      colorModes: [false, true],
+      reproducible: false,
+      runTmux,
+      wait: async () => undefined,
+      startupWaitMilliseconds: 0,
+      command: ["node", "dist/main.js"],
+    });
+
+    expect(cases).toHaveLength(2);
+    expect(cases.every((item) => item.reproducible === false)).toBe(true);
+    expect(captureCount).toBe(4);
   });
 
   it("removes Maestro credentials and local auto-start from the child environment", () => {
