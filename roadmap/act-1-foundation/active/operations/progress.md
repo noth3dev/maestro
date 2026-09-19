@@ -4790,3 +4790,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - This finding preserves the TUI spec's conversation-first normal layout and progressive disclosure: navigation takes focus only in the narrow overlay, and the composer returns after Esc or Ctrl+B. No auth, approval, conversation, cancellation, idempotency, persistence, Flashmob/Muze, or publish behavior changed.
 
 - Correction after concurrent delivery: `610c4d75 fix(tui): restore narrow sidebar navigation` is now HEAD and includes the modal-visible keyboard gate, shared narrow-overlay predicate, and the normal-state `ctrl+b sidebar` footer cue. The overlay frame itself truthfully shows `esc unfocus · ctrl+b`; the footer cue is verified in the normal/composer restoration captures under `.artifacts/e4-pillar1-live-sidebar-overlay` and `.artifacts/e4-pillar1-live-sidebar-overlay-enter`. The earlier simplification note above is superseded and removed.
+
+
+## 2026-09-19 — Dogfood loop: persistent sidebar shortcut cue
+
+- A real restored 80x24 frame showed the narrow overlay recovery, but the composer footer did not teach `Ctrl+B` after recovery. A normal 120x40 frame also lacked the same discoverability. Three options were considered: narrow-only hint, always-visible hint, or no hint; the always-visible cue was selected because `Ctrl+B` is truthful at every width and costs one bounded footer suffix.
+- GREEN is committed as `9a247974 fix(tui): advertise sidebar shortcut at all widths`. Fresh real frames show `/ commands · ctrl+g goals · /help · ctrl+b sidebar` at 80x24 and 120x40 without truncation.
+- The follow-up blind review caught the missing wide-screen cue and blocked delivery until it was added. After the fix, the regenerated six-case matrix and Enter/Escape artifacts pass hash, row-count, line-width, focus, and footer-cue audits. Focused shell/sidebar verification is 80/80, with `tsc -b`, changed-file ESLint, and `git diff --check` passing.
