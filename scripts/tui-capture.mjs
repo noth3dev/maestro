@@ -80,6 +80,21 @@ function sha256(text) {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }
 
+function isMissingSessionError(error) {
+  const text = [error?.message, error?.stderr].filter((value) => typeof value === "string").join("\n");
+  return /no server running|session does not exist|can't find session|no such session/i.test(text);
+}
+
+async function hasSession(runTmux, session) {
+  try {
+    await runTmux(["has-session", "-t", session]);
+    return true;
+  } catch (error) {
+    if (isMissingSessionError(error)) return false;
+    throw error;
+  }
+}
+
 function createTmuxRunner(options = {}) {
   return async (args) => {
     const result = await execFileAsync("tmux", [...args], {
@@ -142,9 +157,13 @@ export async function captureScenario(options) {
   const columns = options.columns;
   const rows = options.rows;
   validateSize(columns, rows);
-  const runTmux = options.runTmux ?? createTmuxRunner({ cwd: options.cwd ?? REPO_ROOT });
-  const wait = options.wait ?? sleep;
   const cwd = options.cwd ?? REPO_ROOT;
+  const tmuxEnvironment =
+    options.liveEnvironment === true
+      ? buildLiveCaptureEnvironment({ ...process.env, ...options.environment })
+      : buildCaptureEnvironment({ ...process.env, ...options.environment });
+  const runTmux = options.runTmux ?? createTmuxRunner({ cwd, env: tmuxEnvironment });
+  const wait = options.wait ?? sleep;
   const command = options.command ?? DEFAULT_TUI_COMMAND;
   const session = createSessionName(columns, rows);
   const target = `${session}:0.0`;
@@ -162,12 +181,8 @@ export async function captureScenario(options) {
       : buildCaptureEnvironment({ ...process.env, ...options.environment }, homeDirectory);
 
   try {
-    await runTmux(["has-session", "-t", session]).then(
-      () => {
-        throw new Error(`Refusing to reuse existing tmux session: ${session}`);
-      },
-      () => undefined,
-    );
+    if (await hasSession(runTmux, session)) throw new Error(`Refusing to reuse existing tmux session: ${session}`);
+    ownsSession = true;
     await runTmux(
       launchArguments({
         session,
@@ -179,7 +194,6 @@ export async function captureScenario(options) {
         environment: childEnvironment,
       }),
     );
-    ownsSession = true;
     await runTmux(["has-session", "-t", session]);
     if (startupWait > 0) await wait(startupWait);
     for (const [index, step] of steps.entries()) {
@@ -214,8 +228,7 @@ export async function captureScenario(options) {
   } finally {
     if (ownsSession) {
       try {
-        await runTmux(["has-session", "-t", session]);
-        await runTmux(["kill-session", "-t", session]);
+        if (await hasSession(runTmux, session)) await runTmux(["kill-session", "-t", session]);
       } catch (error) {
         cleanupError = error;
       }

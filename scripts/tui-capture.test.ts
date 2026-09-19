@@ -143,6 +143,38 @@ describe("tui capture pipeline", () => {
     expect(tmux.calls.at(-1)?.[0]).toBe("kill-session");
   });
 
+  it("cleans up a generated session when new-session creates it before the client reports failure", async () => {
+    const calls: string[][] = [];
+    let created = false;
+    const runTmux: Run = async (args) => {
+      calls.push([...args]);
+      if (args[0] === "has-session") {
+        if (!created) throw new Error("session does not exist");
+        return { stdout: "" };
+      }
+      if (args[0] === "new-session") {
+        created = true;
+        throw new Error("tmux client disconnected after session creation");
+      }
+      if (args[0] === "kill-session") {
+        created = false;
+        return { stdout: "" };
+      }
+      return { stdout: "" };
+    };
+
+    await expect(captureScenario({
+      columns: 80,
+      rows: 24,
+      scenario: [{ type: "capture", name: "never-reached" }],
+      runTmux,
+      wait: async () => undefined,
+      startupWaitMilliseconds: 0,
+      command: ["node", "dist/main.js"],
+    })).rejects.toThrow("tmux client disconnected after session creation");
+    expect(calls.at(-1)?.[0]).toBe("kill-session");
+  });
+
   it("captures every required size and color mode only after reproducibility checks", async () => {
     let captureCount = 0;
     const sessions = new Map<string, boolean>();

@@ -4734,3 +4734,17 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 - Current focused regression lane passes **79/79 tests** across the recovery banner, shell, sidebar, and capture helper suites. Changed-file ESLint, `node --check scripts/tui-capture.mjs`, and `git diff --check` pass. The new capture files pass Prettier after formatting.
 - `npm run build` reaches root/CLI `tsc -b` and fails only in the known Carnegie renderer gate: missing `@playwright/test` plus the resulting implicit-`any` diagnostics in `apps/carnegie/src/accessibility.playwright.ts`. Exact output is `.artifacts/e4-build-current.log`; this remains an environment/dependency blocker, not a claimed source-green build.
+
+
+## 2026-09-19 — Dogfood loop: §0.3 capture ownership hardening
+
+- Initial §0.3 review found a generated tmux session could leak if `new-session` created it before the client returned an error, and that the tmux client/server could inherit credentials by default.
+- RED added the client-failure-after-session-creation regression. GREEN now claims the generated name after a missing-session preflight, probes/kills it after launch errors, suppresses only expected missing-session cleanup, and surfaces all other tmux errors. Default tmux client/server and pane environments are sanitized; `--live` remains explicit.
+- Final gate after the fix: capture/TUI focused tests 80/80, `node --check scripts/tui-capture.mjs`, CLI `tsc -b`, changed-file ESLint, and `git diff --check` pass. A re-review was requested from the same no-edit §0.3 reviewer.
+
+
+## 2026-09-19 — Dogfood loop: final hardening evidence
+
+- Final post-hardening real matrix is `.artifacts/e4-pillar1-final`: exactly six cases (`80x24`, `120x40`, `200x50`, color and `NO_COLOR`), each with `reproducible: true`; hashes and plain/ANSI files were emitted.
+- The follow-up §0.3 review is **REVIEW: PASS**. It specifically rechecked the launch-failure cleanup regression, strict preflight handling, sanitized tmux client/server environment, explicit live opt-in, and the absence of excluded-scope changes.
+- Focused verification after hardening: 80/80 tests, CLI `tsc -b`, changed-file ESLint, `node --check`, and `git diff --check` all pass.
