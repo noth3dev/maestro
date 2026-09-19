@@ -4848,3 +4848,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Candidates: (A) retract/qualify the semantic claim and retain bounded render evidence, (B) auto-tokenize whitespace key strings in the capture API, or (C) rerun all 36 cases before claiming anything. Independent critique ranked **A > C > B**. B was rejected because the API intentionally passes one string as one tmux key argument; changing that would alter semantics. C is unnecessary for this bounded finding and may never settle under live auth/history instability.
 - Clean explicit-key revalidation uses separate `C-b`, `DOWN`, `Enter`, and `Escape` arguments. It directly proves Billing and Evidence Log destination rendering and separately confirms the Goal-scoped Channel result. Search/inbox remain auth/history-limited; Luthiery truthfully reports its future Phase 9 registry limitation. No product code changed.
 - The broad pending nav claim is now qualified in `execution/PENDING_LIVE_CHECKS.md`; no destructive action, Goal creation, approval, worker execution, publish, logout, or credential mutation occurred.
+
+
+## 2026-09-19 — Phase 4/5 deterministic harness recheck
+
+- Phase 4 fixture safety re-ran from `test/phase4-scenario/fixture.test.ts`: **2/2 tests passed**. The disposable fixture creates both bounded scenarios, signs and verifies the Discord envelope, rejects replay/tampering, preserves private-file modes, and rejects `testbed/` and symlink roots before writing. Evidence: `.artifacts/e4-phase4-fixture-tests.log`.
+- The Phase 4 runbook was re-read: live device enrollment, capability activation, outage restart, Discord delivery, and critical-effect denial remain user-owned live steps. No live provider, device, Discord, capability, Goal, approval, worker, publish, or external action was attempted.
+- Phase 5 contention harness was invoked without `MAESTRO_TEST_DATABASE_URL`; Vitest correctly skipped all five database-gated tests. This is an environment gate, not a pass. No PostgreSQL claims are made.
+- The Phase 5 runbook and harness comments were re-read; the deterministic test would require a dedicated disposable PostgreSQL database and still would not close the live three-Goal/two-project acceptance handoff.
