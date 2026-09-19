@@ -24,11 +24,42 @@ export function createCommandPalette(): AutocompleteItem[] {
   return [...commands, ...RAW_KEYBOARD_SHORTCUTS];
 }
 
+function renderCommandPalette(items: readonly AutocompleteItem[]): string {
+  const groups: Record<string, AutocompleteItem[]> = {
+    READ: [],
+    WRITE: [],
+    CRITICAL: [],
+    SHORTCUTS: [],
+    OTHER: [],
+  };
+  for (const item of items) {
+    const description = item.description ?? "other";
+    const group = item.value.startsWith("Ctrl+") ? "SHORTCUTS" : description.toUpperCase();
+    const bucket = groups[group] ?? groups.OTHER;
+    if (bucket === undefined) continue;
+    bucket.push(item);
+  }
+
+  const lines = ["Commands:"];
+  for (const group of ["READ", "WRITE", "CRITICAL", "SHORTCUTS"]) {
+    const entries = groups[group] ?? [];
+    if (entries.length === 0) continue;
+    lines.push(`${group}:`);
+    for (const item of entries) lines.push(`  ${item.label} [${item.description ?? "other"}]`);
+  }
+  const otherEntries = groups.OTHER ?? [];
+  if (otherEntries.length > 0) lines.push(`OTHER: ${otherEntries.map((item) => item.label).join(" · ")}`);
+  lines.push("At a glance:");
+  for (const group of ["READ", "WRITE", "CRITICAL"]) {
+    const representative = groups[group]?.[0];
+    if (representative !== undefined) lines.push(`  ${group}: ${representative.label}`);
+  }
+  lines.push("Groups: READ · WRITE · CRITICAL · SHORTCUTS · OTHER", "Catalog above · PgUp/PgDn scroll");
+  return lines.join("\n");
+}
+
 export function dispatchCommandPaletteInput(input: string, write: (text: string) => void): boolean {
   if (input !== "help" && !matchesKey(input, "ctrl+k")) return false;
-  const entries = createCommandPalette()
-    .map((item) => `${item.label} [${item.description}]`)
-    .join(" · ");
-  write(`Commands: ${entries} · More commands above · PgUp/PgDn scroll`);
+  write(renderCommandPalette(createCommandPalette()));
   return true;
 }

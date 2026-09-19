@@ -63,8 +63,22 @@ it("prints shortcut labels through the /help and Ctrl+K dispatch paths", () => {
     expect(helpOutput.join("\n")).toContain(label);
     expect(ctrlKOutput.join("\n")).toContain(label);
   }
-  expect(helpOutput.join("\n")).toContain("More commands above · PgUp/PgDn scroll");
-  expect(ctrlKOutput.join("\n")).toContain("More commands above · PgUp/PgDn scroll");
+  for (const output of [helpOutput.join("\n"), ctrlKOutput.join("\n")]) {
+    expect(output).toContain("READ:");
+    expect(output).toContain("WRITE:");
+    expect(output).toContain("CRITICAL:");
+    expect(output).toContain("SHORTCUTS:");
+    expect(output).toContain("Groups: READ · WRITE · CRITICAL · SHORTCUTS");
+    expect(output).toContain("At a glance:");
+    for (const group of ["read", "write", "critical"]) {
+      const item = createCommandPalette().find((candidate) => candidate.description === group);
+      expect(item).toBeDefined();
+      expect(output).toContain(`${group.toUpperCase()}: ${item!.label}`);
+    }
+    expect(output).toContain("Catalog above · PgUp/PgDn scroll");
+    expect(output).not.toContain("More commands above");
+    expect(Math.max(...output.split("\n").map((line) => line.length))).toBeLessThanOrEqual(72);
+  }
 });
 
 it("does not reserve literal question marks for the command palette", () => {
