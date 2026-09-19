@@ -3,6 +3,7 @@ import { HStack, Text, TuiAltScreen, VStack, visibleWidth } from "@earendil-work
 import { fitPlain, tuiTheme } from "../theme.js";
 import {
   contentWidth,
+  isNarrowSidebarOverlayVisible,
   isSidebarVisible,
   renderFooterSection,
   renderGoalSection,
@@ -319,6 +320,13 @@ describe("sidebar visibility", () => {
     expect(SIDEBAR_MIN_COLUMNS).toBe(100);
   });
 
+  it("keeps narrow overlay hidden when a modal owns the main pane", () => {
+    expect(isNarrowSidebarOverlayVisible(80, "search")).toBe(true);
+    expect(isNarrowSidebarOverlayVisible(80, "search", false, true)).toBe(false);
+    expect(isNarrowSidebarOverlayVisible(80, undefined)).toBe(false);
+    expect(isNarrowSidebarOverlayVisible(120, "search")).toBe(false);
+  });
+
   it("subtracts the sidebar width only when visible", () => {
     expect(contentWidth(120, true)).toBe(94);
     expect(contentWidth(100, true)).toBe(74);
@@ -385,5 +393,4 @@ describe("sidebar layout mechanics", () => {
     expect(isSidebarVisible(true, 120, true)).toBe(false);
     expect(isSidebarVisible(true, 120, false)).toBe(true);
   });
-
 });

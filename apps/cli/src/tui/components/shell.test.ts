@@ -93,6 +93,12 @@ describe("Maestro TUI shell", () => {
     }
   });
 
+  it("advertises the narrow sidebar shortcut when requested", () => {
+    const output = stripAnsi(renderTuiFooter(80, state, { sidebarHint: true }));
+    expect(output).toContain("ctrl+b sidebar");
+    expect(output.length).toBeLessThanOrEqual(80);
+  });
+
   it("shows retry guidance when project discovery fails", () => {
     const failedDiscovery = {
       ...state,

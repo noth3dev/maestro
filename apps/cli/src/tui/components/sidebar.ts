@@ -8,6 +8,15 @@ export function isSidebarVisible(explicit: boolean, columns: number, suppressed 
   return !suppressed && explicit && columns >= SIDEBAR_MIN_COLUMNS;
 }
 
+export function isNarrowSidebarOverlayVisible(
+  columns: number,
+  focusedId: string | undefined,
+  suppressed = false,
+  modalVisible = false,
+): boolean {
+  return columns < SIDEBAR_MIN_COLUMNS && focusedId !== undefined && !suppressed && !modalVisible;
+}
+
 export function contentWidth(columns: number, sidebarVisible: boolean): number {
   if (!isSidebarVisible(sidebarVisible, columns)) return columns;
   return Math.max(0, columns - SIDEBAR_WIDTH);

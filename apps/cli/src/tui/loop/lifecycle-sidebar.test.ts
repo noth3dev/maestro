@@ -148,20 +148,20 @@ describe("sidebar focus keys", () => {
     expect(c.submitter.submit).toHaveBeenCalledWith("/channel read --channel-kind department --channel-id engineering");
   });
 
-  it("stops swallowing keys when narrowed while focused", () => {
+  it("keeps the narrow sidebar overlay keyboard-accessible while focused", () => {
     const c = stubController();
     c.sidebarVisible = true;
     c.sidebarFocus = "home";
     c.terminal.columns = 80;
     const handler = new LifecycleHandler(c as unknown as TuiController);
-    expect(handler.handleInput("a")).toBeUndefined();
+    expect(handler.handleInput("a")).toEqual({ consume: true });
     expect(c.sidebarFocus).toBe("home");
-    expect(handler.handleInput(UP)).toBeUndefined();
-    expect(c.sidebarFocus).toBe("home");
-    expect(handler.handleInput("\r")).toBeUndefined();
-    expect(c.submitter.submit).not.toHaveBeenCalled();
-    expect(handler.handleInput(ESC)).toBeUndefined();
-    expect(c.sidebarFocus).toBe("home");
+    expect(handler.handleInput(UP)).toEqual({ consume: true });
+    expect(c.sidebarFocus).toBe("luthiery");
+    expect(handler.handleInput("\r")).toEqual({ consume: true });
+    expect(c.submitter.submit).toHaveBeenCalledWith("/luthiery list");
+    expect(handler.handleInput(ESC)).toEqual({ consume: true });
+    expect(c.sidebarFocus).toBeUndefined();
   });
 
   it("restores nav without refocus after widening", () => {
@@ -170,19 +170,23 @@ describe("sidebar focus keys", () => {
     c.sidebarFocus = "home";
     c.terminal.columns = 80;
     const handler = new LifecycleHandler(c as unknown as TuiController);
-    expect(handler.handleInput(UP)).toBeUndefined();
-    c.terminal.columns = 120;
     expect(handler.handleInput(UP)).toEqual({ consume: true });
     expect(c.sidebarFocus).toBe("luthiery");
+    c.terminal.columns = 120;
+    expect(handler.handleInput(UP)).toEqual({ consume: true });
+    expect(c.sidebarFocus).toBe("billing");
   });
 
-  it("still toggles visibility while narrow", () => {
+  it("toggles the narrow sidebar overlay without hiding its dock state", () => {
     const c = stubController();
     c.sidebarVisible = true;
     c.terminal.columns = 80;
     const handler = new LifecycleHandler(c as unknown as TuiController);
     expect(handler.handleInput(CTRL_B)).toEqual({ consume: true });
-    expect(c.sidebarVisible).toBe(false);
+    expect(c.sidebarVisible).toBe(true);
+    expect(c.sidebarFocus).toBe("home");
+    expect(handler.handleInput(CTRL_B)).toEqual({ consume: true });
+    expect(c.sidebarVisible).toBe(true);
     expect(c.sidebarFocus).toBeUndefined();
   });
 });

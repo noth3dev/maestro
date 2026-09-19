@@ -3,7 +3,7 @@ import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
-import { isSidebarVisible, toggleSidebar } from "../components/sidebar.js";
+import { isNarrowSidebarOverlayVisible, isSidebarVisible, SIDEBAR_MIN_COLUMNS, toggleSidebar } from "../components/sidebar.js";
 import { activateSidebarRow, isSidebarNavActive, moveSidebarFocus, NAV_ROWS, sidebarFocusRows } from "../components/sidebar-nav.js";
 import { activateSidebarChannel, channelRowKey } from "../components/sidebar-channels.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
@@ -125,20 +125,34 @@ export class LifecycleHandler {
       return { consume: true };
     }
     if (dispatchCommandPaletteInput(data, c.view.append)) return { consume: true };
+    const sidebarSuppressed = c.isBlockedSetupState?.() === true;
+    const modalVisible = c.pendingConfirmation !== undefined || c.accountLoginSelection !== undefined;
     if (matchesKey(data, "ctrl+b")) {
-      toggleSidebar(c, NAV_ROWS);
+      if (c.terminal.columns < SIDEBAR_MIN_COLUMNS && !sidebarSuppressed && !modalVisible) {
+        c.sidebarFocus = c.sidebarFocus === undefined ? moveSidebarFocus(undefined, 1, NAV_ROWS) : undefined;
+        c.view.render();
+      } else {
+        toggleSidebar(c, NAV_ROWS);
+      }
       return { consume: true };
     }
     // The focus block also requires effective visibility: a focused but
     // narrowed sidebar keeps its focus value (widening restores seamlessly)
     // while keys fall through to the existing global handling below.
-    const sidebarSuppressed = c.isBlockedSetupState?.() === true;
-    if (isSidebarNavActive(c) && isSidebarVisible(c.sidebarVisible, c.terminal.columns, sidebarSuppressed)) {
+    if (
+      isSidebarNavActive(c) &&
+      !modalVisible &&
+      (isSidebarVisible(c.sidebarVisible, c.terminal.columns, sidebarSuppressed) ||
+        isNarrowSidebarOverlayVisible(c.terminal.columns, c.sidebarFocus, sidebarSuppressed, modalVisible))
+    ) {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
         c.sidebarFocus = moveSidebarFocus(
           c.sidebarFocus,
           matchesKey(data, "up") ? -1 : 1,
-          sidebarFocusRows(c.sidebarGoals, c.sidebarChannels.map((read) => channelRowKey(read))),
+          sidebarFocusRows(
+            c.sidebarGoals,
+            c.sidebarChannels.map((read) => channelRowKey(read)),
+          ),
         );
         c.view.render();
         return { consume: true };

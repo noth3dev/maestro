@@ -420,8 +420,9 @@ function hintText(state: TuiShellState, width = 80): string {
   return "/ commands · ctrl+g goals · /help";
 }
 
-export function renderHints(state: TuiShellState, width: number): string {
-  return tuiTheme.dim(fitPlain(hintText(state, width), width));
+export function renderHints(state: TuiShellState, width: number, options: { sidebarHint?: boolean } = {}): string {
+  const hint = options.sidebarHint ? `${hintText(state, width)} · ctrl+b sidebar` : hintText(state, width);
+  return tuiTheme.dim(fitPlain(hint, width));
 }
 
 export function renderTuiLayout(state: TuiShellState, width: number, height: number, options: TuiLayoutOptions = {}): TuiLayoutFrame {
@@ -455,7 +456,7 @@ export function renderStatusHeader(state: TuiShellState, width: number, _height 
   return [renderStatusRow(state, width)];
 }
 
-export function renderTuiFooter(width: number, state?: TuiShellState): string {
+export function renderTuiFooter(width: number, state?: TuiShellState, options: { sidebarHint?: boolean } = {}): string {
   return renderHints(
     state ?? {
       workspace: { cwd: "", gitRoot: "" },
@@ -466,5 +467,6 @@ export function renderTuiFooter(width: number, state?: TuiShellState): string {
       budget: { kind: "empty" },
     },
     width,
+    options,
   );
 }

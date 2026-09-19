@@ -14,8 +14,22 @@ import {
   sidebarChannelSyncAction,
 } from "../components/sidebar-channels.js";
 import { createClickRegion } from "../components/mouse.js";
-import { isBlockedSetupState as isBlockedSetupPresentation, renderStatusSection, sidebarNavBadges, toSidebarStatus } from "../components/shell.js";
-import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
+import {
+  isBlockedSetupState as isBlockedSetupPresentation,
+  renderStatusSection,
+  sidebarNavBadges,
+  toSidebarStatus,
+} from "../components/shell.js";
+import {
+  contentWidth,
+  isNarrowSidebarOverlayVisible as shouldShowNarrowSidebarOverlay,
+  isSidebarVisible,
+  renderFooterSection,
+  renderGoalSection,
+  renderNavSection,
+  renderSidebar,
+  SIDEBAR_WIDTH,
+} from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -109,6 +123,15 @@ export class TuiController {
 
   contentWidth(): number {
     return contentWidth(this.terminal.columns, this.sidebarVisible && !this.isBlockedSetupState());
+  }
+
+  isNarrowSidebarOverlayVisible(): boolean {
+    return shouldShowNarrowSidebarOverlay(
+      this.terminal.columns,
+      this.sidebarFocus,
+      this.isBlockedSetupState(),
+      this.pendingConfirmation !== undefined || this.accountLoginSelection !== undefined,
+    );
   }
 
   conversation: ConversationTranscriptState = createConversationTranscript();
@@ -346,7 +369,7 @@ export class TuiController {
       { component: composer, basis: "auto", shrink: 1, minSize: 1, visible: () => !this.isBlockedSetupState() },
       { component: this.footer, basis: "auto", shrink: 0, minSize: 1, visible: () => !this.isBlockedSetupState() },
     ]);
-    const sidebarLines = (width: number) => {
+    const syncSidebarChannels = () => {
       const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
       // Render-time tag sync (the dynamic-region precedent in view.ts
       // buildInputLabel): a goal change clears the old roster and fires one
@@ -360,6 +383,10 @@ export class TuiController {
         this.sidebarChannels = [];
         void this.refreshSidebarChannels();
       }
+      return goalId;
+    };
+    const sidebarLines = (width: number) => {
+      const goalId = syncSidebarChannels();
       const channelSections = renderChannelSections(this.sidebarChannels, this.sidebarFocus);
       const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
       return renderSidebar(width, [
@@ -370,17 +397,31 @@ export class TuiController {
         renderFooterSection(),
       ]);
     };
-    const sidebarRegion = createClickRegion({
-      lines: sidebarLines,
-      resolve: (lines, x, y) =>
-        resolveSidebarNavClick(lines, x, y) ??
-        resolveSidebarGoalClick(lines, this.sidebarGoals, x, y) ??
-        resolveSidebarChannelClick(lines, this.sidebarChannels, x, y),
-      onAction: (id) => {
-        activateSidebarRow(this, id);
-        activateSidebarChannel(this, id);
-      },
-    });
+    const createSidebarClickRegion = (lines: (width: number) => readonly string[]) =>
+      createClickRegion({
+        lines,
+        resolve: (renderedLines, x, y) =>
+          resolveSidebarNavClick(renderedLines, x, y) ??
+          resolveSidebarGoalClick(renderedLines, this.sidebarGoals, x, y) ??
+          resolveSidebarChannelClick(renderedLines, this.sidebarChannels, x, y),
+        onAction: (id) => {
+          activateSidebarRow(this, id);
+          activateSidebarChannel(this, id);
+        },
+      });
+    const sidebarRegion = createSidebarClickRegion(sidebarLines);
+    const sidebarOverlayLines = (width: number) => {
+      const goalId = syncSidebarChannels();
+      const channelSections = renderChannelSections(this.sidebarChannels, this.sidebarFocus);
+      const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
+      return renderSidebar(width, [
+        renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state)),
+        ...channelSections,
+        ...(goalSection === undefined ? [] : [goalSection]),
+        renderFooterSection(),
+      ]);
+    };
+    const sidebarOverlayRegion = createSidebarClickRegion(sidebarOverlayLines);
     const visibleStatusRegion = createDynamicRegion((width) => (this.isBlockedSetupState() ? [] : this.statusRegion.render(width)));
     const mainColumn = new VStack([
       { component: visibleStatusRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => !this.isBlockedSetupState() },
@@ -419,7 +460,8 @@ export class TuiController {
           minSize: 0,
           visible: () => isSidebarVisible(this.sidebarVisible, terminal.columns, this.isBlockedSetupState()),
         },
-        { component: mainColumn, basis: 0, grow: 1, minSize: 0 },
+        { component: mainColumn, basis: 0, grow: 1, minSize: 0, visible: () => !this.isNarrowSidebarOverlayVisible() },
+        { component: sidebarOverlayRegion, basis: 0, grow: 1, minSize: 0, visible: () => this.isNarrowSidebarOverlayVisible() },
       ]),
     );
     tui.setFocus(this.editor);
