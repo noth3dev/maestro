@@ -9,7 +9,6 @@ import {
   shouldRetryAutomaticProviderSignIn,
 } from "../entry-helpers.js";
 import { renderInputPlaceholder, renderTuiFooter } from "../components/shell.js";
-import { SIDEBAR_MIN_COLUMNS } from "../components/sidebar.js";
 import { createDynamicRegion } from "../components/regions.js";
 import { draftForPresentation } from "../draft-presentation.js";
 import { renderTaskContractDraft } from "../goal-less-intake.js";
@@ -57,7 +56,7 @@ export class TuiView {
       c.terminal.rows < 16
         ? ""
         : renderTuiFooter(c.contentWidth(), c.state, {
-            sidebarHint: c.terminal.columns < SIDEBAR_MIN_COLUMNS && !c.isBlockedSetupState(),
+            sidebarHint: !c.isBlockedSetupState(),
           }),
     );
     c.tui.requestRender(true);
