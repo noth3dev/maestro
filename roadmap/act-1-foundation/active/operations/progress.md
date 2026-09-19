@@ -4797,3 +4797,11 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - A real restored 80x24 frame showed the narrow overlay recovery, but the composer footer did not teach `Ctrl+B` after recovery. A normal 120x40 frame also lacked the same discoverability. Three options were considered: narrow-only hint, always-visible hint, or no hint; the always-visible cue was selected because `Ctrl+B` is truthful at every width and costs one bounded footer suffix.
 - GREEN is committed as `9a247974 fix(tui): advertise sidebar shortcut at all widths`. Fresh real frames show `/ commands · ctrl+g goals · /help · ctrl+b sidebar` at 80x24 and 120x40 without truncation.
 - The follow-up blind review caught the missing wide-screen cue and blocked delivery until it was added. After the fix, the regenerated six-case matrix and Enter/Escape artifacts pass hash, row-count, line-width, focus, and footer-cue audits. Focused shell/sidebar verification is 80/80, with `tsc -b`, changed-file ESLint, and `git diff --check` passing.
+
+
+## 2026-09-19 — Dogfood loop: live color/auth parity limitation
+
+- Latest HEAD live matrix produced six dynamic home frames across 80x24, 120x40, and 200x50 in color and `NO_COLOR`; all are explicitly `reproducible: false`. Fresh blind review found a parity concern: 120x40 sidebar sections and 200x50 auth/error placement differed between the two runs.
+- A bounded paired rerun at 200x50 reproduced non-equivalent backend state: color placed `Authentication is temporarily unavailable` into status/Goal/workers/budget, while `NO_COLOR` showed the draft Goal but reported unavailable conversation history. Both remained connected to project/event cursor 167.
+- Source re-read found `NO_COLOR` only in theme rendering; no application auth/session branch depends on it. Independent critique ranked **C > B > A**: do not change product code; treat authenticated color/NO_COLOR parity as dynamic and unverified, use deterministic fixtures for visual parity, and only consider same-session comparison as a future diagnostic. Longer waits are not an auth-stability proof.
+- This is recorded as an evidence limitation, not a demonstrated product defect. Evidence: `.artifacts/e4-latest-head-live-matrix` and `.artifacts/e4-live-color-pair-rerun`; reference structure snapshot: `.artifacts/e4-reference-structure-iteration14.json`.
