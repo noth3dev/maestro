@@ -7,7 +7,11 @@ const channel = { channelId: "44444444-4444-4444-8444-444444444444", projectId, 
 
 describe("channel panel", () => {
   it("renders roster-filtered channel summaries and empty state", () => {
-    expect(renderChannelList([], 80)).toEqual(["Channels", "No channels available for this Goal."]);
+    expect(renderChannelList([], 80)).toEqual([
+      "Channels",
+      "No Goal-scoped channels are available for this Goal.",
+      "Sidebar organization and Encore channels are separate from this Goal-filtered result.",
+    ]);
     expect(renderChannelList([{ channel, messages: [], members: [{ identityId: "head:engineering", identityKind: "head", displayName: "Engineering Head", departmentId: "engineering", status: "active" }] }], 80)).toEqual(["Channels", "• #engineering · department:engineering · 0 messages · 1 members"]);
   });
 

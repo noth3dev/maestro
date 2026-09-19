@@ -4805,3 +4805,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - A bounded paired rerun at 200x50 reproduced non-equivalent backend state: color placed `Authentication is temporarily unavailable` into status/Goal/workers/budget, while `NO_COLOR` showed the draft Goal but reported unavailable conversation history. Both remained connected to project/event cursor 167.
 - Source re-read found `NO_COLOR` only in theme rendering; no application auth/session branch depends on it. Independent critique ranked **C > B > A**: do not change product code; treat authenticated color/NO_COLOR parity as dynamic and unverified, use deterministic fixtures for visual parity, and only consider same-session comparison as a future diagnostic. Longer waits are not an auth-stability proof.
 - This is recorded as an evidence limitation, not a demonstrated product defect. Evidence: `.artifacts/e4-latest-head-live-matrix` and `.artifacts/e4-live-color-pair-rerun`; reference structure snapshot: `.artifacts/e4-reference-structure-iteration14.json`.
+
+
+## 2026-09-19 — Dogfood loop: Goal-scoped channel empty-state clarity
+
+- Real live sidebar navigation selected the channel row and pressed Enter. The attached draft Goal returned `Channels: No channels available for this Goal.` while the sidebar showed organization channels. Phase 2 requires collaboration channels to be bound to one Goal, so the state was truthful but visually ambiguous.
+- Three candidates were considered: (A) clarify the empty result with the Goal-scoped versus sidebar organization distinction, (B) hide sidebar channels until a Goal channel exists, or (C) leave the current sentence and mark it pending. Independent critique ranked **A > C > B**; hiding useful organization context was rejected.
+- RED changed the channel-panel empty-state expectation and failed 1 test. GREEN now renders `No Goal-scoped channels are available for this Goal.` followed by `Sidebar organization and Encore channels are separate from this Goal-filtered result.` The wording was corrected after §0.3 caught an inaccurate claim about organization-channel scope.
+- Real 80x24 live verification after the same channel Enter flow shows the clarified copy, clean wrapping, and intact composer. Fresh blind review is **PASS**.
+- Verification: channel-panel tests 2/2, `tsc -b`, changed-file ESLint, and `git diff --check` pass. No Goal creation, approval, worker, publish, login, logout, or credential mutation occurred.

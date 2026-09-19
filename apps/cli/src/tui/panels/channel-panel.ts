@@ -14,7 +14,12 @@ function orderedMessages(messages: ChannelRead["messages"]): ChannelRead["messag
 }
 
 export function renderChannelList(state: readonly ChannelRead[], width: number): string[] {
-  if (state.length === 0) return ["Channels", "No channels available for this Goal."];
+  if (state.length === 0)
+    return [
+      "Channels",
+      "No Goal-scoped channels are available for this Goal.",
+      "Sidebar organization and Encore channels are separate from this Goal-filtered result.",
+    ];
   return [
     "Channels",
     ...state.map((read) => panelLine(`• ${read.channel.displayName} · ${read.channel.kind}:${read.channel.scopeId} · ${read.messages.length} messages · ${read.members.length} members`, width)),
