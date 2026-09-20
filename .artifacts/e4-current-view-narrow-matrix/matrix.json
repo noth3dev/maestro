@@ -1,0 +1,113 @@
+[
+  {
+    "session": "maestro-e4-333575-80x24-506648aa-6846-4573-b9d2-344091a1d02a",
+    "columns": 80,
+    "rows": 24,
+    "noColor": false,
+    "environment": {
+      "TERM": "screen-256color"
+    },
+    "scenario": "home",
+    "reproducible": false,
+    "frames": [
+      {
+        "name": "home",
+        "ansiSha256": "ead4f88c76c980be2a0674e652357156e88423a7f557186f103afe0072c44e86",
+        "plainSha256": "0c307fa2a0e2e723c0f2a0831b29c44ad70069deafa83f3459a5b763f6166f01"
+      }
+    ]
+  },
+  {
+    "session": "maestro-e4-333575-80x24-d42ac3c2-84c6-4015-bc86-bf0b5a91872f",
+    "columns": 80,
+    "rows": 24,
+    "noColor": true,
+    "environment": {
+      "TERM": "screen-256color",
+      "NO_COLOR": "1"
+    },
+    "scenario": "home",
+    "reproducible": false,
+    "frames": [
+      {
+        "name": "home",
+        "ansiSha256": "083eaff7041a9109d72835eb5b4529698df5dbc1fd75271451fa87be7e7072e3",
+        "plainSha256": "0c307fa2a0e2e723c0f2a0831b29c44ad70069deafa83f3459a5b763f6166f01"
+      }
+    ]
+  },
+  {
+    "session": "maestro-e4-333575-120x40-4506f279-907f-4944-9fdd-a8f84f0e3599",
+    "columns": 120,
+    "rows": 40,
+    "noColor": false,
+    "environment": {
+      "TERM": "screen-256color"
+    },
+    "scenario": "home",
+    "reproducible": false,
+    "frames": [
+      {
+        "name": "home",
+        "ansiSha256": "65967a7fa3696e12562c5e8c1c3f9142c3ff99100a0f58ae33b068448c4c4708",
+        "plainSha256": "748401b68644ba32d53b0cda30cf7735a8c5a233c8f7b49ffeea402fcd5aab40"
+      }
+    ]
+  },
+  {
+    "session": "maestro-e4-333575-120x40-d521e296-fb50-4511-9532-7463b4f4e385",
+    "columns": 120,
+    "rows": 40,
+    "noColor": true,
+    "environment": {
+      "TERM": "screen-256color",
+      "NO_COLOR": "1"
+    },
+    "scenario": "home",
+    "reproducible": false,
+    "frames": [
+      {
+        "name": "home",
+        "ansiSha256": "4834848b68fc27f0005ee7127166d3b405643e68a783ee6851d266c1d5b5265d",
+        "plainSha256": "39f4af2e3c654a41a577e500be81e6c32de59759554aba24ce3680c478850483"
+      }
+    ]
+  },
+  {
+    "session": "maestro-e4-333575-200x50-04ce1ec2-f436-4141-b5c7-f9c5c9765c51",
+    "columns": 200,
+    "rows": 50,
+    "noColor": false,
+    "environment": {
+      "TERM": "screen-256color"
+    },
+    "scenario": "home",
+    "reproducible": false,
+    "frames": [
+      {
+        "name": "home",
+        "ansiSha256": "486d3a45bbab238db2a4adb47d280038d3342380c6dce3eab8e6cc038609ae91",
+        "plainSha256": "359850e889e0c35ed10ec881e48a746764263b5cb58d7ba0bebfd3269a214de8"
+      }
+    ]
+  },
+  {
+    "session": "maestro-e4-333575-200x50-e684e483-a936-4a08-a8c7-293ce516458a",
+    "columns": 200,
+    "rows": 50,
+    "noColor": true,
+    "environment": {
+      "TERM": "screen-256color",
+      "NO_COLOR": "1"
+    },
+    "scenario": "home",
+    "reproducible": false,
+    "frames": [
+      {
+        "name": "home",
+        "ansiSha256": "458e5530365a64533fb69a944d39b0340287ea80559d87a50d51064ba37bbd1e",
+        "plainSha256": "28ca5f1e9b6a33e81a1ae11ec37cab00c16c4eda83b7cd2cef91d92c17467e4c"
+      }
+    ]
+  }
+]

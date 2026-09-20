@@ -1,0 +1,7 @@
+
+> build
+> tsc -b && npm run typecheck:renderer --workspace @maestro/carnegie
+
+
+> typecheck:renderer
+> tsc -p tsconfig.renderer.json --noEmit
