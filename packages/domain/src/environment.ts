@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 
 export const ENVIRONMENT_RECIPE_SCHEMA_VERSION = 1;
@@ -15,7 +15,7 @@ export interface EnvironmentRecord {
  readonly environmentId: string; readonly recipeVersion: number; readonly goalId: string; readonly departmentId: string; readonly workerId: string; readonly projectId: string; readonly missionId: string; readonly type: EnvironmentType;
  readonly recipe: Readonly<Record<string, unknown>>; readonly resolvedInputs: Readonly<Record<string, unknown>>; readonly capabilities: readonly Capability[]; readonly boundaries: EnvironmentBoundaries; readonly secretsReferences: readonly string[]; readonly resources: ResourceCeilings; readonly expiresAt: string; readonly state: EnvironmentState; readonly setupLog: readonly string[]; readonly health: EnvironmentHealth; readonly contentIdentity: string; readonly cleanup: EnvironmentCleanup;
 }
-export function environmentContentIdentity(recipe: EnvironmentRecipe): string { return createHash("sha256").update(canonicalJson(recipe)).digest("hex"); }
+export function environmentContentIdentity(recipe: EnvironmentRecipe): string { return sha256Hex(canonicalJson(recipe)); }
 function nonblank(value: unknown): value is string { return typeof value === "string" && value.trim() !== ""; }
 export function assertValidEnvironmentRecipe(value: unknown): asserts value is EnvironmentRecipe {
  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Environment recipe must be an object");

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 import type { DecisionPacket } from "./council.js";
 
@@ -133,9 +133,9 @@ export function assertValidDepartmentPlanSubstance(value: unknown): asserts valu
 }
 
 export function departmentPlanSubstanceContentHash(substance: DepartmentPlanSubstance): string {
-  return createHash("sha256").update(canonicalJson(substance)).digest("hex");
+  return sha256Hex(canonicalJson(substance));
 }
 
 export function decisionPacketContentHash(packet: DecisionPacket): string {
-  return createHash("sha256").update(canonicalJson(packet)).digest("hex");
+  return sha256Hex(canonicalJson(packet));
 }

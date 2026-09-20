@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 
 /**
@@ -43,7 +43,7 @@ export interface EvidenceBundle {
 }
 
 export function evidenceBundleContentHash(bundle: Omit<EvidenceBundle, "assembledAt">): string {
-  return createHash("sha256").update(canonicalJson(bundle)).digest("hex");
+  return sha256Hex(canonicalJson(bundle));
 }
 
 export class EvidenceBundleIntegrityError extends Error {

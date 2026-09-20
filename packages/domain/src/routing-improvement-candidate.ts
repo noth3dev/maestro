@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import {
   assertValidImprovementCandidate,
   assertValidImprovementCandidateInput,
@@ -129,7 +129,7 @@ export function assertValidRoutingCandidateEvaluation(
 
 export function routingCandidateEvaluationHash(evaluation: RoutingCandidateEvaluationEvidence): string {
   assertEvaluationResultShape(evaluation);
-  return createHash("sha256").update(canonicalJson(evaluation), "utf8").digest("hex");
+  return sha256Hex(canonicalJson(evaluation));
 }
 
 function plainRecord(value: unknown, name: string): asserts value is Record<string, unknown> {

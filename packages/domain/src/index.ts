@@ -56,3 +56,4 @@ export * from "./rollout-controller.js";
 export * from "./worker-profile-derivation.js";
 export * from "./routing-improvement-candidate.js";
 export * from "./channel.js";
+export * from "./hash.js";

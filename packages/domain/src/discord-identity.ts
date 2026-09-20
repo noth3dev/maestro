@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 import type { DiscordSignal } from "./discord.js";
 
@@ -47,7 +47,7 @@ export function deriveDiscordIncidentFingerprint(
     source: normalize(signal.source),
     evidence: signal.minimalReproductionEvidence.map((item) => normalize(redactDiscordSecretLikeText(item))).filter(Boolean).sort(),
   };
-  return createHash("sha256").update(canonicalJson(identity)).digest("hex");
+  return sha256Hex(canonicalJson(identity));
 }
 
 function normalize(value: string): string {

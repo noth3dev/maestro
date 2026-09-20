@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 
 export const IMPROVEMENT_DIGEST_SCHEMA_VERSION = 1 as const;
@@ -110,5 +110,5 @@ export function normalizeImprovementDigestInput(value: ImprovementDigestInput): 
 }
 
 export function improvementDigestContentHash(value: ImprovementDigestInput): string {
-  return createHash("sha256").update(canonicalJson(normalizeImprovementDigestInput(value)), "utf8").digest("hex");
+  return sha256Hex(canonicalJson(normalizeImprovementDigestInput(value)));
 }

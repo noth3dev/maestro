@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 import { PERSONA_AXES, parsePersonaProfile, type PersonaAxis, type PersonaProfile } from "./persona.js";
 import { assertValidTaskDemand, type TaskDemand } from "./task-demand.js";
@@ -164,7 +164,7 @@ export function assertValidMissionBundleSubstance(value: unknown): asserts value
 
 export function missionBundleSubstanceContentHash(substance: MissionBundleSubstance): string {
   assertValidMissionBundleSubstance(substance);
-  return createHash("sha256").update(canonicalJson(substance)).digest("hex");
+  return sha256Hex(canonicalJson(substance));
 }
 
 
