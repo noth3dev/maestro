@@ -1,5 +1,5 @@
 import { fitPlain, tuiTheme } from "../theme.js";
-import { MAX_SIDEBAR_GOALS, moveSidebarFocus } from "./sidebar-nav.js";
+import { MAX_SIDEBAR_GOALS, moveSidebarFocus, NAV_ROWS } from "./sidebar-nav.js";
 
 export const SIDEBAR_WIDTH = 26;
 export const SIDEBAR_MIN_COLUMNS = 100;
@@ -11,6 +11,13 @@ export function isSidebarVisible(explicit: boolean, columns: number): boolean {
 export function contentWidth(columns: number, sidebarVisible: boolean): number {
   if (!isSidebarVisible(sidebarVisible, columns)) return columns;
   return Math.max(0, columns - SIDEBAR_WIDTH);
+}
+
+/** One-line current-view cue used when the full sidebar is hidden by terminal width. */
+export function renderNarrowCurrentView(selection: string | undefined, width: number): string[] {
+  const row = NAV_ROWS.find((candidate) => candidate.id === selection);
+  if (row === undefined || width <= 0) return [];
+  return [tuiTheme.dim(fitPlain(`view · ${row.label}`, width))];
 }
 
 export interface SidebarToggleHost {
@@ -40,6 +47,7 @@ export interface SidebarRow {
   id?: string;
   selectable?: boolean;
   focused?: boolean;
+  selected?: boolean;
 }
 
 export interface SidebarSection {
@@ -51,8 +59,10 @@ const LABEL_WIDTH = 8;
 
 function renderRow(row: SidebarRow, width: number): string {
   if (row.selectable === true) {
-    const cells = `${row.focused === true ? "› " : "  "}${fitPlain(row.label, Math.max(0, width - 2))}`.padEnd(width);
+    const marker = row.focused === true ? "› " : row.selected === true ? "• " : "  ";
+    const cells = `${marker}${fitPlain(row.label, Math.max(0, width - 2))}`.padEnd(width);
     if (row.focused === true) return tuiTheme.selected(tuiTheme.primary(cells));
+    if (row.selected === true) return tuiTheme.primary(cells);
     return tuiTheme.text(cells);
   }
   const labelWidth = Math.min(LABEL_WIDTH, width);
@@ -89,6 +99,7 @@ export function renderNavSection(
   rows: readonly { id: string; label: string }[],
   focusedId: string | undefined,
   badges: Record<string, string> = {},
+  selectedId: string | undefined = undefined,
 ): SidebarSection {
   return {
     title: "views",
@@ -97,6 +108,7 @@ export function renderNavSection(
       id: row.id,
       selectable: true,
       focused: focusedId === row.id,
+      selected: selectedId === row.id,
     })),
   };
 }

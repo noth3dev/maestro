@@ -6,6 +6,7 @@ import {
   isSidebarVisible,
   renderFooterSection,
   renderGoalSection,
+  renderNarrowCurrentView,
   renderNavSection,
   renderSidebar,
   SIDEBAR_MIN_COLUMNS,
@@ -64,6 +65,23 @@ describe("sidebar shell", () => {
     expect(calm).toBe(
       tuiTheme.text(`  ${fitPlain("inbox", SIDEBAR_WIDTH - 3)}`.padEnd(SIDEBAR_WIDTH - 1)) + tuiTheme.border(divider),
     );
+  });
+
+  it("marks the current nav row without activating keyboard focus", () => {
+    const section = renderNavSection(NAV_ROWS, undefined, {}, "home");
+    const current = section.rows.find((row) => row.id === "home");
+    expect(current).toMatchObject({ selected: true, focused: false });
+    const lines = renderSidebar(SIDEBAR_WIDTH, [section]);
+    const search = lines.find((line) => plain(line).includes("search"))!;
+    expect(plain(search)).toContain("• search");
+    expect(search.includes("[7m")).toBe(false);
+  });
+
+  it("renders a sourced current-view line for the narrow layout", () => {
+    expect(renderNarrowCurrentView("home", 80).map(plain)).toEqual(["view · search"]);
+    expect(renderNarrowCurrentView("inbox", 80).map(plain)).toEqual(["view · inbox"]);
+    expect(renderNarrowCurrentView("unknown", 80)).toEqual([]);
+    expect(renderNarrowCurrentView(undefined, 80)).toEqual([]);
   });
 
   function withEnv(env: { noColor?: string; colorTerm?: string }, fn: () => void): void {

@@ -84,6 +84,7 @@ describe("sidebar nav actions", () => {
     pendingConfirmation: undefined as undefined,
     state: { pendingDecisions: [] as Array<{ identity: string; tier: string; action: string; actor: string }> },
     compactReview: undefined as string | undefined,
+    sidebarSelection: undefined as string | undefined,
     terminal: { columns: 120, rows: 30 },
     contentWidth: () => 120,
     sidebarGoals: [] as Array<{ goalId: string }>,
@@ -100,6 +101,13 @@ describe("sidebar nav actions", () => {
     expect(h.submitter.submit).toHaveBeenCalledWith("/billing get");
     applySidebarNavAction(h, "luthiery");
     expect(h.submitter.submit).toHaveBeenCalledWith("/luthiery list");
+  });
+
+  it("updates the current nav marker without taking focus", () => {
+    const h = host();
+    expect(h.sidebarSelection).toBeUndefined();
+    applySidebarNavAction(h, "channel");
+    expect(h.sidebarSelection).toBe("channel");
   });
 
   it("restores home through the splash", () => {
@@ -154,6 +162,7 @@ describe("sidebar row activation", () => {
       pendingConfirmation: undefined as undefined,
       state: { pendingDecisions: [] as Array<{ identity: string; tier: string; action: string; actor: string }> },
       compactReview: undefined as string | undefined,
+      sidebarSelection: undefined as string | undefined,
       terminal: { columns: 120, rows: 30 },
       contentWidth: () => 120,
       sidebarGoals: goals,

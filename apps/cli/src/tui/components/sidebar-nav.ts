@@ -69,6 +69,7 @@ export interface SidebarNavHost {
   readonly submitter: { submit(text: string): void };
   readonly splash: { restore(): void };
   readonly tui: { requestRender(force: boolean): void };
+  sidebarSelection: string | undefined;
   compactReview: string | undefined;
   readonly pendingConfirmation:
     | { summary: ApprovalDialogSummary; resolve: (decision: ConfirmationResult) => void }
@@ -106,6 +107,7 @@ export function activateInbox(host: SidebarNavHost): void {
 export function applySidebarNavAction(host: SidebarNavHost, id: string): void {
   const row = NAV_ROWS.find((candidate) => candidate.id === id);
   if (row === undefined) return;
+  host.sidebarSelection = id;
   if (row.action.kind === "submit") {
     void host.submitter.submit(row.action.text);
     return;

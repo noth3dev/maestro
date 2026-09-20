@@ -15,7 +15,7 @@ import {
 } from "../components/sidebar-channels.js";
 import { createClickRegion } from "../components/mouse.js";
 import { renderStatusSection, sidebarNavBadges, toSidebarStatus } from "../components/shell.js";
-import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
+import { contentWidth, isSidebarVisible, renderFooterSection, renderGoalSection, renderNarrowCurrentView, renderNavSection, renderSidebar, SIDEBAR_WIDTH } from "../components/sidebar.js";
 import { approvalDialogClickLines, applyApprovalAction, createApprovalClickRegion } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction, createProviderLoginClickRegion } from "../components/provider-login-click.js";
 import { type TuiShellState } from "../components/shell.js";
@@ -95,6 +95,8 @@ export class TuiController {
   lastRenderedTerminalRows: number;
   sidebarVisible = true;
   sidebarFocus: string | undefined = undefined;
+  /** Current top-level view marker; separate from transient keyboard focus. */
+  sidebarSelection = "home";
   /** Dashboard goal cache backing the sidebar goals section (setRecovery only). */
   sidebarGoals: GoalResult[] = [];
   /** Roster cache backing the sidebar channels section, tagged by goal. */
@@ -345,7 +347,7 @@ export class TuiController {
       const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
       return renderSidebar(width, [
         ...renderStatusSection(toSidebarStatus(state), width),
-        renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state)),
+        renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state), this.sidebarSelection),
         ...channelSections,
         ...(goalSection === undefined ? [] : [goalSection]),
         renderFooterSection(),
@@ -362,8 +364,16 @@ export class TuiController {
         activateSidebarChannel(this, id);
       },
     });
+    const narrowViewRegion = createDynamicRegion((width) => renderNarrowCurrentView(this.sidebarSelection, width));
     const mainColumn = new VStack([
       { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
+      {
+        component: narrowViewRegion,
+        basis: "auto",
+        shrink: 0,
+        minSize: 0,
+        visible: () => terminal.rows >= 16 && !isSidebarVisible(this.sidebarVisible, terminal.columns),
+      },
       { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
       { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
       {

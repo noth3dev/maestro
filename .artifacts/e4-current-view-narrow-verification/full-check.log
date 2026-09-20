@@ -1,0 +1,611 @@
+
+> check
+> npm run build && npm test
+
+
+> build
+> tsc -b && npm run typecheck:renderer --workspace @maestro/carnegie
+
+
+> typecheck:renderer
+> tsc -p tsconfig.renderer.json --noEmit
+
+
+> test
+> vitest run
+
+
+ RUN  v4.1.11 /home/ubuntu/projects/ms/.worktrees/e4-current-view-integration
+
+ ❯ packages/persistence/src/embedded-database.integration.test.ts (5 tests | 1 failed) 31567ms
+     ✓ applies every existing migration through the normal PostgreSQL wire protocol  6555ms
+     × reuses an already-running fixed-port embedded server for the same data directory 5022ms
+     ✓ waits for active socket transaction cleanup before closing the database  6715ms
+     ✓ waits for a closed socket's asynchronous detach before closing the database  5952ms
+     ✓ preserves user data when the same embedded data directory restarts  7321ms
+ ❯ test/phase6-scenario/full-chain.integration.test.ts (0 test)
+ ❯ test/phase8-data/audit-privacy.integration.test.ts (0 test)
+ ❯ test/phase8-data/migration-parity.integration.test.ts (0 test)
+ ❯ test/phase8-performance/command-event-baseline.integration.test.ts (0 test)
+ ❯ test/phase8-performance/discord-detection-delivery-baseline.integration.test.ts (0 test)
+ ❯ test/phase8-performance/head-activation-baseline.integration.test.ts (0 test)
+ ❯ test/phase8-performance/postgres-query-storage-growth-baseline.integration.test.ts (0 test)
+ ❯ test/phase8-performance/scheduler-reconciliation-baseline.integration.test.ts (0 test)
+ ❯ test/phase8-performance/sse-recovery-baseline.integration.test.ts (0 test)
+ ❯ apps/control-plane/src/concertmaster-report-service.integration.test.ts (0 test)
+ ❯ packages/persistence/src/persona-profile.integration.test.ts (0 test)
+ ✓ test/release-scenario/fake-provider.test.ts (2 tests) 14737ms
+     ✓ runs all fourteen steps through a fake provider without a remote  8510ms
+     ✓ rejects duplicate persisted effects during successor reconciliation  6222ms
+ ✓ packages/local-backend/src/local-bootstrap.test.ts (36 tests) 6961ms
+     ✓ uses the embedded Postgres-compatible engine by default when Docker is unavailable  6001ms
+ ✓ apps/control-plane/src/server.test.ts (58 tests) 2086ms
+     ✓ cleans up a conversation events stream on client abort  517ms
+     ✓ cleans up a conversation activity stream on client abort  522ms
+ ✓ packages/model-provider-openai/src/codex-app-server.test.ts (15 tests) 875ms
+     ✓ reads the authenticated ChatGPT account through the real installed Codex app-server  443ms
+     ✓ reads the currently offered Codex model catalog without a baked-in model name  331ms
+ ✓ test/phase8-release/release-decision.test.ts (12 tests) 1330ms
+     ✓ preserves candidate/evidence, disables authority, pauses goals, and reruns all gates  1113ms
+ ✓ test/phase8-release/publish-install.test.ts (6 tests) 870ms
+     ✓ packs only compiled runtime files and required metadata  830ms
+ ✓ packages/local-backend/src/surface.test.ts (1 test) 555ms
+     ✓ pins the barrel export list  553ms
+ ✓ apps/control-plane/src/ipython-composition.test.ts (9 tests) 540ms
+ ✓ apps/model-gateway/src/surface.test.ts (1 test) 671ms
+     ✓ pins the barrel export list  666ms
+fatal: Needed a single revision
+fatal: Needed a single revision
+fatal: Needed a single revision
+ ✓ packages/git-adapter/src/git-ops.test.ts (13 tests) 444ms
+ ✓ packages/persistence/src/auth.test.ts (9 tests) 521ms
+     ✓ fails closed when the bounded scrypt guard is saturated before KDF work  504ms
+ ✓ test/phase8-routing/routing-hardening-fuzz.test.ts (12 tests) 371ms
+ ✓ packages/persistence/src/surface.test.ts (1 test) 521ms
+     ✓ pins the barrel export list  519ms
+ ✓ apps/control-plane/src/provider-credential-route.test.ts (17 tests) 533ms
+ ✓ packages/agent-runtime/src/surface.test.ts (1 test) 503ms
+     ✓ pins the barrel export list  502ms
+ ✓ packages/model-provider-openai/src/surface.test.ts (1 test) 276ms
+ ✓ test/phase8-soak/soak-runner.test.ts (5 tests) 386ms
+ ✓ packages/agent-runtime/src/ipython-process-adapter.test.ts (18 tests) 293ms
+ ✓ packages/contracts/src/surface.test.ts (1 test) 320ms
+     ✓ pins the barrel export list  317ms
+ ✓ apps/control-plane/src/conversation-route.test.ts (5 tests) 253ms
+ ✓ packages/environment-adapter/src/surface.test.ts (1 test) 297ms
+ ✓ packages/model-provider-anthropic/src/surface.test.ts (1 test) 475ms
+     ✓ pins the barrel export list  461ms
+ ✓ apps/control-plane/src/critical-action-route.test.ts (7 tests) 371ms
+ ✓ packages/api-client/src/surface.test.ts (1 test) 640ms
+     ✓ pins the barrel export list  638ms
+ ✓ apps/control-plane/src/discord-signal-route.test.ts (4 tests) 420ms
+ ✓ apps/control-plane/src/task-contract-route.test.ts (2 tests) 222ms
+ ✓ packages/device-agent/src/surface.test.ts (1 test) 573ms
+     ✓ pins the barrel export list  570ms
+ ✓ test/release-scenario/fixture.test.ts (3 tests) 356ms
+ ✓ apps/control-plane/src/native-gateway-http.integration.test.ts (1 test) 393ms
+     ✓ admits, prompts, observes, and closes a native worker through TCP  391ms
+ ✓ apps/control-plane/src/channel-route.test.ts (3 tests) 208ms
+ ✓ apps/control-plane/src/settings-route.test.ts (3 tests) 277ms
+ ✓ apps/model-gateway/src/rpc.test.ts (8 tests) 271ms
+ ✓ test/carnegie-branding.test.ts (6 tests) 243ms
+ ✓ packages/agent-runtime/src/ipython-bootstrap.test.ts (2 tests) 188ms
+ ✓ packages/model-provider-openai/src/codex-stdio-transport.test.ts (2 tests) 130ms
+ ✓ test/phase8-security/security-adversarial.test.ts (10 tests) 395ms
+ ✓ packages/git-adapter/src/surface.test.ts (1 test) 317ms
+     ✓ pins the barrel export list  315ms
+ ✓ packages/domain/src/surface.test.ts (1 test) 332ms
+     ✓ pins the barrel export list  329ms
+ ✓ packages/model-provider-anthropic/src/provider.real-http.test.ts (2 tests) 112ms
+ ✓ packages/api-client/src/client.test.ts (36 tests) 373ms
+ ✓ packages/environment-adapter/src/runtime-adapter.test.ts (24 tests) 138ms
+ ✓ apps/cli/src/main.test.ts (24 tests) 185ms
+ ✓ packages/model-provider-openai/src/provider.real-http.test.ts (2 tests) 134ms
+ ✓ apps/control-plane/src/projection-route.test.ts (1 test) 178ms
+ ✓ test/phase7-scenario/cli-parity-and-recovery-proof.integration.test.ts (8 tests) 64ms
+ ✓ apps/model-gateway/src/main.test.ts (3 tests) 178ms
+ ✓ packages/agent-runtime/src/ipython-process.test.ts (6 tests) 144ms
+ ✓ packages/contracts/src/conversation.test.ts (7 tests) 95ms
+ ✓ test/phase4-scenario/fixture.test.ts (2 tests) 226ms
+ ✓ packages/persistence/src/concertmaster-report.test.ts (18 tests) 56ms
+stdout | test/phase8-performance/radial-graph-large-portfolio-baseline.integration.test.ts > Plan 8 §S5 radial graph behavior under a large portfolio > records layout cost and preserves the complete projection behavior
+PHASE8_PERFORMANCE_BASELINE {"metric":"radial-graph-large-portfolio","database":"runtime","scope":"layout-and-node-behavior","sampleCount":10,"layoutMs":{"p50":6.509041000000025,"p95":17.140368000000024,"max":18.204969000000006},"portfolio":{"goals":24,"sectorsPerGoal":5,"workersPerSector":2,"sourceNodes":384},"behavior":{"virtualizedFlagSamples":10,"sourceIdentityPreserved":true,"criticalBlockersRetained":true}}
+
+ ✓ test/phase8-performance/radial-graph-large-portfolio-baseline.integration.test.ts (1 test) 139ms
+ ✓ packages/environment-adapter/src/read-only-file-adapter.test.ts (6 tests) 48ms
+ ✓ packages/domain/src/mission-bundle.test.ts (22 tests) 156ms
+ ✓ test/phase8-chaos/chaos-injection.test.ts (5 tests) 70ms
+ ✓ apps/cli/src/tui/commands/write-commands.test.ts (36 tests) 120ms
+ ✓ apps/cli/src/tui/components/conversation-viewport.test.ts (6 tests) 63ms
+ ✓ apps/cli/src/tui/commands/autocomplete.test.ts (92 tests) 107ms
+ ✓ packages/contracts/src/contracts.test.ts (15 tests) 67ms
+ ✓ apps/cli/src/tui/entry.test.ts (58 tests) 81ms
+ ✓ apps/discord/src/discord.test.ts (10 tests) 170ms
+ ✓ packages/agent-runtime/src/ipython-two-stage.test.ts (14 tests) 136ms
+ ✓ packages/agent-runtime/src/native-refinement.test.ts (12 tests) 63ms
+ ✓ packages/local-backend/src/local-control-plane.test.ts (5 tests) 76ms
+ ✓ apps/control-plane/src/model-gateway-client.test.ts (11 tests) 99ms
+ ✓ apps/cli/src/tui/conversation-cancellation.test.ts (2 tests) 87ms
+ ✓ packages/domain/src/improvement-candidate.test.ts (5 tests) 45ms
+ ✓ apps/carnegie/src/views/panels/radial/RadialGraph.test.tsx (6 tests) 51ms
+ ✓ apps/control-plane/src/critical-action-service.test.ts (11 tests) 21ms
+ ✓ apps/control-plane/src/goal-service.test.ts (11 tests) 51ms
+ ✓ apps/cli/src/tui/components/sidebar.test.ts (30 tests) 109ms
+ ✓ apps/control-plane/src/conversation-service.test.ts (21 tests) 68ms
+ ✓ packages/api-client/src/settings-client.test.ts (1 test) 67ms
+ ✓ apps/cli/src/tui/components/provider-login-click.test.ts (10 tests) 28ms
+ ✓ packages/agent-runtime/src/agent-runtime.test.ts (14 tests) 123ms
+ ✓ packages/api-client/src/methods/reporting.test.ts (3 tests) 39ms
+ ✓ packages/model-provider-openai/src/provider.test.ts (2 tests) 54ms
+ ✓ packages/model-provider-anthropic/src/provider.test.ts (2 tests) 70ms
+ ✓ test/phase8-ops/model-outage-loopback.integration.test.ts (1 test) 40ms
+ ✓ packages/persistence/src/git-integration.path.test.ts (2 tests) 14ms
+ ✓ apps/control-plane/src/native-execution-kernel.test.ts (7 tests) 18ms
+ ✓ packages/persistence/src/encore-council.test.ts (8 tests) 42ms
+ ✓ apps/control-plane/src/account-login-flow.test.ts (6 tests) 57ms
+ ✓ packages/evidence/src/surface.test.ts (1 test) 51ms
+ ✓ packages/environment-adapter/src/file-edit-adapter.test.ts (5 tests) 49ms
+ ✓ apps/carnegie/src/views/panels/goal-department-panels.test.tsx (2 tests) 36ms
+ ✓ apps/carnegie/src/views/panels/radial/NodeActionControls.test.tsx (3 tests) 41ms
+ ✓ apps/carnegie/src/lib/task-contract-authoring.test.ts (9 tests) 21ms
+stdout | test/phase8-performance/idle-improvement-budget-baseline.integration.test.ts > Plan 8 §S5 idle improvement budget baseline > records a provisional test-only budget without claiming a production idle consumer
+PHASE8_PERFORMANCE_BASELINE {"metric":"idle-improvement-budget","database":"runtime","status":"provisional-unimplemented","productionIdleConsumer":"unimplemented","productBudgetDeclared":false,"candidateContentHash":"bc61e691483f56c3e34ad44319a059ca338342d94fb628da6d81002ec042df7e","fixture":{"scope":"test-only","simulationOnly":true,"declaredWorkUnits":3,"consumedWorkUnits":3,"elapsedMs":17.876688999999942,"yieldedBeforeEligibleGoal":true,"eligibilitySource":"scripted-test-fixture","authoritativeGoalRead":false,"timeBoundEnforced":false},"replay":{"status":"compared","resultCount":1},"synthetic":{"status":"completed","scenarioCount":8},"shadow":{"status":"completed","recordCount":1,"deniedEffects":1,"liveEffects":0,"journalEvents":["started","orphaned","completed"],"evidencePersistence":"in-memory-test-sink","committedEvidence":true,"committedCandidateContentHash":"bc61e691483f56c3e34ad44319a059ca338342d94fb628da6d81002ec042df7e","committedRunId":"shadow-run-idle-budget-1"},"observations":[{"operation":"replay","outcome":"executed","workUnits":1,"reason":"no-eligible-ceo-goal-needs-capacity","candidateContentHash":"bc61e691483f56c3e34ad44319a059ca338342d94fb628da6d81002ec042df7e","auditable":true},{"operation":"synthetic","outcome":"executed","workUnits":1,"reason":"no-eligible-ceo-goal-needs-capacity","candidateContentHash":"bc61e691483f56c3e34ad44319a059ca338342d94fb628da6d81002ec042df7e","auditable":true},{"operation":"shadow","outcome":"executed","workUnits":1,"reason":"no-eligible-ceo-goal-needs-capacity","candidateContentHash":"bc61e691483f56c3e34ad44319a059ca338342d94fb628da6d81002ec042df7e","auditable":true},{"operation":"shadow","outcome":"yielded","workUnits":0,"reason":"eligible-ceo-goal-needs-capacity","candidateContentHash":"bc61e691483f56c3e34ad44319a059ca338342d94fb628da6d81002ec042df7e","auditable":true}],"observationDurability":"in-memory-test-fixture","durableAuditRecord":false,"providerCalls":0,"tokens":0,"cost":0}
+
+ ✓ test/phase8-performance/idle-improvement-budget-baseline.integration.test.ts (1 test) 30ms
+ ✓ packages/persistence/src/ensemble-router-artifacts.test.ts (4 tests) 55ms
+ ✓ packages/agent-runtime/src/ipython-local-effects.test.ts (7 tests) 29ms
+ ✓ apps/cli/src/tui/components/sidebar-nav.test.ts (25 tests) 19ms
+ ✓ apps/cli/src/tui/components/sidebar-channels.test.ts (25 tests) 33ms
+ ✓ apps/control-plane/src/config.test.ts (19 tests) 22ms
+ ✓ packages/domain/src/shadow-evaluation.test.ts (12 tests) 36ms
+ ✓ packages/contracts/src/events.test.ts (9 tests) 10ms
+ ✓ apps/model-gateway/src/gateway.test.ts (8 tests) 18ms
+ ✓ packages/domain/src/host-effect-classification.test.ts (7 tests) 11ms
+ ✓ packages/domain/src/goal.test.ts (5 tests) 28ms
+ ✓ apps/cli/src/tui/commands/read-commands.test.ts (22 tests) 34ms
+ ✓ apps/cli/src/tui/basic-shell.test.ts (1 test) 8ms
+ ✓ packages/device-agent/src/device-agent.test.ts (4 tests) 52ms
+ ✓ packages/local-backend/src/connection.test.ts (5 tests) 21ms
+ ✓ packages/persistence/src/reconciliation.test.ts (4 tests) 8ms
+ ✓ apps/cli/src/tui/loop/lifecycle-sidebar.test.ts (11 tests) 24ms
+ ✓ packages/agent-runtime/src/ipython-tool.test.ts (9 tests) 17ms
+ ✓ apps/control-plane/src/persona-inspection-service.test.ts (2 tests) 22ms
+ ✓ packages/persistence/src/conversation.test.ts (6 tests) 15ms
+ ✓ apps/control-plane/src/ensemble-candidate-catalog.test.ts (3 tests) 63ms
+ ✓ packages/domain/src/routing-improvement-candidate.test.ts (6 tests) 41ms
+ ✓ apps/control-plane/src/projection-service.test.ts (6 tests) 54ms
+ ✓ apps/cli/src/tui/components/regions.test.ts (4 tests) 9ms
+ ✓ test/phase8-scenarios/scenario-runner.test.ts (4 tests) 34ms
+ ✓ packages/environment-adapter/src/browser-adapter.test.ts (14 tests) 80ms
+ ✓ packages/domain/src/routing-evidence.test.ts (10 tests) 28ms
+stdout | test/phase8-performance/context-size-by-role-baseline.integration.test.ts > Plan 8 §S5 context size by role baseline > records the provider-facing context emitted by each model-turn role
+PHASE8_PERFORMANCE_BASELINE {"metric":"context-size-by-role","database":"runtime","samples":[{"role":"head","sampleCount":10,"contextBytes":{"p50":2894,"p95":3106,"max":3159},"messageCounts":{"p50":2,"p95":2,"max":2},"toolCounts":{"p50":0,"p95":0,"max":0}},{"role":"worker","sampleCount":10,"contextBytes":{"p50":3240,"p95":3452,"max":3505},"messageCounts":{"p50":3,"p95":3,"max":3},"toolCounts":{"p50":0,"p95":0,"max":0}},{"role":"team-lead-helper","sampleCount":10,"contextBytes":{"p50":3213,"p95":3425,"max":3478},"messageCounts":{"p50":3,"p95":3,"max":3},"toolCounts":{"p50":0,"p95":0,"max":0}},{"role":"encore-reviewer","sampleCount":10,"contextBytes":{"p50":3084,"p95":3296,"max":3349},"messageCounts":{"p50":2,"p95":2,"max":2},"toolCounts":{"p50":0,"p95":0,"max":0}},{"role":"semantic-reviewer","sampleCount":10,"contextBytes":{"p50":3186,"p95":3398,"max":3451},"messageCounts":{"p50":2,"p95":2,"max":2},"toolCounts":{"p50":0,"p95":0,"max":0}},{"role":"conversation","sampleCount":10,"contextBytes":{"p50":2642,"p95":2854,"max":2907},"messageCounts":{"p50":2,"p95":2,"max":2},"toolCounts":{"p50":0,"p95":0,"max":0}}]}
+
+ ✓ test/phase8-performance/context-size-by-role-baseline.integration.test.ts (1 test) 44ms
+ ✓ apps/cli/src/tui/components/approval-dialog-click.test.ts (14 tests) 44ms
+ ✓ apps/cli/src/tui/project-reconnect.test.ts (3 tests) 24ms
+ ✓ packages/domain/src/organization.test.ts (7 tests) 26ms
+ ✓ packages/agent-runtime/src/overture-drafting-tool.test.ts (4 tests) 57ms
+ ✓ apps/carnegie/src/views/panels/radial/radial-layout.test.ts (6 tests) 27ms
+ ✓ apps/control-plane/src/capability-approval-service.test.ts (13 tests) 31ms
+ ✓ apps/carnegie/electron/event-stream-bridge.test.ts (3 tests) 43ms
+ ✓ packages/agent-runtime/src/ipython-host.test.ts (16 tests) 59ms
+ ✓ apps/cli/src/tui/components/mouse.test.ts (3 tests) 59ms
+ ✓ packages/domain/src/worker-profile-derivation.test.ts (5 tests) 64ms
+ ✓ apps/cli/src/tui/components/activity-timeline.test.ts (11 tests) 52ms
+ ✓ apps/control-plane/src/ensemble-admission.test.ts (7 tests) 53ms
+ ✓ packages/evidence/src/evidence.test.ts (3 tests) 49ms
+ ✓ apps/cli/src/tui/components/shell.test.ts (37 tests) 59ms
+ ✓ apps/carnegie/src/views/panels/persona/PersonaPanel.test.tsx (4 tests) 33ms
+ ✓ packages/persistence/src/mission-bundle.row.test.ts (1 test) 7ms
+ ✓ apps/cli/src/tui/commands/registry.test.ts (6 tests) 41ms
+ ✓ apps/cli/src/tui/workspace.test.ts (2 tests) 16ms
+ ✓ apps/cli/src/tui/goal-less-intake.test.ts (4 tests) 13ms
+ ✓ packages/domain/src/concertmaster-report.test.ts (11 tests) 9ms
+ ✓ apps/carnegie/src/views/Luthiery.test.tsx (2 tests) 17ms
+ ✓ apps/control-plane/src/persona-inspection-service.rollout.test.ts (1 test) 29ms
+ ✓ test/release-scenario/runbook.test.ts (3 tests) 48ms
+ ✓ packages/domain/src/certification.test.ts (20 tests) 12ms
+ ✓ packages/domain/src/candidate-evaluation.test.ts (4 tests) 15ms
+ ✓ packages/agent-runtime/src/ipython-git-gateway.test.ts (6 tests) 41ms
+ ✓ packages/authority/src/authority.test.ts (19 tests) 45ms
+ ✓ packages/domain/src/organizational-knowledge.remediation.test.ts (2 tests) 16ms
+ ✓ apps/control-plane/src/external-capability-activation.test.ts (7 tests) 20ms
+ ✓ packages/domain/src/sealed-submission.test.ts (13 tests) 22ms
+ ✓ packages/domain/src/execution-kernel.test.ts (4 tests) 10ms
+ ✓ packages/authority/src/surface.test.ts (1 test) 17ms
+ ✓ apps/carnegie/src/views/Channel.test.tsx (1 test) 19ms
+ ✓ packages/persistence/src/commands.test.ts (6 tests) 13ms
+ ✓ apps/cli/src/tui/session.test.ts (9 tests) 14ms
+ ✓ apps/carnegie/src/views/Persona.test.tsx (1 test) 9ms
+ ✓ apps/carnegie/src/lib/goal-data.test.ts (1 test) 10ms
+ ✓ packages/domain/src/pressure-band.test.ts (18 tests) 10ms
+ ✓ packages/contracts/src/arrangements.test.ts (3 tests) 20ms
+ ✓ apps/carnegie/src/views/Inbox.test.tsx (1 test) 43ms
+ ✓ packages/agent-runtime/src/provider-registry.test.ts (3 tests) 7ms
+ ✓ apps/control-plane/src/worker-service.test.ts (6 tests) 39ms
+ ✓ apps/control-plane/src/server-input.test.ts (4 tests) 40ms
+ ✓ packages/domain/src/encore-council.test.ts (13 tests) 9ms
+ ✓ packages/persistence/src/settings.test.ts (8 tests) 37ms
+ ✓ packages/persistence/src/actual-cost.test.ts (6 tests) 17ms
+ ✓ packages/domain/src/routing-selector.test.ts (7 tests) 16ms
+ ✓ packages/domain/src/task-contract.test.ts (7 tests) 10ms
+ ✓ apps/carnegie/src/views/Billing.test.tsx (1 test) 11ms
+ ✓ packages/domain/src/portfolio-council.test.ts (7 tests) 14ms
+ ✓ packages/domain/src/persona.test.ts (11 tests) 31ms
+ ✓ apps/carnegie/src/views/Arrangements.test.tsx (1 test) 14ms
+ ✓ apps/cli/src/tui/retry-workspace.test.ts (2 tests) 16ms
+ ✓ packages/contracts/src/projection.test.ts (2 tests) 39ms
+ ✓ packages/domain/src/organizational-knowledge.test.ts (6 tests) 18ms
+ ✓ apps/control-plane/src/composition/provider-access.test.ts (15 tests) 40ms
+ ✓ packages/persistence/src/goal-authority.test.ts (6 tests) 56ms
+ ✓ apps/cli/src/tui/panels/projection-panel.test.ts (4 tests) 28ms
+ ✓ apps/carnegie/src/lib/node-actions.test.ts (10 tests) 43ms
+ ✓ packages/domain/src/operational-overlay.test.ts (8 tests) 16ms
+ ✓ packages/contracts/src/provider-credentials.test.ts (3 tests) 9ms
+ ✓ packages/persistence/src/organization.test.ts (4 tests) 14ms
+ ✓ apps/carnegie/src/i18n/index.test.ts (1 test) 3ms
+ ✓ packages/domain/src/capacity.test.ts (7 tests) 8ms
+ ✓ apps/carnegie/src/lib/channel-data.test.ts (3 tests) 9ms
+ ✓ test/phase8-data/artifact-integrity.test.ts (1 test) 11ms
+ ✓ apps/cli/src/tui/conversation-draft.test.ts (2 tests) 11ms
+ ✓ packages/domain/src/device.test.ts (8 tests) 32ms
+ ✓ packages/persistence/src/metronome-observation.test.ts (1 test) 9ms
+ ✓ packages/persistence/src/channel.test.ts (2 tests) 14ms
+ ✓ test/phase8-scenarios/representative-scenarios.test.ts (5 tests) 16ms
+ ✓ packages/domain/src/task-demand.test.ts (15 tests) 41ms
+ ✓ packages/domain/src/device-grant.test.ts (4 tests) 8ms
+ ✓ apps/control-plane/src/native-admission.test.ts (3 tests) 9ms
+ ✓ apps/carnegie/electron/bootstrap.test.ts (6 tests) 10ms
+ ✓ apps/control-plane/src/metronome-loop.test.ts (5 tests) 8ms
+ ✓ packages/persistence/src/release-checkpoint.test.ts (5 tests) 13ms
+ ✓ apps/carnegie/src/lib/inbox-data.test.ts (5 tests) 15ms
+ ✓ apps/carnegie/src/useDurableEvents.test.ts (6 tests) 16ms
+ ✓ packages/domain/src/council.test.ts (4 tests) 6ms
+ ✓ packages/domain/src/discord-incident.test.ts (14 tests) 21ms
+ ✓ apps/control-plane/src/worker-capacity.test.ts (4 tests) 21ms
+ ✓ apps/cli/src/tui/conversation-transcript.test.ts (13 tests) 14ms
+ ✓ apps/carnegie/src/lib/goal-control.test.ts (5 tests) 15ms
+ ✓ apps/cli/src/tui/activity-stream.test.ts (9 tests) 28ms
+ ✓ packages/domain/src/rollout-controller.test.ts (4 tests) 10ms
+ ✓ packages/persistence/src/device-session.test.ts (5 tests) 13ms
+ ✓ packages/persistence/src/semantic-review.test.ts (4 tests) 31ms
+ ✓ apps/cli/src/tui/panels/read-depth-panels.test.ts (10 tests) 11ms
+ ✓ packages/domain/src/improvement-digest.test.ts (6 tests) 13ms
+ ✓ packages/agent-runtime/src/model-provider.test.ts (5 tests) 8ms
+ ✓ apps/cli/src/tui/commands/interactive-dispatch.test.ts (1 test) 11ms
+ ✓ packages/domain/src/model-profile.test.ts (14 tests) 12ms
+ ✓ apps/cli/src/tui/commands/palette.test.ts (7 tests) 15ms
+ ✓ packages/domain/src/discord.test.ts (7 tests) 11ms
+ ✓ packages/persistence/src/routing-work-snapshot.test.ts (4 tests) 18ms
+ ✓ apps/control-plane/src/metronome-service.test.ts (1 test) 13ms
+ ✓ packages/domain/src/worker.test.ts (4 tests) 11ms
+ ✓ apps/control-plane/src/worker-ipython-composition.test.ts (5 tests) 9ms
+ ✓ apps/cli/src/tui/components/layout.test.ts (12 tests) 16ms
+ ✓ apps/cli/src/tui/components/provider-login-dialog.test.ts (5 tests) 10ms
+ ✓ packages/domain/src/channel.test.ts (3 tests) 17ms
+ ✓ packages/domain/src/work-character.test.ts (8 tests) 12ms
+ ✓ apps/cli/src/tui/activity-history.test.ts (3 tests) 12ms
+ ✓ packages/persistence/src/metronome-routing.test.ts (1 test) 6ms
+ ✓ apps/cli/src/tui/conversation-history.test.ts (2 tests) 40ms
+ ✓ packages/domain/src/routing-work-snapshot.test.ts (5 tests) 13ms
+ ✓ apps/control-plane/src/api-error.test.ts (2 tests) 11ms
+ ✓ apps/cli/src/tui/activity-event.test.ts (4 tests) 10ms
+ ✓ test/phase8-scenarios/scenario-runbook.test.ts (1 test) 7ms
+ ✓ apps/cli/src/tui/confirmation.test.ts (5 tests) 12ms
+ ✓ packages/domain/src/evidence-bundle.test.ts (4 tests) 8ms
+ ✓ apps/cli/src/tui/account-login.test.ts (1 test) 16ms
+ ✓ packages/domain/src/model-map.test.ts (3 tests) 13ms
+ ✓ test/phase8-ops/runbooks.test.ts (1 test) 8ms
+ ✓ apps/cli/src/tui/dashboard-refresh.test.ts (4 tests) 9ms
+ ✓ packages/domain/src/department-plan.test.ts (12 tests) 30ms
+ ✓ apps/carnegie/src/views/Dashboard.test.tsx (2 tests) 7ms
+ ✓ packages/domain/src/metronome.test.ts (6 tests) 19ms
+ ✓ packages/domain/src/provider-facts.test.ts (8 tests) 12ms
+ ✓ packages/persistence/src/organizational-knowledge.sql-shape.test.ts (2 tests) 5ms
+ ✓ packages/domain/src/browser-execution.test.ts (6 tests) 8ms
+ ✓ packages/domain/src/semantic-review.test.ts (7 tests) 8ms
+ ✓ packages/persistence/src/improvement-candidate-arrangements.test.ts (3 tests) 7ms
+ ✓ apps/model-gateway/src/credential-store.test.ts (2 tests) 9ms
+ ✓ apps/cli/src/tui/recovery.test.ts (3 tests) 9ms
+ ✓ packages/domain/src/device-command.test.ts (5 tests) 5ms
+ ✓ packages/domain/src/head-participation.test.ts (3 tests) 15ms
+ ✓ apps/cli/src/tui/commands/parser.test.ts (10 tests) 10ms
+ ✓ apps/control-plane/src/main-ipython-journal.test.ts (6 tests) 5ms
+ ✓ apps/carnegie/src/lib/dashboard-data.test.ts (3 tests) 5ms
+ ✓ test/carnegie-build-coverage.test.ts (1 test) 4ms
+ ✓ apps/cli/src/tui/pending-decisions.test.ts (2 tests) 7ms
+ ✓ apps/cli/src/tui/theme.test.ts (8 tests) 12ms
+ ✓ apps/cli/src/tui/startup.test.ts (5 tests) 12ms
+ ✓ packages/domain/src/external-capability.test.ts (1 test) 4ms
+ ✓ apps/carnegie/src/views/panels/radial/electron-renderer.test.ts (1 test) 17ms
+ ✓ apps/cli/src/tui/components/recovery-banner.test.ts (2 tests) 5ms
+ ✓ apps/cli/src/tui/activity-live-stream.test.ts (2 tests) 5ms
+ ✓ apps/carnegie/electron/event-stream-lifecycle.test.ts (1 test) 6ms
+ ✓ packages/domain/src/environment.test.ts (3 tests) 14ms
+ ✓ packages/domain/src/metronome-challenge.test.ts (6 tests) 5ms
+ ✓ packages/domain/src/routing-work-input.test.ts (4 tests) 10ms
+ ✓ apps/cli/src/tui/model-selection.test.ts (1 test) 3ms
+ ✓ apps/carnegie/src/electron-api-surface.test.ts (1 test) 5ms
+ ✓ apps/cli/src/tui/activity-history-hydration.test.ts (4 tests) 5ms
+ ✓ apps/cli/src/tui/flashmob-animation.test.ts (2 tests) 9ms
+ ✓ packages/domain/src/budget-reservation.test.ts (5 tests) 6ms
+ ✓ apps/cli/src/tui/dashboard-state.test.ts (3 tests) 20ms
+ ✓ apps/control-plane/src/read-state-service.test.ts (1 test) 7ms
+ ✓ apps/cli/src/tui/draft-presentation.test.ts (3 tests) 7ms
+ ✓ packages/domain/src/team-lead-grant.test.ts (4 tests) 7ms
+ ✓ packages/persistence/src/council.identity.test.ts (2 tests) 4ms
+ ✓ apps/carnegie/src/branding.test.ts (1 test) 14ms
+ ✓ apps/carnegie/electron/apiBridge.test.ts (4 tests) 8ms
+ ✓ packages/authority/src/action-classification.test.ts (1 test) 5ms
+ ✓ apps/cli/src/tui/panels/organization-panel.test.ts (1 test) 6ms
+ ✓ test/phase8-soak/soak-runbook.test.ts (1 test) 21ms
+ ✓ packages/git-adapter/src/workspace-deps.test.ts (3 tests) 6ms
+ ✓ apps/cli/src/tui/runtime.test.ts (1 test) 14ms
+ ✓ apps/cli/src/tui/conversation-activity.test.ts (3 tests) 6ms
+ ✓ apps/cli/src/tui/panels/goal-panel.test.ts (2 tests) 5ms
+ ✓ packages/agent-runtime/src/ipython-lines.test.ts (2 tests) 7ms
+ ✓ packages/agent-runtime/src/system-prompt.test.ts (1 test) 4ms
+ ✓ apps/control-plane/src/git-integration-service.test.ts (2 tests) 6ms
+ ✓ apps/cli/src/tui/panels/evidence-panel.test.ts (1 test) 6ms
+ ✓ apps/cli/src/tui/panels/channel-panel.test.ts (2 tests) 7ms
+ ✓ packages/persistence/src/certification.test.ts (1 test) 5ms
+ ✓ apps/cli/src/tui/components/approval-dialog.test.ts (4 tests) 7ms
+ ✓ apps/cli/src/tui/panels/billing-panel.test.ts (2 tests) 4ms
+ ✓ apps/cli/src/tui/panels/incident-panel.test.ts (1 test) 9ms
+ ✓ apps/cli/src/tui/panels/luthiery-panel.test.ts (2 tests) 23ms
+ ✓ apps/cli/src/tui/panels/portfolio-panel.test.ts (1 test) 4ms
+ ↓ test/phase5-scenario/contention.integration.test.ts (5 tests | 5 skipped)
+ ↓ test/phase8-chaos/chaos-injection.integration.test.ts (5 tests | 5 skipped)
+ ↓ test/phase8-data/adversarial-project-isolation.integration.test.ts (1 test | 1 skipped)
+ ↓ test/phase8-ops/operator-recovery-drills.integration.test.ts (1 test | 1 skipped)
+ ↓ test/phase8-performance/routing-cost-overhead-baseline.integration.test.ts (1 test | 1 skipped)
+ ↓ test/phase8-performance/worker-activation-baseline.integration.test.ts (1 test | 1 skipped)
+ ↓ test/release-scenario/critical-action-forbidden-effect.integration.test.ts (1 test | 1 skipped)
+ ↓ test/release-scenario/worker-restart-recovery.integration.test.ts (2 tests | 2 skipped)
+ ↓ apps/carnegie/src/cli-carnegie-parity.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/device-agent/src/main.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/account-login-acceptance.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/billing-read.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/channel-route.integration.test.ts (3 tests | 3 skipped)
+ ↓ apps/control-plane/src/concurrent-goals-isolation.integration.test.ts (7 tests | 7 skipped)
+ ↓ apps/control-plane/src/conversation-service.integration.test.ts (6 tests | 6 skipped)
+ ↓ apps/control-plane/src/discord-signal-acceptance.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/encore-acceptance.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/head-participation-api.integration.test.ts (2 tests | 2 skipped)
+ ↓ apps/control-plane/src/improvement-council-service.integration.test.ts (4 tests | 4 skipped)
+ ↓ apps/control-plane/src/ipython-orphan-journal.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/main.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/main.kill-restart.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/metronome-loop.integration.test.ts (2 tests | 2 skipped)
+ ↓ apps/control-plane/src/native-worker-acceptance.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/read-state-parity.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/task-contract-api.integration.test.ts (1 test | 1 skipped)
+ ↓ apps/control-plane/src/tui-sse-reconnect.integration.test.ts (0 test)
+ ↓ apps/control-plane/src/worker.kill-restart.integration.test.ts (2 tests | 2 skipped)
+ ↓ apps/discord/src/live-gate.integration.test.ts (1 test | 1 skipped)
+ ↓ packages/persistence/src/account-login.integration.test.ts (8 tests | 8 skipped)
+ ↓ packages/persistence/src/adversarial-fixtures.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/auth.integration.test.ts (9 tests | 9 skipped)
+ ↓ packages/persistence/src/authority.integration.test.ts (17 tests | 17 skipped)
+ ↓ packages/persistence/src/budget-reservation.integration.test.ts (9 tests | 9 skipped)
+ ↓ packages/persistence/src/capability-approval.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/capacity-reservation.integration.test.ts (8 tests | 8 skipped)
+ ↓ packages/persistence/src/certification-conflict.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/certification.integration.test.ts (15 tests | 15 skipped)
+ ↓ packages/persistence/src/channel.integration.test.ts (13 tests | 13 skipped)
+ ↓ packages/persistence/src/commands.integration.test.ts (16 tests | 16 skipped)
+ ↓ packages/persistence/src/concertmaster-report.integration.test.ts (8 tests | 8 skipped)
+ ↓ packages/persistence/src/conditional-certification.integration.test.ts (4 tests | 4 skipped)
+ ↓ packages/persistence/src/council.integration.test.ts (21 tests | 21 skipped)
+ ↓ packages/persistence/src/department-plan.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/device-agent-runtime.integration.test.ts (3 tests | 3 skipped)
+ ↓ packages/persistence/src/device-grant.integration.test.ts (14 tests | 14 skipped)
+ ↓ packages/persistence/src/device.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/discord-incident-workflow.integration.test.ts (7 tests | 7 skipped)
+ ↓ packages/persistence/src/discord-incident.integration.test.ts (6 tests | 6 skipped)
+ ↓ packages/persistence/src/discord.integration.test.ts (3 tests | 3 skipped)
+ ↓ packages/persistence/src/e2e-goal.integration.test.ts (1 test | 1 skipped)
+ ↓ packages/persistence/src/encore-council.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/ensemble-router-artifacts.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/environment.integration.test.ts (3 tests | 3 skipped)
+ ↓ packages/persistence/src/evidence-bundle.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/evidence.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/fencing.property.test.ts (4 tests | 4 skipped)
+ ↓ packages/persistence/src/git-integration.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/head-participation.integration.test.ts (27 tests | 27 skipped)
+ ↓ packages/persistence/src/improvement-candidate.integration.test.ts (9 tests | 9 skipped)
+ ↓ packages/persistence/src/improvement-digest.integration.test.ts (3 tests | 3 skipped)
+ ↓ packages/persistence/src/ipython-session-journal.test.ts (9 tests | 9 skipped)
+ ↓ packages/persistence/src/metronome-challenge.integration.test.ts (7 tests | 7 skipped)
+ ↓ packages/persistence/src/metronome-observation.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/metronome.integration.test.ts (8 tests | 8 skipped)
+ ↓ packages/persistence/src/migrate.integration.test.ts (7 tests | 7 skipped)
+ ↓ packages/persistence/src/mission-bundle.integration.test.ts (18 tests | 18 skipped)
+ ↓ packages/persistence/src/organization.integration.test.ts (1 test | 1 skipped)
+ ↓ packages/persistence/src/organizational-knowledge.integration.test.ts (17 tests | 17 skipped)
+ ↓ packages/persistence/src/persona-goal-evidence.integration.test.ts (2 tests | 2 skipped)
+ ↓ packages/persistence/src/phase4-device-live-gate.integration.test.ts (1 test | 1 skipped)
+ ↓ packages/persistence/src/portfolio-council.integration.test.ts (4 tests | 4 skipped)
+ ↓ packages/persistence/src/project-membership.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/reconciliation.fencing.property.test.ts (3 tests | 3 skipped)
+ ↓ packages/persistence/src/reconciliation.integration.test.ts (11 tests | 11 skipped)
+ ↓ packages/persistence/src/rollout-controller.integration.test.ts (9 tests | 9 skipped)
+ ↓ packages/persistence/src/safe-pause-and-resume.integration.test.ts (5 tests | 5 skipped)
+ ↓ packages/persistence/src/semantic-review.integration.test.ts (4 tests | 4 skipped)
+ ↓ packages/persistence/src/task-contract.integration.test.ts (7 tests | 7 skipped)
+ ↓ packages/persistence/src/team-lead-grant.integration.test.ts (12 tests | 12 skipped)
+ ↓ packages/persistence/src/test-migrations.integration.test.ts (3 tests | 3 skipped)
+ ↓ packages/persistence/src/worker.integration.test.ts (46 tests | 46 skipped)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 11 ⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/phase6-scenario/full-chain.integration.test.ts [ test/phase6-scenario/full-chain.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase6-scenario/full-chain.integration.test.ts:242:42
+
+ ❯ test/phase6-scenario/full-chain.integration.test.ts:242:149
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  test/phase8-data/audit-privacy.integration.test.ts [ test/phase8-data/audit-privacy.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-data/audit-privacy.integration.test.ts:13:17
+     11|   const basePool = new Pool({ connectionString: databaseUrl });
+     12|   const pool = new Pool({ connectionString: (() => {
+     13|     const url = new URL(databaseUrl!);
+       |                 ^
+     14|     url.searchParams.set("options", `-c search_path=${schema}`);
+     15|     return url.toString();
+ ❯ test/phase8-data/audit-privacy.integration.test.ts:16:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  test/phase8-data/migration-parity.integration.test.ts [ test/phase8-data/migration-parity.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-data/migration-parity.integration.test.ts:13:17
+     11|   const basePool = new Pool({ connectionString: databaseUrl });
+     12|   const pool = new Pool({ connectionString: (() => {
+     13|     const url = new URL(databaseUrl!);
+       |                 ^
+     14|     url.searchParams.set("options", `-c search_path=${schema}`);
+     15|     return url.toString();
+ ❯ test/phase8-data/migration-parity.integration.test.ts:16:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  test/phase8-performance/command-event-baseline.integration.test.ts [ test/phase8-performance/command-event-baseline.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-performance/command-event-baseline.integration.test.ts:20:17
+     18|   const basePool = new Pool({ connectionString: databaseUrl });
+     19|   const pool = new Pool({ connectionString: (() => {
+     20|     const url = new URL(databaseUrl!);
+       |                 ^
+     21|     url.searchParams.set("options", `-c search_path=${schema}`);
+     22|     return url.toString();
+ ❯ test/phase8-performance/command-event-baseline.integration.test.ts:23:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  test/phase8-performance/discord-detection-delivery-baseline.integration.test.ts [ test/phase8-performance/discord-detection-delivery-baseline.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-performance/discord-detection-delivery-baseline.integration.test.ts:15:42
+     13|   const basePool = new Pool({ connectionString: databaseUrl });
+     14|   const schema = `discord_perf_${randomUUID().replaceAll("-", "")}`;
+     15|   const scopedUrl = (() => { const url = new URL(databaseUrl!); url.se…
+       |                                          ^
+     16|   let pool: Pool;
+     17|   let controlPlane: ReturnType<typeof createControlPlane>;
+ ❯ test/phase8-performance/discord-detection-delivery-baseline.integration.test.ts:15:149
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  test/phase8-performance/head-activation-baseline.integration.test.ts [ test/phase8-performance/head-activation-baseline.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-performance/head-activation-baseline.integration.test.ts:39:17
+     37|   const basePool = new Pool({ connectionString: databaseUrl });
+     38|   const scopedUrl = (() => {
+     39|     const url = new URL(databaseUrl!);
+       |                 ^
+     40|     url.searchParams.set("options", `-c search_path=${schema}`);
+     41|     return url.toString();
+ ❯ test/phase8-performance/head-activation-baseline.integration.test.ts:42:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  test/phase8-performance/postgres-query-storage-growth-baseline.integration.test.ts [ test/phase8-performance/postgres-query-storage-growth-baseline.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-performance/postgres-query-storage-growth-baseline.integration.test.ts:14:42
+     12|   const schema = `postgres_perf_${randomUUID().replaceAll("-", "")}`;
+     13|   const projectId = randomUUID();
+     14|   const scopedUrl = (() => { const url = new URL(databaseUrl!); url.se…
+       |                                          ^
+     15|   let pool: Pool;
+     16|
+ ❯ test/phase8-performance/postgres-query-storage-growth-baseline.integration.test.ts:14:149
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  test/phase8-performance/scheduler-reconciliation-baseline.integration.test.ts [ test/phase8-performance/scheduler-reconciliation-baseline.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-performance/scheduler-reconciliation-baseline.integration.test.ts:53:17
+     51|   const basePool = new Pool({ connectionString: databaseUrl });
+     52|   const scopedUrl = (() => {
+     53|     const url = new URL(databaseUrl!);
+       |                 ^
+     54|     url.searchParams.set("options", `-c search_path=${schema}`);
+     55|     return url.toString();
+ ❯ test/phase8-performance/scheduler-reconciliation-baseline.integration.test.ts:56:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  test/phase8-performance/sse-recovery-baseline.integration.test.ts [ test/phase8-performance/sse-recovery-baseline.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ test/phase8-performance/sse-recovery-baseline.integration.test.ts:24:17
+     22|   const basePool = new Pool({ connectionString: databaseUrl });
+     23|   const scopedUrl = (() => {
+     24|     const url = new URL(databaseUrl!);
+       |                 ^
+     25|     url.searchParams.set("options", `-c search_path=${schema}`);
+     26|     return url.toString();
+ ❯ test/phase8-performance/sse-recovery-baseline.integration.test.ts:27:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  apps/control-plane/src/concertmaster-report-service.integration.test.ts [ apps/control-plane/src/concertmaster-report-service.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ apps/control-plane/src/concertmaster-report-service.integration.test.ts:27:17
+     25|   const schema = `concertmaster_report_${randomUUID().replaceAll("-", …
+     26|   const scopedUrl = (() => {
+     27|     const url = new URL(databaseUrl!);
+       |                 ^
+     28|     url.searchParams.set("options", `-c search_path=${schema}`);
+     29|     return url.toString();
+ ❯ apps/control-plane/src/concertmaster-report-service.integration.test.ts:30:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  packages/persistence/src/persona-profile.integration.test.ts [ packages/persistence/src/persona-profile.integration.test.ts ]
+TypeError: Invalid URL
+ ❯ packages/persistence/src/persona-profile.integration.test.ts:15:42
+
+ ❯ packages/persistence/src/persona-profile.integration.test.ts:15:149
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/persistence/src/embedded-database.integration.test.ts > embedded PostgreSQL-compatible database > reuses an already-running fixed-port embedded server for the same data directory
+Error: node:net:2167
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use 127.0.0.1:55433
+    at Server.setupListenHandle [as _listen2] (node:net:2167:16)
+    at listenInCluster (node:net:2224:12)
+    at node:net:2448:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -98,
+  syscall: 'listen',
+  address: '127.0.0.1',
+  port: 55433
+}
+
+Node.js v24.19.0
+ ❯ Socket.<anonymous> packages/persistence/src/embedded-database.ts:227:49
+    225|       errorOutput?.setEncoding("utf8");
+    226|       errorOutput?.on("data", (chunk) => {
+    227|         if (String(chunk).trim() !== "") reject(new Error(String(chunk…
+       |                                                 ^
+    228|       });
+    229|       child.once("error", reject);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+
+ Test Files  12 failed | 288 passed | 82 skipped (382)
+      Tests  1 failed | 1967 passed | 534 skipped (2502)
+   Start at  23:05:06
+   Duration  317.08s (transform 16.13s, setup 4.08s, import 126.55s, tests 78.99s, environment 89ms)

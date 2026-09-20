@@ -1,0 +1,42 @@
+{
+  "refs": {},
+  "comparison": [
+    {
+      "repo": "openai/codex",
+      "head": "5c5308fc9a9ee789049d646ef11e5400384b9c6f",
+      "files": [
+        ".codex/skills/test-tui/SKILL.md",
+        "codex-rs/tui/src/app/empty_state_policy.rs",
+        "codex-rs/tui/src/app/agent_navigation.rs"
+      ],
+      "observed": "interactive TUI testing uses separate text and Enter writes; pure navigation/view labeling is kept separate from app side effects; empty-state presentation is suppressed outside the ordinary conversation view."
+    },
+    {
+      "repo": "PrimeIntellect-ai/prime-agent",
+      "head": "e311d6495124cf0bdc629c813fc97a39a9a3054d",
+      "files": [
+        "packages/coding-agent/docs/tui.md",
+        "packages/tui/src/components/select-list.ts"
+      ],
+      "observed": "components own render(width), every line must fit width, and selection is a distinct visual state from focus/input."
+    },
+    {
+      "repo": "NousResearch/hermes-agent",
+      "head": "2ed6387d87b4db091af2f05db32faab6e0dbb9a2",
+      "files": [
+        "apps/desktop/e2e/visual-snapshot.ts",
+        "apps/desktop/electron/command-screenshot-capture.ts"
+      ],
+      "observed": "visual snapshots force fixed dimensions; screenshot capture is bounded and explicit rather than an ambient global capture."
+    },
+    {
+      "repo": "anomalyco/opencode",
+      "head": "ebb7b76eca82342642c78645109e865614533827",
+      "files": [
+        "packages/app/e2e/utils/visual-stability/capture.ts",
+        "packages/app/src/pages/layout/sidebar-shell.tsx"
+      ],
+      "observed": "visual capture is opt-in and bounded; the sidebar separates a compact rail from an expanded panel and uses inert/hidden behavior rather than cluttering narrow layouts."
+    }
+  ]
+}

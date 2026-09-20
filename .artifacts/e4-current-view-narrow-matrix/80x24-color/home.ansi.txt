@@ -1,0 +1,24 @@
+maestro · 1a9836bf-e85d-404e-bb08-48d329704998 · draft · 0 workers
+[90mview · search[39m
+[30m  ● #200  GoalCreated[39m
+
+
+
+
+
+Session attached
+Project: 7e04e928-bdee-4574-aa14-afa967c0b2b2 · Event cursor: 0
+TUI exit does not cancel server-owned work.
+[33m  Sign in to Maestro
+
+› [39mChatGPT Plus / Pro [90m· OpenAI Codex account[39m
+  [90mClaude Pro / Max[39m [33m· unavailable: provider approval required[39m
+
+[90m↑/↓ choose · Enter continue · Esc cancel
+╭──────────────────────────────────────────────────────────────────────────────╮
+│[39m [90mmessage to Concertmaster · Enter to send[39m                                     [90m│
+│[39m [33m────────────────────────────────────────────────────────────────────────────[39m [90m│
+│[39m [33m••[7m[39m•[0m••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••• [90m│
+│[39m [33m────────────────────────────────────────────────────────────────────────────[39m [90m│
+╰──────────────────────────────────────────────────────────────────────────────╯
+/help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals[39m
