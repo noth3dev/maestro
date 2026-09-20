@@ -27,3 +27,23 @@ describe("registry command Goal context", () => {
     expect(view.append).toHaveBeenCalledWith("Channels: ");
   });
 });
+  it("routes a sidebar read result into the destination page without appending transcript text", async () => {
+    executeReadCommand.mockResolvedValue({ title: "Billing", lines: ["Daily spend"] });
+    const view = { append: vi.fn(), setMainPageResult: vi.fn() };
+    const controller = {
+      client: {},
+      project: { kind: "attached", projectId: "project-1" },
+      session: undefined,
+      state: { goal: { kind: "value", value: { goalId: "goal-1", name: "goal-1", state: "draft" } } },
+      registry: { find: vi.fn(() => ({ actions: [{ name: "get", kind: "read" }] })) },
+      view,
+    };
+
+    await handleRegistryCommand(controller as never, { kind: "command", name: "billing", action: "get", options: {} } as never, {
+      readViewId: "billing",
+      readViewGeneration: 7,
+    });
+
+    expect(view.setMainPageResult).toHaveBeenCalledWith("billing", { title: "Billing", lines: ["Daily spend"] }, 7);
+    expect(view.append).not.toHaveBeenCalled();
+  });

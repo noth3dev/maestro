@@ -1,0 +1,50 @@
+[33mstatus                   [90m┃[39mmaestro · 1a9836bf-e85d-404e-bb08-48d329704998 · draft · 0 workers · $0.00/$0.00
+model    none            [90m┃[33mchannel[39m
+goal     1a9836bf-e85d-4…[90m┃Goal-bound channels · durable messages only[39m
+workers  0 workers       [90m┃[39m
+budget   $0.00/$0.00     [90m┃[33mChannels[39m
+conn     connected       [90m┃[39m• #metronome · encore:metronome · 0 messages · 1 members
+dir      e4-page-layout  [90m┃[39m
+                         [90m┃[39m
+[33mviews                    [90m┃[39m
+  search                 [90m┃[39m
+  inbox                  [90m┃[39m
+[7m[33m› channel                [0m[90m┃[39m
+  evidence log           [90m┃[39m
+  billing                [90m┃[39m
+  luthiery               [90m┃[39m
+                         [90m┃[39m
+[33mencore                   [90m┃[39m
+  #encore-council (0)    [90m┃[39m
+  #metronome (0)         [90m┃[39m
+  refresh                [90m┃[39m
+                         [90m┃[39m
+[33mgoals                    [90m┃[39m
+  • 1a9836bf · draft     [90m┃[39m
+                         [90m┃[39m
+[33mkeys                     [90m┃[39m
+up/dn    move · enter op…[90m┃[39m
+esc      unfocus · ctrl+b[90m┃[39m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                          Session attached
+                          Project: 7e04e928-bdee-4574-aa14-afa967c0b2b2 · Event cursor: 0
+                          TUI exit does not cancel server-owned work.
+                          [90m/help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals[39m

@@ -1,0 +1,24 @@
+maestro · 1a9836bf-e85d-404e-bb08-48d329704998 · draft · 0 workers
+view · channel
+channel
+Goal-bound channels · durable messages only
+
+Channels
+• #encore-council · encore:encore-council · 0 messages · 3 members
+• #metronome · encore:metronome · 0 messages · 1 members
+
+
+
+
+
+
+
+
+
+
+
+
+Session attached
+Project: 7e04e928-bdee-4574-aa14-afa967c0b2b2 · Event cursor: 0
+TUI exit does not cancel server-owned work.
+/help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals

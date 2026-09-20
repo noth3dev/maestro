@@ -19,6 +19,7 @@ import { selectedConversationGoalId } from "../dashboard-state.js";
 import { pendingDecisionsForView } from "../pending-decisions.js";
 import { addConversationMessage } from "../conversation-transcript.js";
 import type { TranscriptLine } from "../theme.js";
+import type { ReadCommandResult } from "../commands/read-commands.js";
 import type { TuiController } from "./controller.js";
 
 export class TuiView {
@@ -54,6 +55,37 @@ export class TuiView {
     this.syncPendingDecisionState();
     c.footer.setText(c.terminal.rows < 16 ? "" : renderTuiFooter(c.contentWidth(), c.state));
     c.tui.requestRender(true);
+  };
+
+  beginMainPageLoading = (viewId: string): number => {
+    const generation = ++this.c.mainPageGeneration;
+    this.c.mainPage = { viewId, kind: "loading" };
+    this.render();
+    return generation;
+  };
+
+  setMainPageInbox = (viewId: string): void => {
+    ++this.c.mainPageGeneration;
+    this.c.mainPage = { viewId, kind: "inbox" };
+    this.render();
+  };
+
+  setMainPageResult = (viewId: string, result: ReadCommandResult, generation: number): void => {
+    if (this.c.sidebarSelection !== viewId || this.c.mainPageGeneration !== generation) return;
+    this.c.mainPage = { viewId, kind: "read", title: result.title, lines: result.lines };
+    this.render();
+  };
+
+  setMainPageError = (viewId: string, message: string, generation: number): void => {
+    if (this.c.sidebarSelection !== viewId || this.c.mainPageGeneration !== generation) return;
+    this.c.mainPage = { viewId, kind: "error", message };
+    this.render();
+  };
+
+  clearMainPage = (): void => {
+    ++this.c.mainPageGeneration;
+    this.c.mainPage = undefined;
+    this.render();
   };
 
   append = (line: string | TranscriptLine): void => {

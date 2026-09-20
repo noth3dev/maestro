@@ -7,7 +7,7 @@ import { MAX_SIDEBAR_CHANNELS } from "./sidebar-channels.js";
 export interface SidebarNavRow {
   id: string;
   label: string;
-  action: { kind: "submit"; text: string } | { kind: "home" } | { kind: "inbox" };
+  action: { kind: "view"; text: string } | { kind: "home" } | { kind: "inbox" };
 }
 
 export const NAV_ROWS: readonly SidebarNavRow[] = [
@@ -15,10 +15,10 @@ export const NAV_ROWS: readonly SidebarNavRow[] = [
   // ids stay stable because focus, resolvers, and tests key on them.
   { id: "home", label: "search", action: { kind: "home" } },
   { id: "inbox", label: "inbox", action: { kind: "inbox" } },
-  { id: "channel", label: "channel", action: { kind: "submit", text: "/channel list" } },
-  { id: "evlog", label: "evidence log", action: { kind: "submit", text: "/events list" } },
-  { id: "billing", label: "billing", action: { kind: "submit", text: "/billing get" } },
-  { id: "luthiery", label: "luthiery", action: { kind: "submit", text: "/luthiery list" } },
+  { id: "channel", label: "channel", action: { kind: "view", text: "/channel list" } },
+  { id: "evlog", label: "evidence log", action: { kind: "view", text: "/events list" } },
+  { id: "billing", label: "billing", action: { kind: "view", text: "/billing get" } },
+  { id: "luthiery", label: "luthiery", action: { kind: "view", text: "/luthiery list" } },
 ];
 
 /** Rendered goal rows stay capped so keyboard, mouse, and paint agree. */
@@ -66,7 +66,10 @@ export function resolveSidebarNavClick(lines: readonly string[], x: number, y: n
 }
 
 export interface SidebarNavHost {
-  readonly submitter: { submit(text: string): void };
+  readonly submitter: {
+    submit(text: string): void;
+    openReadView(viewId: string, text: string): void;
+  };
   readonly splash: { restore(): void };
   readonly tui: { requestRender(force: boolean): void };
   sidebarSelection: string | undefined;
@@ -84,32 +87,35 @@ export interface SidebarNavHost {
     appendWarning(text: string): void;
     render(): void;
     syncPendingDecisionState(): void;
+    setMainPageInbox(viewId: string): void;
+    clearMainPage?: () => void;
   };
 }
 
-export function showHome(host: Pick<SidebarNavHost, "splash" | "tui">): void {
+export function showHome(host: Pick<SidebarNavHost, "splash" | "tui"> & { view?: { clearMainPage?: () => void } }): void {
   host.splash.restore();
+  host.view?.clearMainPage?.();
   host.tui.requestRender(true);
 }
 
 export function activateInbox(host: SidebarNavHost): void {
+  host.view.setMainPageInbox("inbox");
   if (host.pendingConfirmation !== undefined) {
     applyApprovalAction(host, { kind: "reveal" });
     return;
   }
-  host.compactReview =
-    host.terminal.rows < 16
-      ? compactReviewAcknowledgement(undefined, host.state.pendingDecisions ?? [], host.contentWidth())
-      : undefined;
-  host.view.append(renderPendingDecisionDetails(host.state, host.contentWidth()).join("\n"));
+  if (host.terminal.rows >= 16) return;
+  host.compactReview = compactReviewAcknowledgement(undefined, host.state.pendingDecisions ?? [], host.contentWidth());
+  const details = renderPendingDecisionDetails(host.state, host.contentWidth());
+  host.view.append(details.length > 0 ? details.join("\n") : "Inbox: No pending decisions.");
 }
 
 export function applySidebarNavAction(host: SidebarNavHost, id: string): void {
   const row = NAV_ROWS.find((candidate) => candidate.id === id);
   if (row === undefined) return;
   host.sidebarSelection = id;
-  if (row.action.kind === "submit") {
-    void host.submitter.submit(row.action.text);
+  if (row.action.kind === "view") {
+    host.submitter.openReadView(id, row.action.text);
     return;
   }
   if (row.action.kind === "home") {

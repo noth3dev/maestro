@@ -6,7 +6,12 @@ import { resolveConfiguredModel } from "../../../entry-hydration.js";
 import { selectedCommandGoalId } from "../../../dashboard-state.js";
 import type { TuiController } from "../../controller.js";
 
-export async function handleRegistryCommand(c: TuiController, parsed: ParsedCommand): Promise<void> {
+export interface RegistryCommandOptions {
+  readViewId?: string;
+  readViewGeneration?: number;
+}
+
+export async function handleRegistryCommand(c: TuiController, parsed: ParsedCommand, options: RegistryCommandOptions = {}): Promise<void> {
   if (parsed.kind !== "command" || c.client === undefined) throw new Error("Registry handler requires a connected command");
   const project = c.project;
   if (project.kind !== "attached") throw new Error("Registry handler requires an attached project");
@@ -17,7 +22,9 @@ export async function handleRegistryCommand(c: TuiController, parsed: ParsedComm
       { client: c.client, projectId: project.projectId, ...(goalId === undefined ? {} : { goalId }) },
       parsed,
     );
-    c.view.append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
+    if (options.readViewId === undefined) c.view.append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
+    else if (options.readViewGeneration === undefined) throw new Error("Sidebar read view generation is missing");
+    else c.view.setMainPageResult(options.readViewId, readResult, options.readViewGeneration);
   } else if (action !== undefined) {
     const writeContext = {
       client: c.client,

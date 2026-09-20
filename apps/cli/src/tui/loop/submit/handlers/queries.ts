@@ -16,6 +16,7 @@ export async function handleQueryCommand(c: TuiController, parsed: ParsedCommand
     } else if (typeof requestedGoalId !== "string" || requestedGoalId.trim() === "") {
       c.view.appendWarning("Goal selection requires --goal-id.");
     } else {
+      c.view.clearMainPage();
       c.invalidateDashboardRefreshes();
       const selected = await c.client.getGoal(requestedGoalId, { projectId: project.projectId });
       if (selected.projectId !== project.projectId) throw new Error("Selected Goal is bound to another project");

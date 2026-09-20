@@ -77,10 +77,10 @@ describe("resolveSidebarNavClick", () => {
 describe("sidebar nav actions", () => {
   function host() {
     return {
-      submitter: { submit: vi.fn() },
+      submitter: { submit: vi.fn(), openReadView: vi.fn() },
       splash: { restore: vi.fn() },
       tui: { requestRender: vi.fn() },
-      view: { append: vi.fn(), appendWarning: vi.fn(), render: vi.fn(), syncPendingDecisionState: vi.fn() },
+      view: { append: vi.fn(), appendWarning: vi.fn(), render: vi.fn(), syncPendingDecisionState: vi.fn(), setMainPageInbox: vi.fn() },
     pendingConfirmation: undefined as undefined,
     state: { pendingDecisions: [] as Array<{ identity: string; tier: string; action: string; actor: string }> },
     compactReview: undefined as string | undefined,
@@ -91,16 +91,17 @@ describe("sidebar nav actions", () => {
   };
 }
 
-  it("submits mapped commands without awaiting", () => {
+  it("opens mapped destination pages without appending transcript text", () => {
     const h = host();
     applySidebarNavAction(h, "channel");
-    expect(h.submitter.submit).toHaveBeenCalledWith("/channel list");
+    expect(h.submitter.openReadView).toHaveBeenCalledWith("channel", "/channel list");
     applySidebarNavAction(h, "evlog");
-    expect(h.submitter.submit).toHaveBeenCalledWith("/events list");
+    expect(h.submitter.openReadView).toHaveBeenCalledWith("evlog", "/events list");
     applySidebarNavAction(h, "billing");
-    expect(h.submitter.submit).toHaveBeenCalledWith("/billing get");
+    expect(h.submitter.openReadView).toHaveBeenCalledWith("billing", "/billing get");
     applySidebarNavAction(h, "luthiery");
-    expect(h.submitter.submit).toHaveBeenCalledWith("/luthiery list");
+    expect(h.submitter.openReadView).toHaveBeenCalledWith("luthiery", "/luthiery list");
+    expect(h.submitter.submit).not.toHaveBeenCalled();
   });
 
   it("updates the current nav marker without taking focus", () => {
@@ -108,6 +109,15 @@ describe("sidebar nav actions", () => {
     expect(h.sidebarSelection).toBeUndefined();
     applySidebarNavAction(h, "channel");
     expect(h.sidebarSelection).toBe("channel");
+  });
+
+  it("opens a destination page for sidebar reads without using the transcript submit path", () => {
+    const h = host();
+    const openReadView = vi.fn();
+    h.submitter.openReadView = openReadView;
+    applySidebarNavAction(h, "billing");
+    expect(openReadView).toHaveBeenCalledWith("billing", "/billing get");
+    expect(h.submitter.submit).not.toHaveBeenCalled();
   });
 
   it("restores home through the splash", () => {
@@ -142,8 +152,17 @@ describe("sidebar nav actions", () => {
       state: { pendingDecisions: [{ identity: "effect-1", tier: "You", action: "deploy release", actor: "worker-1" }] },
     };
     applySidebarNavAction(pending, "inbox");
-    expect(h.view.append).toHaveBeenCalledOnce();
-    expect(String(h.view.append.mock.calls[0]![0])).toContain("deploy release");
+    expect(h.view.setMainPageInbox).toHaveBeenCalledWith("inbox");
+    expect(h.view.append).not.toHaveBeenCalled();
+  });
+
+  it("keeps compact inbox review acknowledgement below the page-height threshold", () => {
+    const h = host();
+    h.terminal.rows = 15;
+    h.state = { pendingDecisions: [{ identity: "effect-1", tier: "You", action: "deploy release", actor: "worker-1" }] };
+    applySidebarNavAction(h, "inbox");
+    expect(h.compactReview).toContain("Review: deploy release");
+    expect(h.view.append).toHaveBeenCalledWith(expect.stringContaining("deploy release"));
   });
 });
 
@@ -155,10 +174,10 @@ describe("sidebar row activation", () => {
 
   function host() {
     return {
-      submitter: { submit: vi.fn() },
+      submitter: { submit: vi.fn(), openReadView: vi.fn() },
       splash: { restore: vi.fn() },
       tui: { requestRender: vi.fn() },
-      view: { append: vi.fn(), appendWarning: vi.fn(), render: vi.fn(), syncPendingDecisionState: vi.fn() },
+      view: { append: vi.fn(), appendWarning: vi.fn(), render: vi.fn(), syncPendingDecisionState: vi.fn(), setMainPageInbox: vi.fn() },
       pendingConfirmation: undefined as undefined,
       state: { pendingDecisions: [] as Array<{ identity: string; tier: string; action: string; actor: string }> },
       compactReview: undefined as string | undefined,
@@ -175,10 +194,10 @@ describe("sidebar row activation", () => {
     expect(h.submitter.submit).toHaveBeenCalledWith(`/goal select --goal-id ${goals[0]!.goalId}`);
   });
 
-  it("still routes nav ids through the nav actions", () => {
+  it("routes nav ids through destination pages", () => {
     const h = host();
     activateSidebarRow(h, "channel");
-    expect(h.submitter.submit).toHaveBeenCalledWith("/channel list");
+    expect(h.submitter.openReadView).toHaveBeenCalledWith("channel", "/channel list");
   });
 
   it("ignores ids that are neither nav rows nor cached goals", () => {
