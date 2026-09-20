@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
+import { sha256Hex } from "@maestro/domain/hash";
 
 export const UuidSchema = z.uuid();
 export const CommandVersionSchema = z.number().int().min(0);
@@ -14,7 +14,7 @@ function canonicalJson(value: unknown): string {
     .join(",")}}`;
 }
 export function taskDemandHash(value: unknown): string {
-  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+  return sha256Hex(canonicalJson(value));
 }
 
 /** Project identities visible to the authenticated operator for workspace attachment. */

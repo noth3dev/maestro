@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 
 export const TASK_CONTRACT_SCHEMA_VERSION = 1;
 export const OVERTURE_ROLE_TAXONOMY_VERSION = 2;
@@ -132,7 +132,7 @@ export function assertValidTaskContractSubstance(value: unknown): asserts value 
 export function taskContractContentHash(substance: TaskContractSubstance): string;
 export function taskContractContentHash(substance: Readonly<Record<string, unknown>>): string;
 export function taskContractContentHash(substance: TaskContractSubstance | Readonly<Record<string, unknown>>): string {
-  return createHash("sha256").update(canonicalJson(substance)).digest("hex");
+  return sha256Hex(canonicalJson(substance));
 }
 
 export function createTaskContract(contractId: string, substance: TaskContractSubstance, decisionHistory: readonly TaskContractDecision[] = []): TaskContract {

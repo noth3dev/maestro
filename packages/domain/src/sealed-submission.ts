@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import { canonicalJson, taskContractContentHash } from "./task-contract.js";
 
 /** Frozen, deep-copied inputs for the sealed-submission primitive shared by Head Council and future protocols. */
@@ -295,14 +295,14 @@ export function freezeSealedSubmissionSnapshot(input: SealedSubmissionInput): Se
 }
 
 function computeSnapshotHash(snapshot: Omit<SealedSubmissionSnapshot, "snapshotHash">): string {
-  return createHash("sha256").update(canonicalJson({
+  return sha256Hex(canonicalJson({
     projectId: snapshot.projectId,
     goalId: snapshot.goalId,
     contract: snapshot.contract,
     participants: snapshot.participants,
     evidence: snapshot.evidence,
     deadline: snapshot.deadline,
-  })).digest("hex");
+  }));
 }
 
 /** Recomputes the hash independently for external verification against a stored snapshot. */

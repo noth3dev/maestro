@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import {
   MODEL_CAPABILITY_AXES,
   MODEL_CAPABILITY_SCORE_MAX,
@@ -213,7 +213,7 @@ export function assertValidTaskDemand(value: unknown): asserts value is TaskDema
 /** Stable hash of the sealed D demand snapshot used by routing evidence. */
 export function taskDemandContentHash(value: TaskDemand): string {
   assertValidTaskDemand(value);
-  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+  return sha256Hex(canonicalJson(value));
 }
 
 /** Seal explicit Head levels; this function never derives numbers from task-kind recipes. */

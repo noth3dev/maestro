@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 import {
   MODEL_CAPABILITY_AXES,
   MODEL_CAPABILITY_SCORE_MAX,
@@ -350,12 +350,12 @@ function validateIdentity(identity: ImprovementCandidateIdentity): void {
 }
 
 export function improvementCandidateScenarioSuiteHash(scenarioSuite: readonly string[]): string {
-  return createHash("sha256").update(canonicalJson(scenarioSuite), "utf8").digest("hex");
+  return sha256Hex(canonicalJson(scenarioSuite));
 }
 
 export function improvementCandidateContentHash(input: ImprovementCandidateInput): string {
   assertValidImprovementCandidateInput(input);
-  return createHash("sha256").update(canonicalJson(input), "utf8").digest("hex");
+  return sha256Hex(canonicalJson(input));
 }
 
 export function materializeImprovementCandidate(input: ImprovementCandidateInput, identity: ImprovementCandidateIdentity): ImprovementCandidate {

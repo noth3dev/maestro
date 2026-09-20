@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { sha256Hex } from "./hash.js";
 
 export type DeviceType = "computer" | "cli_endpoint";
 export type DeviceEnrollmentState = "enrolled" | "revoked";
@@ -127,7 +127,7 @@ export function deviceIdentityFingerprint(publicKey: string): string {
   if (!nonblank(publicKey) || /PRIVATE KEY|BEGIN [A-Z ]*SECRET KEY/i.test(publicKey)) {
     throw new InvalidDeviceEnrollmentError("A device identity requires public key material, not a private key");
   }
-  return createHash("sha256").update(publicKey.trim(), "utf8").digest("hex");
+  return sha256Hex(publicKey.trim());
 }
 
 export function assertValidDeviceEnrollment(value: unknown): asserts value is DeviceEnrollment {

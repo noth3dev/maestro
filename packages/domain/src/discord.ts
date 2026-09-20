@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { hmacSha256Hex, timingSafeHexEqual } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 import {
   DiscordSignalError,
@@ -123,7 +123,7 @@ export function signDiscordSignal(signal: DiscordSignal, secret: string, nonce: 
   if (!Number.isFinite(issued)) throw new DiscordSignalError("issuedAt must be an ISO date");
   assertObservationNotAfterIssued(safeSignal, issued);
   const body = { signal: safeSignal, nonce, sequence, issuedAt };
-  return { ...body, signature: createHmac("sha256", secret).update(unsigned(body)).digest("hex") };
+  return { ...body, signature: hmacSha256Hex(unsigned(body), secret) };
 }
 
 export function verifyDiscordSignal(e: AuthenticatedDiscordSignal, secret: string, now = Date.now(), freshnessWindowMs = 300_000, replay: DiscordReplayState = { nonces: new Set(), highestSequence: -1 }): DiscordReplayState {
@@ -138,11 +138,9 @@ export function verifyDiscordSignal(e: AuthenticatedDiscordSignal, secret: strin
   if (!Number.isFinite(issued)) throw new DiscordFreshnessError("issuedAt must be an ISO date");
   const safeSignal = sanitizeDiscordSignal(e.signal);
   assertValidDiscordSignal(safeSignal);
-  const expected = createHmac("sha256", secret).update(unsigned({ signal: safeSignal, nonce: e.nonce, sequence: e.sequence, issuedAt: e.issuedAt })).digest("hex");
+  const expected = hmacSha256Hex(unsigned({ signal: safeSignal, nonce: e.nonce, sequence: e.sequence, issuedAt: e.issuedAt }), secret);
   if (typeof e.signature !== "string" || !FINGERPRINT_PATTERN.test(e.signature)) throw new DiscordAuthenticationError("invalid Discord signal authentication");
-  const provided = Buffer.from(e.signature, "hex");
-  const wanted = Buffer.from(expected, "hex");
-  if (provided.length !== wanted.length || !timingSafeEqual(provided, wanted)) throw new DiscordAuthenticationError("invalid Discord signal authentication");
+  if (!timingSafeHexEqual(e.signature, expected)) throw new DiscordAuthenticationError("invalid Discord signal authentication");
   const expectedFingerprint = deriveDiscordIncidentFingerprint(safeSignal);
   if (safeSignal.incidentFingerprint !== expectedFingerprint) throw new DiscordFingerprintError("Discord incident fingerprint does not match authenticated signal facts");
   assertFreshAtReceipt(safeSignal, issued, now, freshnessWindowMs);

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "./hash.js";
 
 export const ORGANIZATIONAL_KNOWLEDGE_SCHEMA_VERSION = 1 as const;
 export type OrganizationalKnowledgeScope = "worker_proposed" | "project_department" | "global";
