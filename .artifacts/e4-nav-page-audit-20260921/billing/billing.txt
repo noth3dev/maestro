@@ -1,0 +1,40 @@
+status                   ┃maestro · 1a9836bf-e85d-404e-bb08-48d329704998 · draft · 0 workers
+model    openai-codex/gp…┃billing
+goal     1a9836bf-e85d-4…┃project billing rollup · selected Goal context
+workers  0 workers       ┃
+budget   $0.00/$0.00     ┃Billing
+conn     connected       ┃Daily spend · last 14 days · $0.00
+dir      ms              ┃• 2026-09-07 · $0.00
+                         ┃• 2026-09-08 · $0.00
+views                    ┃• 2026-09-09 · $0.00
+  search                 ┃• 2026-09-10 · $0.00
+  inbox                  ┃• 2026-09-11 · $0.00
+  channel                ┃• 2026-09-12 · $0.00
+  evidence log           ┃• 2026-09-13 · $0.00
+› billing                ┃• 2026-09-14 · $0.00
+  luthiery               ┃• 2026-09-15 · $0.00
+                         ┃• 2026-09-16 · $0.00
+channels                 ┃• 2026-09-17 · $0.00
+  #head-council (0)      ┃• 2026-09-18 · $0.00
+                         ┃• 2026-09-19 · $0.00
+encore                   ┃• 2026-09-20 · $0.00
+  #encore-council (0)    ┃Cross-Goal totals · 1 Goal
+  refresh                ┃• actual spend: $0.00
+                         ┃• ceiling: $0.00
+goals                    ┃• reserved: $0.00
+  • 1a9836bf · draft     ┃Goals
+                         ┃• 1a9836bf-e85d-404e-bb08-48d329704998 · budget $0.00 · reserved $0.00 · actual $0.00
+keys                     ┃Per-department cost · unavailable
+up/dn    move · enter op…┃• Actual costs are tracked at Goal scope only
+esc      unfocus · ctrl+b┃
+
+
+
+
+
+
+
+                          Session attached
+                          Project: 7e04e928-bdee-4574-aa14-afa967c0b2b2 · Event cursor: 0
+                          TUI exit does not cancel server-owned work.
+                          /help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals

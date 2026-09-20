@@ -1,0 +1,82 @@
+{
+  "session": "maestro-e4-445753-120x40-002cfaf8-9956-4f6b-ac16-98a99de80d5b",
+  "columns": 120,
+  "rows": 40,
+  "noColor": true,
+  "environment": {
+    "TERM": "screen-256color",
+    "NO_COLOR": "1"
+  },
+  "scenario": [
+    {
+      "type": "keys",
+      "keys": "Escape"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "C-b",
+        "C-b"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "billing"
+    }
+  ],
+  "frames": [
+    {
+      "name": "billing",
+      "ansiSha256": "af0ef050555ad758a38df75a6b1c509ebf589ec70cea869d4592cc7d7b643b9d",
+      "plainSha256": "af0ef050555ad758a38df75a6b1c509ebf589ec70cea869d4592cc7d7b643b9d"
+    }
+  ]
+}

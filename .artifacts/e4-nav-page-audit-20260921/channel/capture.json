@@ -1,0 +1,66 @@
+{
+  "session": "maestro-e4-445753-120x40-02de891c-ac52-430c-8924-2976990f0734",
+  "columns": 120,
+  "rows": 40,
+  "noColor": true,
+  "environment": {
+    "TERM": "screen-256color",
+    "NO_COLOR": "1"
+  },
+  "scenario": [
+    {
+      "type": "keys",
+      "keys": "Escape"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "C-b",
+        "C-b"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "channel"
+    }
+  ],
+  "frames": [
+    {
+      "name": "channel",
+      "ansiSha256": "0824f6934bc3a9ade0f3c5d5767aa3132fb1723a9ddb62a01036f95051065f5e",
+      "plainSha256": "0824f6934bc3a9ade0f3c5d5767aa3132fb1723a9ddb62a01036f95051065f5e"
+    }
+  ]
+}

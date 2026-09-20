@@ -1,0 +1,90 @@
+{
+  "session": "maestro-e4-445753-120x40-68977bf5-2a0a-4d29-804b-2396cc0318b2",
+  "columns": 120,
+  "rows": 40,
+  "noColor": true,
+  "environment": {
+    "TERM": "screen-256color",
+    "NO_COLOR": "1"
+  },
+  "scenario": [
+    {
+      "type": "keys",
+      "keys": "Escape"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "C-b",
+        "C-b"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "luthiery"
+    }
+  ],
+  "frames": [
+    {
+      "name": "luthiery",
+      "ansiSha256": "e3da14ca0f795eab38903bd509b4dd87ecc0d65b6ac3f9f2d629bb470910c5dc",
+      "plainSha256": "e3da14ca0f795eab38903bd509b4dd87ecc0d65b6ac3f9f2d629bb470910c5dc"
+    }
+  ]
+}

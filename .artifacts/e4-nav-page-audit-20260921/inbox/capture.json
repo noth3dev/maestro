@@ -1,0 +1,58 @@
+{
+  "session": "maestro-e4-445753-120x40-24577044-8ac6-473f-94c3-eb9b2d8a24cc",
+  "columns": 120,
+  "rows": 40,
+  "noColor": true,
+  "environment": {
+    "TERM": "screen-256color",
+    "NO_COLOR": "1"
+  },
+  "scenario": [
+    {
+      "type": "keys",
+      "keys": "Escape"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "C-b",
+        "C-b"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "inbox"
+    }
+  ],
+  "frames": [
+    {
+      "name": "inbox",
+      "ansiSha256": "58e27e5073cb667c7f8972a546ed9cb3d937368c23bc8c027d1c3866ac694f8a",
+      "plainSha256": "58e27e5073cb667c7f8972a546ed9cb3d937368c23bc8c027d1c3866ac694f8a"
+    }
+  ]
+}

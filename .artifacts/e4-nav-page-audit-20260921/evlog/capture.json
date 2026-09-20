@@ -1,0 +1,74 @@
+{
+  "session": "maestro-e4-445753-120x40-dbd4ba02-8a29-4c24-b094-7d5a48a4b979",
+  "columns": 120,
+  "rows": 40,
+  "noColor": true,
+  "environment": {
+    "TERM": "screen-256color",
+    "NO_COLOR": "1"
+  },
+  "scenario": [
+    {
+      "type": "keys",
+      "keys": "Escape"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "C-b",
+        "C-b"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 180
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "evlog"
+    }
+  ],
+  "frames": [
+    {
+      "name": "evlog",
+      "ansiSha256": "4116ddd0e8e7593821ef90b8dbdbf1478db054ce7b3c95e470fd6c4c5fac7731",
+      "plainSha256": "4116ddd0e8e7593821ef90b8dbdbf1478db054ce7b3c95e470fd6c4c5fac7731"
+    }
+  ]
+}
