@@ -6,7 +6,7 @@ This directory is the planning and evidence map for Maestro. It is organized by 
 
 | Act                                                | Focus                                                                                                                               | Entry point                   |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| [Act 1 — Foundation](act-1-foundation/README.md)   | Durable control plane, hierarchical execution, certification, environments, portfolio, learning, UI, hardening, tools, and treasury | `act-1-foundation/README.md`  |
+| [Act 1 — Foundation/WIP](act-1-foundation/README.md)   | Durable control plane, hierarchical execution, certification, environments, portfolio, learning, UI, hardening, tools, and treasury | `act-1-foundation/README.md`  |
 | [Act 2 — Flashmob](act-2-flashmob/README.md)       | Fast path for bounded, low-risk light tasks                                                                                         | `act-2-flashmob/README.md`    |
 | [Act 3 — Arrangement](act-3-arrangement/README.md) | Certified, lineage-aware self-modification and personalization                                                                      | `act-3-arrangement/README.md` |
 
