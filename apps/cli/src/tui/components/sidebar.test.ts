@@ -80,6 +80,7 @@ describe("sidebar shell", () => {
   it("renders a sourced current-view line for the narrow layout", () => {
     expect(renderNarrowCurrentView("home", 80).map(plain)).toEqual(["view · search"]);
     expect(renderNarrowCurrentView("inbox", 80).map(plain)).toEqual(["view · inbox"]);
+    expect(renderNarrowCurrentView("channel", 80, "billing", true).map(plain)).toEqual(["nav · billing · ↑↓ move · enter open · esc close"]);
     expect(renderNarrowCurrentView("unknown", 80)).toEqual([]);
     expect(renderNarrowCurrentView(undefined, 80)).toEqual([]);
   });

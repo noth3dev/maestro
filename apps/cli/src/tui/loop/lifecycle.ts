@@ -3,7 +3,7 @@ import { copyToClipboard } from "../../external-url.js";
 import { dispatchCommandPaletteInput } from "../commands/palette.js";
 import { applyApprovalAction } from "../components/approval-dialog-click.js";
 import { applyProviderLoginAction } from "../components/provider-login-click.js";
-import { isSidebarVisible, toggleSidebar } from "../components/sidebar.js";
+import { isSidebarVisible, SIDEBAR_MIN_COLUMNS, toggleSidebar } from "../components/sidebar.js";
 import { activateSidebarRow, isSidebarNavActive, moveSidebarFocus, NAV_ROWS, sidebarFocusRows } from "../components/sidebar-nav.js";
 import { activateSidebarChannel, channelRowKey } from "../components/sidebar-channels.js";
 import { cancelConversationTurn } from "../conversation-cancellation.js";
@@ -126,18 +126,31 @@ export class LifecycleHandler {
     }
     if (dispatchCommandPaletteInput(data, c.view.append)) return { consume: true };
     if (matchesKey(data, "ctrl+b")) {
+      if (c.terminal.columns < SIDEBAR_MIN_COLUMNS) {
+        c.narrowSidebarNavActive = !c.narrowSidebarNavActive;
+        if (c.narrowSidebarNavActive) {
+          const selected = NAV_ROWS.some((row) => row.id === c.sidebarSelection) ? c.sidebarSelection : "home";
+          c.sidebarFocus = NAV_ROWS.some((row) => row.id === c.sidebarFocus) ? c.sidebarFocus : selected;
+        } else {
+          c.sidebarFocus = undefined;
+        }
+        c.view.render();
+        return { consume: true };
+      }
+      c.narrowSidebarNavActive = false;
       toggleSidebar(c, NAV_ROWS);
       return { consume: true };
     }
-    // The focus block also requires effective visibility: a focused but
-    // narrowed sidebar keeps its focus value (widening restores seamlessly)
-    // while keys fall through to the existing global handling below.
-    if (isSidebarNavActive(c) && isSidebarVisible(c.sidebarVisible, c.terminal.columns)) {
+    // A focused but narrowed sidebar keeps its focus value for widening, but
+    // only the explicit narrow nav mode may use it while the pane is hidden.
+    const sidebarKeyboardActive =
+      isSidebarNavActive(c) && (isSidebarVisible(c.sidebarVisible, c.terminal.columns) || c.narrowSidebarNavActive);
+    if (sidebarKeyboardActive) {
       if (matchesKey(data, "up") || matchesKey(data, "down")) {
         c.sidebarFocus = moveSidebarFocus(
           c.sidebarFocus,
           matchesKey(data, "up") ? -1 : 1,
-          sidebarFocusRows(c.sidebarGoals, c.sidebarChannels.map((read) => channelRowKey(read))),
+          c.narrowSidebarNavActive ? NAV_ROWS : sidebarFocusRows(c.sidebarGoals, c.sidebarChannels.map((read) => channelRowKey(read))),
         );
         c.view.render();
         return { consume: true };
@@ -146,10 +159,16 @@ export class LifecycleHandler {
         if (c.sidebarFocus !== undefined) {
           activateSidebarRow(c, c.sidebarFocus);
           activateSidebarChannel(c, c.sidebarFocus);
+          if (c.narrowSidebarNavActive) {
+            c.narrowSidebarNavActive = false;
+            c.sidebarFocus = undefined;
+            c.view.render();
+          }
         }
         return { consume: true };
       }
       if (matchesKey(data, "escape")) {
+        c.narrowSidebarNavActive = false;
         c.sidebarFocus = undefined;
         c.view.render();
         return { consume: true };

@@ -14,10 +14,17 @@ export function contentWidth(columns: number, sidebarVisible: boolean): number {
 }
 
 /** One-line current-view cue used when the full sidebar is hidden by terminal width. */
-export function renderNarrowCurrentView(selection: string | undefined, width: number): string[] {
-  const row = NAV_ROWS.find((candidate) => candidate.id === selection);
+export function renderNarrowCurrentView(
+  selection: string | undefined,
+  width: number,
+  focusedId: string | undefined = undefined,
+  navigationActive = false,
+): string[] {
+  const id = navigationActive ? (focusedId ?? selection) : selection;
+  const row = NAV_ROWS.find((candidate) => candidate.id === id);
   if (row === undefined || width <= 0) return [];
-  return [tuiTheme.dim(fitPlain(`view · ${row.label}`, width))];
+  const text = navigationActive ? `nav · ${row.label} · ↑↓ move · enter open · esc close` : `view · ${row.label}`;
+  return [tuiTheme.dim(fitPlain(text, width))];
 }
 
 export interface SidebarToggleHost {

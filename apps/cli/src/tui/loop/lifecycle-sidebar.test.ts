@@ -24,6 +24,7 @@ function stubController() {
     accountLoginSelection: undefined,
     pendingProviderLoginOperation: undefined,
     sidebarVisible: false,
+    narrowSidebarNavActive: false,
     sidebarFocus: undefined as string | undefined,
     pendingConfirmation: undefined as { summary: Record<string, unknown>; resolve: (decision: string) => void } | undefined,
     project: { kind: "unavailable", reason: "stub" },
@@ -176,13 +177,34 @@ describe("sidebar focus keys", () => {
     expect(c.sidebarFocus).toBe("luthiery");
   });
 
-  it("still toggles visibility while narrow", () => {
+  it("opens a transient keyboard nav mode while narrow", () => {
     const c = stubController();
     c.sidebarVisible = true;
     c.terminal.columns = 80;
     const handler = new LifecycleHandler(c as unknown as TuiController);
     expect(handler.handleInput(CTRL_B)).toEqual({ consume: true });
-    expect(c.sidebarVisible).toBe(false);
+    expect(c.sidebarVisible).toBe(true);
+    expect(c.narrowSidebarNavActive).toBe(true);
+    expect(c.sidebarFocus).toBe("home");
+    expect(handler.handleInput(DOWN)).toEqual({ consume: true });
+    expect(c.sidebarFocus).toBe("inbox");
+    expect(handler.handleInput(ESC)).toEqual({ consume: true });
+    expect(c.narrowSidebarNavActive).toBe(false);
+    expect(c.sidebarFocus).toBeUndefined();
+  });
+
+  it("activates a narrow destination through the existing nav action", () => {
+    const c = stubController();
+    c.sidebarVisible = true;
+    c.terminal.columns = 80;
+    const handler = new LifecycleHandler(c as unknown as TuiController);
+    handler.handleInput(CTRL_B);
+    handler.handleInput(DOWN);
+    handler.handleInput(DOWN);
+    expect(c.sidebarFocus).toBe("channel");
+    expect(handler.handleInput("\r")).toEqual({ consume: true });
+    expect(c.submitter.openReadView).toHaveBeenCalledWith("channel", "/channel list");
+    expect(c.narrowSidebarNavActive).toBe(false);
     expect(c.sidebarFocus).toBeUndefined();
   });
 });

@@ -1,0 +1,48 @@
+{
+  "captures": [
+    {
+      "columns": 80,
+      "rows": 24,
+      "noColor": false,
+      "plainSha256": "09ca20ebf91ac60db334350d04ad6e133ee1d86d07a9cc588f425fdac66adc08",
+      "ansiSha256": "3ad1a01bb9209b8aed898efbc4997c35d539e9305de8969511522d52591912ec"
+    },
+    {
+      "columns": 80,
+      "rows": 24,
+      "noColor": true,
+      "plainSha256": "dfb757cc26cf8149b97382021199c4be571a58c21b18287540fdb64d2aed4953",
+      "ansiSha256": "1317a140915e6936b925d68c2549f862a23af718e7641e00cbf7993ab1fca37c"
+    },
+    {
+      "columns": 120,
+      "rows": 40,
+      "noColor": false,
+      "plainSha256": "347b44fa25d89a40738d17ac6cee313aca5dc518796fb8d9bc3523794d68f89f",
+      "ansiSha256": "b691f4d6b8e62fe8ad1e6bb04bb581bc50d25bef29b48a7e4db7d21a8885e48d"
+    },
+    {
+      "columns": 120,
+      "rows": 40,
+      "noColor": true,
+      "plainSha256": "7aad282f225d6bf99ed88b786b8763817981c2730d0bfcdba9531b62b9c5c53c",
+      "ansiSha256": "4af927c5b7759df1751f155bba326a82cdc21a942d769bf958bb1c85d3f96448"
+    },
+    {
+      "columns": 200,
+      "rows": 50,
+      "noColor": false,
+      "plainSha256": "19b5d08c3eef2ece03b82fce9fa08a133caeea6b0e8eaae8bc1b4ad91946a326",
+      "ansiSha256": "567f6a7aa563b24f45d9e25c684346a2b37676774ae66d4bc3129ad58275e87e"
+    },
+    {
+      "columns": 200,
+      "rows": 50,
+      "noColor": true,
+      "plainSha256": "d03a3088d2252fd94917758033b486d35fd1075be9fa5b690f205f1d31d34df7",
+      "ansiSha256": "64290f58e005d6bea5b32c14af34bc13bb499156cdb225896b31b156bb5aa080"
+    }
+  ],
+  "scenario": "live: Esc; wide C-b,C-b,Down,Down,Enter; narrow C-b,Down,Down,Enter; capture after 5s",
+  "source": "/tmp/e4-page-layout-final-matrix"
+}

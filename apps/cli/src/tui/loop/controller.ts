@@ -95,6 +95,7 @@ export class TuiController {
   compactProjectNotice: string | undefined;
   lastRenderedTerminalRows: number;
   sidebarVisible = true;
+  narrowSidebarNavActive = false;
   sidebarFocus: string | undefined = undefined;
   /** Current top-level view marker; separate from transient keyboard focus. */
   sidebarSelection = "home";
@@ -331,22 +332,26 @@ export class TuiController {
     );
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
+    const dock = new VStack([composer, this.footer]);
     const sidebarLines = (width: number) => {
+      const showSidebarDetails = this.sidebarSelection === "home";
       const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
       // Render-time tag sync (the dynamic-region precedent in view.ts
       // buildInputLabel): a goal change clears the old roster and fires one
       // fetch — the synchronous tag update is the whole dedup mechanism.
-      const sync = sidebarChannelSyncAction(this.sidebarChannelGoalId, goalId);
-      if (sync === "clear") {
-        this.sidebarChannelGoalId = undefined;
-        this.sidebarChannels = [];
-      } else if (sync === "fetch") {
-        this.sidebarChannelGoalId = goalId;
-        this.sidebarChannels = [];
-        void this.refreshSidebarChannels();
+      if (showSidebarDetails) {
+        const sync = sidebarChannelSyncAction(this.sidebarChannelGoalId, goalId);
+        if (sync === "clear") {
+          this.sidebarChannelGoalId = undefined;
+          this.sidebarChannels = [];
+        } else if (sync === "fetch") {
+          this.sidebarChannelGoalId = goalId;
+          this.sidebarChannels = [];
+          void this.refreshSidebarChannels();
+        }
       }
-      const channelSections = renderChannelSections(this.sidebarChannels, this.sidebarFocus);
-      const goalSection = renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus);
+      const channelSections = showSidebarDetails ? renderChannelSections(this.sidebarChannels, this.sidebarFocus) : [];
+      const goalSection = showSidebarDetails ? renderGoalSection(this.sidebarGoals, goalId, this.sidebarFocus) : undefined;
       return renderSidebar(width, [
         ...renderStatusSection(toSidebarStatus(state), width),
         renderNavSection(NAV_ROWS, this.sidebarFocus, sidebarNavBadges(state), this.sidebarSelection),
@@ -366,7 +371,9 @@ export class TuiController {
         activateSidebarChannel(this, id);
       },
     });
-    const narrowViewRegion = createDynamicRegion((width) => renderNarrowCurrentView(this.sidebarSelection, width));
+    const narrowViewRegion = createDynamicRegion((width) =>
+      renderNarrowCurrentView(this.sidebarSelection, width, this.sidebarFocus, this.narrowSidebarNavActive),
+    );
     const mainPageRegion = createDynamicRegion((width) =>
       this.mainPage === undefined
         ? []
@@ -385,13 +392,12 @@ export class TuiController {
       },
       {
         component: mainPageRegion,
-        basis: 0,
-        grow: 1,
+        basis: "auto",
         shrink: 1,
-        minSize: 1,
+        minSize: 0,
         visible: destinationPageVisible,
       },
-      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 && !destinationPageVisible() },
+      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
       { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
       {
         component: approvalClickRegion,
@@ -414,8 +420,7 @@ export class TuiController {
         minSize: 0,
         visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
       },
-      { component: composer, basis: "auto", shrink: 1, minSize: 1, visible: () => !destinationPageVisible() },
-      { component: this.footer, basis: "auto", shrink: 0, minSize: 1 },
+      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
     ]);
     tui.setLayoutRoot(
       new HStack([
