@@ -3,7 +3,7 @@ import { startEmbeddedDatabase } from "@maestro/persistence";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, resolveInstalledControlPlaneEntry, resolveLocalConnection, resolvePackagedAppEntry, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, configuredEmbeddedDatabasePort, resolveInstalledControlPlaneEntry, resolveLocalConnection, resolvePackagedAppEntry, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
 import { resolveCodexAppServerCommand } from "@maestro/model-provider-openai";
 
 function secretStore(initial?: string): LocalSecretStore {
@@ -146,6 +146,30 @@ describe("Codex app-server command propagation", () => {
 });
 
 describe("resolveLocalConnection", () => {
+  it.each([undefined, "", "  ", "0", "65536", "abc", "1e3"])("rejects invalid embedded database port override %s", (value) => {
+    expect(configuredEmbeddedDatabasePort(value)).toBeUndefined();
+  });
+
+  it.each([["1", 1], ["65535", 65_535], [" 55434 ", 55_434]])("accepts valid embedded database port override %s", (value, expected) => {
+    expect(configuredEmbeddedDatabasePort(value)).toBe(expected);
+  });
+
+  it.each(["0", "65536", "abc", "1e3"])("fails closed for invalid embedded database port override %s", async (value) => {
+    const startEmbeddedDatabase = vi.fn(async () => ({ databaseUrl: "postgresql://embedded", stop: vi.fn(async () => undefined) }));
+    await expect(resolveLocalConnection({
+      env: { MAESTRO_EMBEDDED_DATABASE_PORT: value },
+      fetch: vi.fn().mockRejectedValue(new Error("control plane is down")),
+      secretStore: secretStore(),
+      runCommand: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })),
+      startEmbeddedDatabase,
+      retryDelayMs: 0,
+    })).resolves.toEqual({
+      kind: "setup-required",
+      reason: "MAESTRO_EMBEDDED_DATABASE_PORT must be an integer from 1 to 65535",
+    });
+    expect(startEmbeddedDatabase).not.toHaveBeenCalled();
+  });
+
   it("stops a database process that finishes after startup cancellation", async () => {
     const controller = new AbortController();
     let finishDatabase: ((database: { databaseUrl: string; stop: () => Promise<void> }) => void) | undefined;
@@ -322,12 +346,13 @@ describe("resolveLocalConnection", () => {
     let embedded: Awaited<ReturnType<typeof startEmbeddedDatabase>> | undefined;
     try {
       const result = await resolveLocalConnection({
-        env: { MAESTRO_LOCAL_DATA_DIR: dataDir, MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+        env: { MAESTRO_LOCAL_DATA_DIR: dataDir, MAESTRO_EMBEDDED_DATABASE_PORT: "55434", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
         fetch,
         secretStore: secretStore(),
         runCommand,
         startEmbeddedDatabase: async (options) => {
-          embedded = await startEmbeddedDatabase({ dataDir: options.dataDir, detached: false, port: 0 });
+          expect(options.port).toBe(55434);
+          embedded = await startEmbeddedDatabase({ dataDir: options.dataDir, detached: false, port: options.port ?? 0 });
           return embedded;
         },
         startControlPlane: vi.fn(async () => undefined),
@@ -464,7 +489,7 @@ describe("resolveLocalConnection", () => {
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
     const startModelGateway = vi.fn(async () => undefined);
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "55555555-5555-4555-8555-555555555555.stable-secret" });
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_EMBEDDED_DATABASE_PORT: "55434" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "55555555-5555-4555-8555-555555555555.stable-secret" });
     expect(startModelGateway).not.toHaveBeenCalled();
     expect(store.read()).toBe("55555555-5555-4555-8555-555555555555.stable-secret");
   });
@@ -487,7 +512,7 @@ describe("resolveLocalConnection", () => {
     });
     const startControlPlane = vi.fn(async () => undefined);
 
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: secretStore("credential.secret"), runCommand, startControlPlane, retryDelayMs: 0 })).resolves.toEqual({
+    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker", MAESTRO_EMBEDDED_DATABASE_PORT: "55434" }, fetch, secretStore: secretStore("credential.secret"), runCommand, startControlPlane, retryDelayMs: 0 })).resolves.toEqual({
       kind: "configured",
       apiUrl: "http://127.0.0.1:4310",
       token: "credential.secret",

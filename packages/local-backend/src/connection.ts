@@ -9,6 +9,7 @@ export interface ConnectionEnvironment {
   MAESTRO_LOCAL_DATABASE_URL?: string;
   MAESTRO_LOCAL_DB_ENGINE?: string;
   MAESTRO_LOCAL_DATA_DIR?: string;
+  MAESTRO_EMBEDDED_DATABASE_PORT?: string;
   MAESTRO_LOCAL_OPERATOR_ID?: string;
   MAESTRO_MODEL_GATEWAY_URL?: string;
   MAESTRO_MODEL_GATEWAY_TOKEN?: string;

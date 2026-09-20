@@ -64,7 +64,7 @@ export interface LocalBootstrapOptions {
   runCommand?: LocalCommandRunner;
   startControlPlane?: (options: LocalControlPlaneLaunchOptions) => Promise<LocalProcessHandle | void>;
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
-  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean }) => Promise<EmbeddedDatabaseHandle>;
+  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean; port?: number }) => Promise<EmbeddedDatabaseHandle>;
   retryDelayMs?: number;
   signal?: AbortSignal;
   onStep?: (event: LocalBootstrapStepEvent) => void;
@@ -86,6 +86,15 @@ export interface LocalBootstrapStepEvent {
   readonly step: LocalBootstrapStepName;
   readonly status: LocalBootstrapStepStatus;
   readonly message?: string;
+}
+
+export function configuredEmbeddedDatabasePort(value: string | undefined): number | undefined {
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed === "" || !/^\d+$/.test(trimmed)) return undefined;
+  const port = Number(trimmed);
+  // Detached startup needs a stable marker/reuse port; zero is only safe for
+  // in-process ephemeral servers and therefore is not a local override.
+  return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : undefined;
 }
 
 function reportSetupStep(
@@ -555,7 +564,7 @@ async function ensureLocalModelGatewayForBootstrap(options: {
   retryDelayMs: number;
   signal?: AbortSignal;
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
-  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean }) => Promise<EmbeddedDatabaseHandle>;
+  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean; port?: number }) => Promise<EmbeddedDatabaseHandle>;
 }): Promise<{ kind: "ready"; process?: LocalProcessHandle } | { kind: "setup-required"; reason: string }> {
   throwIfAborted(options.signal);
   let current = await probeLocalModelGateway({ apiUrl: options.apiUrl, token: options.token, fetch: options.fetch, ...(options.signal === undefined ? {} : { signal: options.signal }) });
@@ -667,18 +676,26 @@ async function ensureLocalDatabase(options: {
   runCommand: LocalCommandRunner;
   retryDelayMs: number;
   signal?: AbortSignal;
-  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean }) => Promise<EmbeddedDatabaseHandle>;
+  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean; port?: number }) => Promise<EmbeddedDatabaseHandle>;
   onStep?: (event: LocalBootstrapStepEvent) => void;
 }): Promise<{ kind: "ready"; databaseUrl: string; process?: EmbeddedDatabaseHandle } | { kind: "unavailable"; reason: string }> {
   const engine = options.env.MAESTRO_LOCAL_DB_ENGINE?.trim().toLowerCase();
+  const rawPort = options.env.MAESTRO_EMBEDDED_DATABASE_PORT;
+  const trimmedPort = rawPort?.trim();
+  const port = configuredEmbeddedDatabasePort(rawPort);
   if (options.databaseUrl !== undefined && options.databaseUrl !== "") return { kind: "ready", databaseUrl: options.databaseUrl };
   if (engine === "docker") return ensureDockerDatabase({ databaseUrl: DOCKER_LOCAL_DATABASE_URL, runCommand: options.runCommand, retryDelayMs: options.retryDelayMs, ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
   if (engine !== undefined && engine !== "embedded") return { kind: "unavailable", reason: "MAESTRO_LOCAL_DB_ENGINE must be embedded or docker" };
+  if (trimmedPort !== undefined && trimmedPort !== "" && port === undefined) return { kind: "unavailable", reason: "MAESTRO_EMBEDDED_DATABASE_PORT must be an integer from 1 to 65535" };
 
   reportSetupStep(options.onStep, "postgres-ready", "started", "Starting embedded PostgreSQL-compatible database");
   try {
     const process = await startOwnedProcessWithCancellation(
-      () => (options.startEmbeddedDatabase ?? startEmbeddedDatabase)({ dataDir: options.dataDir, detached: options.startEmbeddedDatabase === undefined }),
+      () => (options.startEmbeddedDatabase ?? startEmbeddedDatabase)({
+        dataDir: options.dataDir,
+        detached: options.startEmbeddedDatabase === undefined,
+        ...(port === undefined ? {} : { port }),
+      }),
       options.signal,
     );
     if (process === undefined) throw new Error("embedded database did not return a process");
