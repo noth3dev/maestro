@@ -247,6 +247,7 @@ export async function finalizeConversationTurn(
     projectId: string;
     operatorId: string;
     turnId: string;
+    requestId: string;
     status: Conversation["status"];
     content: string;
   },
@@ -287,7 +288,7 @@ export async function finalizeConversationTurn(
       [
         args.turnId,
         args.turnId,
-        current.active_request_id,
+        args.requestId,
         args.conversationId,
         args.projectId,
         boundedText(content),

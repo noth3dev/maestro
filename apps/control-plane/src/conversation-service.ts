@@ -496,6 +496,7 @@ export function createPostgresConversationService(options: {
         projectId: input.projectId,
         operatorId: _operator.operatorId,
         turnId,
+        requestId: normalizedRequestId,
         status,
         content,
       });
