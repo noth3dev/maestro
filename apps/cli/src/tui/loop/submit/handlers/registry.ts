@@ -3,6 +3,7 @@ import { executeReadCommand } from "../../../commands/read-commands.js";
 import { dispatchInteractiveWriteCommand } from "../../../commands/interactive-dispatch.js";
 import type { executeWriteCommand } from "../../../commands/write-commands.js";
 import { resolveConfiguredModel } from "../../../entry-hydration.js";
+import { selectedCommandGoalId } from "../../../dashboard-state.js";
 import type { TuiController } from "../../controller.js";
 
 export async function handleRegistryCommand(c: TuiController, parsed: ParsedCommand): Promise<void> {
@@ -10,9 +11,10 @@ export async function handleRegistryCommand(c: TuiController, parsed: ParsedComm
   const project = c.project;
   if (project.kind !== "attached") throw new Error("Registry handler requires an attached project");
   const action = c.registry.find(parsed.name)?.actions.find((item) => item.name === parsed.action);
+  const goalId = selectedCommandGoalId(parsed.options["goal-id"], c.state.goal, c.session?.goalId);
   if (action?.kind === "read") {
     const readResult = await executeReadCommand(
-      { client: c.client, projectId: project.projectId, ...(c.session?.goalId === undefined ? {} : { goalId: c.session.goalId }) },
+      { client: c.client, projectId: project.projectId, ...(goalId === undefined ? {} : { goalId }) },
       parsed,
     );
     c.view.append(`${readResult.title}: ${readResult.lines.join(" · ")}`);
@@ -20,7 +22,7 @@ export async function handleRegistryCommand(c: TuiController, parsed: ParsedComm
     const writeContext = {
       client: c.client,
       projectId: project.projectId,
-      ...(c.session?.goalId === undefined ? {} : { goalId: c.session.goalId }),
+      ...(goalId === undefined ? {} : { goalId }),
       confirm: c.confirm,
     } as Parameters<typeof executeWriteCommand>[0];
     const selectedModel = resolveConfiguredModel(c.options.env.MAESTRO_MODEL, c.session?.model);

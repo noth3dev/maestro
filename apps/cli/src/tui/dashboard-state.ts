@@ -12,7 +12,10 @@ export function dashboardStateFromReadModel(dashboard: DashboardReadModel): Dash
     goal:
       dashboard.selectedGoal === undefined
         ? { kind: "empty" }
-        : { kind: "value", value: { goalId: dashboard.selectedGoal.goalId, name: dashboard.selectedGoal.goalId, state: dashboard.selectedGoal.state } },
+        : {
+            kind: "value",
+            value: { goalId: dashboard.selectedGoal.goalId, name: dashboard.selectedGoal.goalId, state: dashboard.selectedGoal.state },
+          },
     workers: dashboard.workerCount === undefined ? { kind: "empty" } : { kind: "value", value: dashboard.workerCount },
     budget:
       dashboard.budget === undefined
@@ -23,6 +26,16 @@ export function dashboardStateFromReadModel(dashboard: DashboardReadModel): Dash
 
 export function selectedConversationGoalId(goal: DashboardStateValues["goal"], sessionGoalId: string | undefined): string | undefined {
   return sessionGoalId ?? (goal.kind === "value" ? goal.value.goalId : undefined);
+}
+
+export function selectedCommandGoalId(
+  explicitGoalId: unknown,
+  goal: DashboardStateValues["goal"],
+  sessionGoalId: string | undefined,
+): string | undefined {
+  return typeof explicitGoalId === "string" && explicitGoalId.trim() !== ""
+    ? explicitGoalId
+    : selectedConversationGoalId(goal, sessionGoalId);
 }
 
 export function dashboardErrorState(message: string): DashboardStateValues {
