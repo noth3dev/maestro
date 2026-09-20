@@ -3,6 +3,7 @@ import { executeReadCommand } from "../../../commands/read-commands.js";
 import { executeWriteCommand } from "../../../commands/write-commands.js";
 import { loadWorkspaceSession, saveWorkspaceSession, selectWorkspaceGoal, selectWorkspaceModel } from "../../../session.js";
 import { reconcileTuiSession } from "../../../recovery.js";
+import { selectedCommandGoalId } from "../../../dashboard-state.js";
 import type { TuiController } from "../../controller.js";
 
 export async function handleQueryCommand(c: TuiController, parsed: ParsedCommand): Promise<void> {
@@ -78,11 +79,12 @@ export async function handleQueryCommand(c: TuiController, parsed: ParsedCommand
     } else {
       const requestedConversationId = parsed.options["conversation-id"];
       if (requestedConversationId === c.session?.conversationId) c.conversationTurnController?.abort();
+      const goalId = selectedCommandGoalId(parsed.options["goal-id"], c.state.goal, c.session?.goalId);
       const cancelResult = await executeWriteCommand(
         {
           client: c.client,
           projectId: project.projectId,
-          ...(c.session?.goalId === undefined ? {} : { goalId: c.session.goalId }),
+          ...(goalId === undefined ? {} : { goalId }),
           confirm: c.confirm,
         },
         parsed,

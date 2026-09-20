@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DashboardReadModel } from "./commands/read-commands.js";
-import { dashboardErrorState, dashboardStateFromReadModel, selectedConversationGoalId } from "./dashboard-state.js";
+import { dashboardErrorState, dashboardStateFromReadModel, selectedCommandGoalId, selectedConversationGoalId } from "./dashboard-state.js";
 
 describe("dashboard state mapping", () => {
   it("maps a selected dashboard read model into TUI async states", () => {
@@ -24,6 +24,14 @@ describe("dashboard state mapping", () => {
     expect(selectedConversationGoalId(selected, "saved-goal")).toBe("saved-goal");
     expect(selectedConversationGoalId(selected, undefined)).toBe("goal-1");
     expect(selectedConversationGoalId({ kind: "empty" }, undefined)).toBeUndefined();
+  });
+
+  it("keeps explicit command Goal options ahead of session and dashboard state", () => {
+    const selected = { kind: "value", value: { goalId: "dashboard-goal", name: "dashboard-goal", state: "active" } } as const;
+    expect(selectedCommandGoalId("explicit-goal", selected, "saved-goal")).toBe("explicit-goal");
+    expect(selectedCommandGoalId("  ", selected, "saved-goal")).toBe("saved-goal");
+    expect(selectedCommandGoalId(true, selected, undefined)).toBe("dashboard-goal");
+    expect(selectedCommandGoalId(undefined, { kind: "empty" }, undefined)).toBeUndefined();
   });
 
   it("maps an empty or failed dashboard read without inventing values", () => {
