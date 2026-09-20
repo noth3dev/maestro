@@ -1,0 +1,40 @@
+status                   ┃maestro · 1a9836bf-e85d-404e-bb08-48d329704998 · draft · 0 workers
+model    openai-codex/gp…┃  ● #200  GoalCreated
+goal     1a9836bf-e85d-4…┃◆ System
+workers  0 workers       ┃
+budget   $0.00/$0.00     ┃#metronome: No messages in this channel.
+conn     connected       ┃
+dir      ms              ┃
+                         ┃
+views                    ┃
+• search                 ┃
+  inbox                  ┃
+  channel                ┃
+  evidence log           ┃
+  billing                ┃
+  luthiery               ┃
+                         ┃
+channels                 ┃
+  #general (0)           ┃
+                         ┃
+encore                   ┃
+› #metronome (0)         ┃
+  refresh                ┃
+                         ┃
+goals                    ┃
+  • 1a9836bf · draft     ┃
+                         ┃
+keys                     ┃
+up/dn    move · enter op…┃
+esc      unfocus · ctrl+b┃
+
+                          Session attached
+                          Project: 7e04e928-bdee-4574-aa14-afa967c0b2b2 · Event cursor: 0
+                          TUI exit does not cancel server-owned work.
+                          ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+                          │ message to Concertmaster · Enter to send                                                   │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          │ ›                                                                                          │
+                          │ ────────────────────────────────────────────────────────────────────────────────────────── │
+                          ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+                          /help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals
