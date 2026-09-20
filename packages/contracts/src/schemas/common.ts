@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sha256Hex } from "@maestro/domain/hash";
+import { sha256Hex } from "@maestro/domain";
 
 export const UuidSchema = z.uuid();
 export const CommandVersionSchema = z.number().int().min(0);
