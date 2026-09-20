@@ -23,8 +23,18 @@ export function createCommandPalette(): AutocompleteItem[] {
 }
 
 
-export function dispatchCommandPaletteInput(input: string, write: (text: string) => void): boolean {
+export function dispatchCommandPaletteInput(input: string, write: (text: string) => void, query?: string): boolean {
   if (input !== "help" && !matchesKey(input, "ctrl+k")) return false;
-  write(`Commands: ${createCommandPalette().map((item) => `${item.label} [${item.description}]`).join(" · ")}`);
+  write(renderPaletteOutput(createCommandPalette(), query));
   return true;
+}
+
+function renderPaletteOutput(items: readonly AutocompleteItem[], query?: string): string {
+  const needle = query?.trim().toLowerCase();
+  if (needle === undefined || needle === "") {
+    return `Commands: ${items.map((item) => `${item.label} [${item.description}]`).join(" · ")}`;
+  }
+  const matches = items.filter((item) => `${item.label} ${item.description ?? ""}`.toLowerCase().includes(needle));
+  if (matches.length === 0) return `No commands match "${query?.trim()}" · try /help or /help <word> (matches name or read/write/critical)`;
+  return `Commands matching "${query?.trim()}": ${matches.map((item) => `${item.label} [${item.description}]`).join(" · ")}`;
 }
