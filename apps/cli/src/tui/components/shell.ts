@@ -403,7 +403,7 @@ function hintText(state: TuiShellState, width = 80): string {
   if (count > 0) return `ctrl+a review ${count} pending decision${count === 1 ? "" : "s"}`;
   if (state.workers.kind === "loading") return "esc stop · ctrl+a decisions";
   if (state.connection.kind === "connected" && state.project?.kind === "unavailable") return projectActionText(state, width);
-  return "/ commands · ctrl+g goals · /help";
+  return "/help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals";
 }
 
 export function renderHints(state: TuiShellState, width: number): string {

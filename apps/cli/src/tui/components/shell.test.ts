@@ -83,13 +83,20 @@ describe("Maestro TUI shell", () => {
   });
 
   it("advertises a copyable help command for first-time users", () => {
+    expect(stripAnsi(renderTuiFooter(80, state))).toBe("/help <word> · ctrl+k commands · ctrl+b sidebar · ctrl+a review · ctrl+g goals");
     for (const width of [40, 60, 80]) {
       const output = stripAnsi(renderTuiFooter(width, state));
-      expect(output).toBe("/ commands · ctrl+g goals · /help");
+      expect(output.startsWith("/help")).toBe(true);
       expect(output).not.toContain("? help");
       expect(output).not.toContain("ctrl+k help");
       expect(output.length).toBeLessThanOrEqual(width);
     }
+  });
+
+  it("advertises persistent keyboard shortcuts in the footer", () => {
+    const output = stripAnsi(renderTuiFooter(80, state));
+    for (const hint of ["ctrl+k", "ctrl+b", "ctrl+a", "/help"]) expect(output).toContain(hint);
+    expect(output.length).toBeLessThanOrEqual(80);
   });
 
   it("shows retry guidance when project discovery fails", () => {
