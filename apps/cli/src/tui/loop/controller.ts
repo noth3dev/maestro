@@ -24,6 +24,7 @@ import type { createStatusRegion } from "../components/regions.js";
 import { tuiTheme } from "../theme.js";
 import { editorTheme, SecretEditor } from "../components/editors.js";
 import { ConversationViewport, FramedComposer } from "../components/conversation-viewport.js";
+import { renderMainPage } from "../components/main-page.js";
 import { createTranscriptClearBoundary } from "../basic-shell.js";
 import { createConversationTurnBoundary } from "../conversation-turn-boundary.js";
 import { createAutomaticProviderSignInGate } from "../entry-helpers.js";
@@ -97,6 +98,8 @@ export class TuiController {
   sidebarFocus: string | undefined = undefined;
   /** Current top-level view marker; separate from transient keyboard focus. */
   sidebarSelection = "home";
+  mainPage: import("../components/main-page.js").MainPageState | undefined = undefined;
+  mainPageGeneration = 0;
   /** Dashboard goal cache backing the sidebar goals section (setRecovery only). */
   sidebarGoals: GoalResult[] = [];
   /** Roster cache backing the sidebar channels section, tagged by goal. */
@@ -328,7 +331,6 @@ export class TuiController {
     );
     this.view.render();
     const transcriptView = new ScrollView(this.header, { follow: "end", primary: true, overscroll: "chain", scrollbar: "auto" });
-    const dock = new VStack([composer, this.footer]);
     const sidebarLines = (width: number) => {
       const goalId = selectedConversationGoalId(state.goal, this.session?.goalId);
       // Render-time tag sync (the dynamic-region precedent in view.ts
@@ -365,6 +367,13 @@ export class TuiController {
       },
     });
     const narrowViewRegion = createDynamicRegion((width) => renderNarrowCurrentView(this.sidebarSelection, width));
+    const mainPageRegion = createDynamicRegion((width) =>
+      this.mainPage === undefined
+        ? []
+        : renderMainPage(this.sidebarSelection, this.mainPage, { pendingDecisions: state.pendingDecisions ?? [] }, width),
+    );
+    const destinationPageVisible = (): boolean =>
+      terminal.rows >= 16 && this.sidebarSelection !== "home" && this.mainPage !== undefined;
     const mainColumn = new VStack([
       { component: this.statusRegion, basis: "auto", shrink: 0, minSize: 1 },
       {
@@ -374,7 +383,15 @@ export class TuiController {
         minSize: 0,
         visible: () => terminal.rows >= 16 && !isSidebarVisible(this.sidebarVisible, terminal.columns),
       },
-      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 },
+      {
+        component: mainPageRegion,
+        basis: 0,
+        grow: 1,
+        shrink: 1,
+        minSize: 1,
+        visible: destinationPageVisible,
+      },
+      { component: transcriptView, basis: 0, grow: 1, minSize: 0, visible: () => terminal.rows >= 16 && !destinationPageVisible() },
       { component: decisionRegion, basis: "auto", shrink: 0, minSize: 0, visible: () => (state.pendingDecisions?.length ?? 0) > 0 },
       {
         component: approvalClickRegion,
@@ -397,7 +414,8 @@ export class TuiController {
         minSize: 0,
         visible: () => this.accountLoginSelection !== undefined && this.accountLoginState !== undefined,
       },
-      { component: dock, basis: "auto", shrink: 1, minSize: 1 },
+      { component: composer, basis: "auto", shrink: 1, minSize: 1, visible: () => !destinationPageVisible() },
+      { component: this.footer, basis: "auto", shrink: 0, minSize: 1 },
     ]);
     tui.setLayoutRoot(
       new HStack([

@@ -19,6 +19,20 @@ import { handleNaturalLanguageTurn } from "./handlers/turn.js";
 export class SubmitDispatcher {
   constructor(private c: TuiController) {}
 
+  openReadView = (viewId: string, text: string): void => {
+    const c = this.c;
+    const generation = c.view.beginMainPageLoading(viewId);
+    void (async () => {
+      try {
+        const parsed = parseInput(text);
+        if (parsed.kind !== "command") throw new Error("Sidebar destination is not a command");
+        await handleRegistryCommand(c, parsed, { readViewId: viewId, readViewGeneration: generation });
+      } catch (error) {
+        c.view.setMainPageError(viewId, error instanceof Error ? error.message : "Unable to load destination", generation);
+      }
+    })();
+  };
+
   submit = async (text: string): Promise<void> => {
     const c = this.c;
     if (shouldIgnoreEmptySubmit(text, c.pendingProviderLogin)) return;

@@ -1,0 +1,70 @@
+{
+  "session": "maestro-e4-432418-120x40-207f58b5-4393-4a30-ac3b-64a7fdfc3933",
+  "columns": 120,
+  "rows": 40,
+  "noColor": false,
+  "environment": {
+    "TERM": "screen-256color"
+  },
+  "scenario": [
+    {
+      "type": "keys",
+      "keys": "Escape"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 400
+    },
+    {
+      "type": "keys",
+      "keys": [
+        "C-b",
+        "C-b"
+      ]
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Down"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 300
+    },
+    {
+      "type": "keys",
+      "keys": "Enter"
+    },
+    {
+      "type": "wait",
+      "milliseconds": 1500
+    },
+    {
+      "type": "capture",
+      "name": "channel-80x24"
+    }
+  ],
+  "frames": [
+    {
+      "name": "channel-80x24",
+      "ansiSha256": "90015293eabe4ba6ef0caec1380ae47bd993fb11563b126951827ce6b4eae3a4",
+      "plainSha256": "7cbd387c8d5e21ca9bd4ea39f94d8237ce03ca24c695418dacde35e7b1e790ef"
+    }
+  ],
+  "actualTerminal": {
+    "columns": 80,
+    "rows": 24,
+    "note": "selected channel at 120x40, then resized via tmux before capture"
+  }
+}

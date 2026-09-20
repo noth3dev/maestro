@@ -35,7 +35,7 @@ function stubController() {
     tui: { requestRender: vi.fn() },
     view: { render: vi.fn(), append: vi.fn(), appendWarning: vi.fn(), syncPendingDecisionState: vi.fn() },
     editor: { setText: vi.fn() },
-    submitter: { submit: vi.fn() },
+    submitter: { submit: vi.fn(), openReadView: vi.fn() },
   };
 }
 
@@ -65,7 +65,7 @@ describe("sidebar focus keys", () => {
     expect(c.submitter.submit).not.toHaveBeenCalled();
     c.sidebarFocus = "channel";
     expect(handler.handleInput("\r")).toEqual({ consume: true });
-    expect(c.submitter.submit).toHaveBeenCalledWith("/channel list");
+    expect(c.submitter.openReadView).toHaveBeenCalledWith("channel", "/channel list");
   });
 
   it("returns focus on escape and consumes other keys while focused", () => {
