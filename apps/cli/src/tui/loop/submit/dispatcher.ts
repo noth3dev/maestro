@@ -62,7 +62,7 @@ export class SubmitDispatcher {
         await handleShellCommand(c, parsed);
       } else if (parsed.kind === "command" && parsed.name === "help") {
         c.compactHelp = c.terminal.rows < 16 ? compactHelpAcknowledgement(c.contentWidth()) : undefined;
-        dispatchCommandPaletteInput("help", c.view.append);
+        dispatchCommandPaletteInput("help", c.view.append, parsed.action);
       } else if (
         parsed.kind === "command" &&
         ((parsed.name === "login" &&

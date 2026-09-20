@@ -70,3 +70,19 @@ it("does not reserve literal question marks for the command palette", () => {
   expect(dispatchCommandPaletteInput("?", (text) => output.push(text))).toBe(false);
   expect(output).toEqual([]);
 });
+
+it("filters the help catalog by a query word", () => {
+  const output: string[] = [];
+  expect(dispatchCommandPaletteInput("help", (text) => output.push(text), "worker")).toBe(true);
+  const text = output.join("\n");
+  expect(text).toContain("/worker spawn");
+  expect(text).not.toContain("/billing get");
+});
+
+it("reports an unmatched help query with group guidance", () => {
+  const output: string[] = [];
+  expect(dispatchCommandPaletteInput("help", (text) => output.push(text), "zzz-no-such-command")).toBe(true);
+  const text = output.join("\n");
+  expect(text).toMatch(/no .*match/i);
+  expect(text).not.toContain("/worker spawn");
+});
