@@ -110,6 +110,19 @@ describe("durable goal service lease-proof retention", () => {
     expect(persistence.renewGoalLease).not.toHaveBeenCalled();
   });
 
+  it("returns the committed terminal result when lease release fails", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.releaseGoalLease.mockRejectedValue(new Error("lease already expired"));
+    persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+
+    await expect(service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator)).resolves.toMatchObject({ state: "stopped", version: 2 });
+    expect(persistence.releaseGoalLease).toHaveBeenCalledWith(expect.anything(), proof);
+
+    await expect(service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator)).resolves.toMatchObject({ state: "stopped", version: 2 });
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(2);
+  });
+
   it("serializes a terminal release before a concurrent same-command retry", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
     let releaseGateResolve!: () => void;
