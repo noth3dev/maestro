@@ -202,6 +202,94 @@ describe("native execution kernel child registration race", () => {
     expect(gateway.close).toHaveBeenCalledOnce();
   });
 
+  it("rejects a new child spawn after root release begins", async () => {
+    const releaseEntered = deferred<void>();
+    const releaseGate = deferred<void>();
+    const childSpawn = vi.fn(async () => ({ execution: "execution-new-child" as ExecutionRef, invocation: "new-child" as InvocationRef }));
+    const runtime = {
+      async spawn(request: SpawnRequest) {
+        if (request.parent === undefined) return { execution: "execution-root-release" as ExecutionRef, invocation: "root-release" as InvocationRef };
+        return childSpawn();
+      },
+      async release(invocation: InvocationRef) {
+        if (invocation === "root-release") {
+          releaseEntered.resolve();
+          await releaseGate.promise;
+        }
+      },
+      async close() {},
+    } as unknown as MaestroAgentRuntime;
+    vi.mocked(createMaestroAgentRuntime).mockReturnValue(runtime);
+    const gateway = {
+      admit: vi.fn(async () => binding),
+      close: vi.fn(async () => undefined),
+    } as unknown as ModelGatewayPort & { admit: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
+    const kernel = createNativeExecutionKernel({
+      gateway,
+      gatewayOperatorId: "operator-1",
+      accountRefs: { test: "test-account" },
+      dataPolicyHash: "policy-race",
+      tools: new ToolRegistry(),
+    });
+    const root = await kernel.spawn(rootRequest());
+    const releasing = kernel.release!(root.invocation);
+    await releaseEntered.promise;
+
+    await expect(kernel.spawn({ ...rootRequest(), parent: root.execution, name: "late-child", idempotencyKey: "late-child-command" })).rejects.toThrow("operation unavailable");
+    expect(childSpawn).not.toHaveBeenCalled();
+    releaseGate.resolve();
+    await releasing;
+    await kernel.close();
+  });
+
+  it("does not double-close after root release races with child shutdown", async () => {
+    const childEntered = deferred<void>();
+    const childGate = deferred<void>();
+    const runtimeCloseEntered = deferred<void>();
+    const runtimeCloseGate = deferred<void>();
+    let runtimeCloseCalls = 0;
+    const runtime = {
+      async spawn(request: SpawnRequest) {
+        if (request.parent === undefined) return { execution: "execution-double-close" as ExecutionRef, invocation: "root-double-close" as InvocationRef };
+        childEntered.resolve();
+        await childGate.promise;
+        return { execution: "execution-double-close" as ExecutionRef, invocation: "child-double-close" as InvocationRef };
+      },
+      async release() {},
+      async close() {
+        runtimeCloseCalls += 1;
+        runtimeCloseEntered.resolve();
+        await runtimeCloseGate.promise;
+      },
+    } as unknown as MaestroAgentRuntime;
+    vi.mocked(createMaestroAgentRuntime).mockReturnValue(runtime);
+    const gateway = {
+      admit: vi.fn(async () => binding),
+      close: vi.fn(async () => undefined),
+    } as unknown as ModelGatewayPort & { admit: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
+    const kernel = createNativeExecutionKernel({
+      gateway,
+      gatewayOperatorId: "operator-1",
+      accountRefs: { test: "test-account" },
+      dataPolicyHash: "policy-race",
+      tools: new ToolRegistry(),
+    });
+    const root = await kernel.spawn(rootRequest());
+    const pendingChild = kernel.spawn({ ...rootRequest(), parent: root.execution, name: "double-close-child", idempotencyKey: "double-close-child-command" });
+
+    await childEntered.promise;
+    await kernel.release!(root.invocation);
+    const closing = kernel.close();
+    await runtimeCloseEntered.promise;
+    childGate.resolve();
+
+    runtimeCloseGate.resolve();
+    await expect(pendingChild).rejects.toThrow("native execution kernel is closed");
+    await closing;
+    expect(runtimeCloseCalls).toBe(1);
+    expect(gateway.close).toHaveBeenCalledOnce();
+  });
+
   it("closes a root runtime that finishes admitting after kernel close", async () => {
     const admissionEntered = deferred<void>();
     const admissionGate = deferred<GatewayBinding>();

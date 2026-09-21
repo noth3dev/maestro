@@ -96,6 +96,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
   const invocationExecutions = new Map<InvocationRef, ExecutionRef>();
   const rootInvocations = new Map<ExecutionRef, InvocationRef>();
   const releasedRootExecutions = new Set<ExecutionRef>();
+  const closingExecutions = new Set<ExecutionRef>();
   const executionInvocations = new Map<ExecutionRef, Set<InvocationRef>>();
   const pendingChildSpawns = new Map<ExecutionRef, number>();
   let closed = false;
@@ -133,6 +134,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
   }
 
   async function maybeReleaseExecution(execution: ExecutionRef): Promise<void> {
+    if (closingExecutions.has(execution)) return;
     const references = executionInvocations.get(execution);
     if (references === undefined || references.size > 0 || (pendingChildSpawns.get(execution) ?? 0) > 0) return;
     const record = executions.get(execution);
@@ -142,6 +144,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     releasedRootExecutions.delete(execution);
     if (record === undefined) return;
     executions.delete(execution);
+    if (closed) return;
     await record.runtime.close?.().catch(() => undefined);
   }
 
@@ -150,6 +153,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       if (closed) throw new Error("native execution kernel is closed");
       if (request.parent !== undefined) {
         const parent = runtimeForExecution(request.parent);
+        if (releasedRootExecutions.has(request.parent)) throw new ExecutionKernelUnavailableError("prompt");
         const pending = pendingChildSpawns.get(request.parent) ?? 0;
         pendingChildSpawns.set(request.parent, pending + 1);
         try {
@@ -272,6 +276,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     async close() {
       if (closed) return;
       closed = true;
+      for (const execution of executions.keys()) closingExecutions.add(execution);
       const unique = new Set([...executions.values()]);
       await Promise.all([...unique].map((record) => record.runtime.close?.()));
       executions.clear();
@@ -281,6 +286,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       invocationExecutions.clear();
       rootInvocations.clear();
       releasedRootExecutions.clear();
+      closingExecutions.clear();
       await options.gateway.close();
     },
   };
