@@ -23,6 +23,20 @@ export interface EmbeddedDatabaseHandle {
   stop(): Promise<void>;
 }
 
+export function buildEmbeddedDatabaseChildEnvironment(
+  options: EmbeddedDatabaseOptions,
+  inheritedEnvironment: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const environment = { ...inheritedEnvironment };
+  environment.MAESTRO_EMBEDDED_DATABASE_DIR = options.dataDir;
+  environment.MAESTRO_EMBEDDED_DATABASE_MARKER = join(options.dataDir, "embedded-postgres", "server.json");
+  if (options.host !== undefined) environment.MAESTRO_EMBEDDED_DATABASE_HOST = options.host;
+  if (options.port === undefined) delete environment.MAESTRO_EMBEDDED_DATABASE_PORT;
+  else environment.MAESTRO_EMBEDDED_DATABASE_PORT = String(options.port);
+  if (options.maxConnections !== undefined) environment.MAESTRO_EMBEDDED_DATABASE_MAX_CONNECTIONS = String(options.maxConnections);
+  return environment;
+}
+
 type EmbeddedSocketHandler = PGLiteSocketHandler;
 type EmbeddedSocketServerInternals = { handlers?: Set<EmbeddedSocketHandler> };
 
@@ -195,14 +209,7 @@ export async function startEmbeddedDatabase(options: EmbeddedDatabaseOptions): P
   const sourceEntry = fileURLToPath(new URL("./embedded-database-server.js", import.meta.url));
   const entry = existsSync(sourceEntry) ? sourceEntry : fileURLToPath(new URL("../dist/embedded-database-server.js", import.meta.url));
   const child = spawn(process.execPath, [entry], {
-    env: {
-      ...process.env,
-      MAESTRO_EMBEDDED_DATABASE_DIR: options.dataDir,
-      MAESTRO_EMBEDDED_DATABASE_MARKER: markerPath,
-      ...(options.host === undefined ? {} : { MAESTRO_EMBEDDED_DATABASE_HOST: options.host }),
-      ...(options.port === undefined ? {} : { MAESTRO_EMBEDDED_DATABASE_PORT: String(options.port) }),
-      ...(options.maxConnections === undefined ? {} : { MAESTRO_EMBEDDED_DATABASE_MAX_CONNECTIONS: String(options.maxConnections) }),
-    },
+    env: buildEmbeddedDatabaseChildEnvironment(options),
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
