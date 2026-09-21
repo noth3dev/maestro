@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runGoalControlAction, type GoalControlApi } from "./goal-control.js";
+import { requiresGoalControlConfirmation, runGoalControlAction, type GoalControlApi } from "./goal-control.js";
 
 const goalId = "22222222-2222-4222-8222-222222222222";
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -32,5 +32,17 @@ describe("runGoalControlAction", () => {
     await runGoalControlAction(api, { goalId, projectId, action: "pause", expectedVersion: 1 });
     const [, , usedCommandId] = (api.pauseGoal as ReturnType<typeof vi.fn>).mock.calls[0] as [string, unknown, string];
     expect(usedCommandId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+
+describe("goal control confirmation policy", () => {
+  it.each([
+    ["pause", false],
+    ["resume", false],
+    ["stop", true],
+    ["emergency-stop", true],
+  ] as const)("marks %s as requiring confirmation: %s", (action, expected) => {
+    expect(requiresGoalControlConfirmation(action)).toBe(expected);
   });
 });

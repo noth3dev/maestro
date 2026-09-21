@@ -18,6 +18,10 @@ export interface GoalControlRequest {
   expectedVersion: number;
 }
 
+export function requiresGoalControlConfirmation(action: GoalControlAction): boolean {
+  return action === "stop" || action === "emergency-stop";
+}
+
 /**
  * Runs a durable Goal lifecycle control through the already-authenticated Electron API bridge.
  * The caller supplies the Goal's current durable version so a stale UI cannot silently clobber a

@@ -4808,3 +4808,6 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - Task 4 Step 1 green checkpoint: added RED coverage for durable Goal loading, initial selection, explicit selection persistence, selection fallback when a Goal disappears, refresh/reconnect reloads, and project scoping; implemented `goal-operations.ts` and wired `GoalsProvider` to reconcile selection against each refreshed durable list. Focused Task 4 coverage passes 3 files / 12 tests; Carnegie build and changed-file lint pass. Full root verification is pending.
+
+
+- Task 4 Step 2 checkpoint: added RED coverage for the lifecycle confirmation policy and implemented `requiresGoalControlConfirmation`, marking only stop and emergency-stop as confirmation-required. Focused Goal-control/operations/Dashboard coverage passes 16/16; Dashboard wiring, post-success refresh, and actionable stale/authority UI remain for Task 4 implementation steps.
