@@ -170,19 +170,21 @@ describe("native Control Plane execution kernel", () => {
   });
 
   it("evicts a released root execution and keeps duplicate release idempotent", async () => {
-    const { kernel } = createKernel();
+    const { gateway, kernel } = createKernel();
     const spawned = await kernel.spawn(rootRequest());
 
     await kernel.release!(spawned.invocation);
 
     await expect(kernel.getModelIdentity(spawned.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.prompt(spawned.execution, "must not route")).rejects.toThrow("operation unavailable");
     await expect(kernel.observe(spawned.execution)).resolves.toEqual([]);
     await expect(kernel.release!(spawned.invocation)).resolves.toBeUndefined();
     await expect(kernel.release!("unknown-invocation" as never)).resolves.toBeUndefined();
+    expect(gateway.close).not.toHaveBeenCalled();
   });
 
   it("retains a shared execution for a child until the child is released", async () => {
-    const { kernel } = createKernel();
+    const { gateway, kernel } = createKernel();
     const request = rootRequest();
     const root = await kernel.spawn({
       ...request,
@@ -206,16 +208,19 @@ describe("native Control Plane execution kernel", () => {
     await kernel.release!(root.invocation);
 
     expect(await kernel.getInvocationStatus(root.invocation)).toBe("unknown");
+    expect(await kernel.getInvocationStatus(child.invocation)).toBe("succeeded");
     expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
     expect((await kernel.observe(root.execution)).some((item) => item.invocation === child.invocation)).toBe(true);
     await kernel.sendMessage(root.execution, child.invocation, "continue child");
+    expect(await kernel.getInvocationStatus(child.invocation)).toBe("succeeded");
 
     await kernel.release!(child.invocation);
     await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    expect(gateway.close).not.toHaveBeenCalled();
   });
 
   it("keeps the root execution after child release until the root is released", async () => {
-    const { kernel } = createKernel();
+    const { gateway, kernel } = createKernel();
     const request = rootRequest();
     const root = await kernel.spawn({
       ...request,
@@ -239,8 +244,11 @@ describe("native Control Plane execution kernel", () => {
     await kernel.release!(child.invocation);
 
     expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
+    await kernel.prompt(root.execution, "root remains routable");
+    expect((await kernel.observe(root.execution)).some((item) => item.invocation === root.invocation)).toBe(true);
     await kernel.release!(root.invocation);
     await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    expect(gateway.close).not.toHaveBeenCalled();
   });
 
 });

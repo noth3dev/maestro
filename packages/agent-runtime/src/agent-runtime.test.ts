@@ -22,7 +22,7 @@ const grant = {
   remaining: { modelTurns: 3, toolCalls: 2, childCalls: 0, outputTokens: 128, wallTimeMs: 10_000, retryCount: 0 },
 } as const;
 
-function gateway(onTurn?: (request: Parameters<ModelGatewayPort["turn"]>[0]) => void): ModelGatewayPort & { calls: number } {
+function gateway(onTurn?: (request: Parameters<ModelGatewayPort["turn"]>[0]) => void, options: { firstTurnTool?: boolean } = {}): ModelGatewayPort & { calls: number } {
   let calls = 0;
   return {
     get calls() {
@@ -37,7 +37,7 @@ function gateway(onTurn?: (request: Parameters<ModelGatewayPort["turn"]>[0]) => 
     async turn(request): Promise<ModelTurnResult> {
       onTurn?.(request);
       calls += 1;
-      if (calls === 1) {
+      if (calls === 1 && options.firstTurnTool !== false) {
         return {
           requestId: request.requestId,
           model: identity,
@@ -831,7 +831,7 @@ describe("native Maestro agent runtime", () => {
   });
 
   it("keeps child observations after root release until the child is released", async () => {
-    const runtime = createMaestroAgentRuntime({ gateway: gateway(), binding, tools: new ToolRegistry() });
+    const runtime = createMaestroAgentRuntime({ gateway: gateway(undefined, { firstTurnTool: false }), binding, tools: new ToolRegistry() });
     const context = {
       operatorId: "operator-1",
       projectId: "project-1",
@@ -866,6 +866,7 @@ describe("native Maestro agent runtime", () => {
     expect(await runtime.getInvocationStatus(root.invocation)).toBe("unknown");
     expect((await runtime.observe(root.execution)).map((item) => item.invocation)).toContain(child.invocation);
     await runtime.sendMessage(root.execution, child.invocation, "continue child");
+    expect(await runtime.getInvocationStatus(child.invocation)).toBe("succeeded");
 
     await runtime.release!(child.invocation);
     await expect(runtime.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
