@@ -1435,3 +1435,18 @@ Before production router code, create and review: the eight A-axis scoring rubri
 - Final stable-HEAD full verification for native retention (2026-09-21): after final §0.3 **REVIEW: PASS** on immutable `8a981466`, `npm test` ran without concurrent worktree changes for 406.11s and reported **295 passed / 82 skipped / 11 failed files** and **2025 passed / 534 skipped / 2559 tests**. Every failure was an integration test constructing `new URL(databaseUrl!)` with `MAESTRO_TEST_DATABASE_URL` unset; the failing files were the six Phase 8 performance PostgreSQL baselines, `apps/control-plane/src/concertmaster-report-service.integration.test.ts`, and `packages/persistence/src/persona-profile.integration.test.ts` (11 total including the other database integration files shown in the log). No native kernel, race, gateway, agent-runtime, RPC, or other unit test failed. This is the authoritative host result; PostgreSQL-backed integration verification remains environment-blocked and is not claimed as green.
 
 - Post-merge `main` revalidation (2026-09-21): merge commit `735ff34a merge: integrate native execution retention hardening` was followed by `npm run build` (passed) and `npm test` (434.39s). The result was **295 passed / 82 skipped / 11 failed files** and **2025 passed / 534 skipped / 2559 tests**. The same 11 PostgreSQL integration files failed closed with `TypeError: Invalid URL` because `MAESTRO_TEST_DATABASE_URL` was unset; no native retention, gateway, runtime, race, or unit test failed. The feature worktree and branch were then removed; preserved E4 worktree `.worktrees/e4-channel-row-page` was not touched.
+
+## 2026-09-21 — Closeout pass authorized by user
+
+**Status:** in_progress
+
+Scope: finish repository-local open work, reconcile the latest runtime review findings, complete the E4 live check when the authenticated durable store is available, run the strongest available PostgreSQL verification, push the verified `main` branch, and leave no disposable worktree/container/heartbeat residue.
+
+Order:
+1. Preserve and reconcile the dirty E4 worktree change that is not already present on `main`; remove the redundant worktree only after its useful change is integrated or explicitly accounted for.
+2. Resolve the remaining Phase 1 review findings: terminal Goal lease-proof retention, SHA-only certification evidence verification, and the migration test seam.
+3. Re-run build, lint, focused tests, and a disposable PostgreSQL suite; record environment blockers honestly.
+4. Re-run E4 channel-row live acceptance if the durable store/auth blocker clears.
+5. Push verified `main` to `origin/main` and update the next-step pointer.
+
+Remote push is authorized for this closeout pass. External provider, Discord, release, and other user-owned gates remain unclaimed unless their real prerequisites are available.
