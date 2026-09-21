@@ -1,5 +1,5 @@
 import type { GoalResult, CreateGoalInput, TransitionGoalInput, GoalControlInput } from "@maestro/contracts";
-import { isTerminalGoalState } from "@maestro/domain";
+import { isTerminalGoalState, type GoalState } from "@maestro/domain";
 import {
   acquireGoalLease,
   renewGoalLease,
@@ -74,9 +74,42 @@ export interface DurableGoalServiceOptions {
 
 export function createDurableGoalService(options: DurableGoalServiceOptions): GoalService {
   const leaseDurationMs = options.leaseDurationMs ?? 30_000;
-  const leaseProofs = new Map<string, import("@maestro/persistence").GoalLeaseProof>();
+  type GoalLeaseProof = import("@maestro/persistence").GoalLeaseProof;
+  const leaseProofs = new Map<string, GoalLeaseProof>();
+  const goalQueues = new Map<string, Promise<unknown>>();
 
-  async function leaseFor(goalId: string): Promise<import("@maestro/persistence").GoalLeaseProof> {
+  async function inGoalQueue<T>(goalId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = goalQueues.get(goalId) ?? Promise.resolve();
+    const current = previous.then(operation, operation);
+    goalQueues.set(goalId, current);
+    try {
+      return await current;
+    } finally {
+      if (goalQueues.get(goalId) === current) goalQueues.delete(goalId);
+    }
+  }
+
+  async function releaseCachedProof(goalId: string, proof: GoalLeaseProof): Promise<void> {
+    if (leaseProofs.get(goalId) !== proof) return;
+    try {
+      await releaseGoalLease(options.pool, proof);
+    } catch {
+      // The command already committed. Evicting the proof still bounds memory
+      // even when the durable lease is already stale or unavailable.
+    }
+    if (leaseProofs.get(goalId) === proof) leaseProofs.delete(goalId);
+  }
+
+  async function isDurablyTerminal(goalId: string): Promise<boolean> {
+    try {
+      const result = await options.pool.query<{ state: GoalState }>("SELECT state FROM goals WHERE goal_id = $1", [goalId]);
+      return result.rowCount === 1 && isTerminalGoalState(result.rows[0]!.state);
+    } catch {
+      return false;
+    }
+  }
+
+  async function leaseFor(goalId: string): Promise<GoalLeaseProof> {
     const currentProof = leaseProofs.get(goalId);
     if (currentProof) {
       try {
@@ -94,32 +127,29 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
   }
 
   async function execute(goalId: string, command: GoalCommand): Promise<GoalResult> {
-    try {
-      const proof = await leaseFor(goalId);
-      const result = await executeGoalCommand(options.pool, command, proof);
-      const goalResult = commandResult(result, command.projectId);
-      if (goalResult.state !== undefined && isTerminalGoalState(goalResult.state)) {
-        // The durable command receipt is enough for a lost-response retry. Do
-        // not retain a terminal proof forever; release the lease and evict the
-        // in-memory entry after the terminal write has committed. A release
-        // failure must not turn an already-successful command into an error.
-        try {
-          await releaseGoalLease(options.pool, proof);
-        } catch {
-          // The proof is still evicted below, so memory retention remains
-          // bounded even if the durable lease has already gone stale.
+    return inGoalQueue(goalId, async () => {
+      let proof: GoalLeaseProof | undefined;
+      try {
+        proof = await leaseFor(goalId);
+        const result = await executeGoalCommand(options.pool, command, proof);
+        const goalResult = commandResult(result, command.projectId);
+        if (goalResult.state !== undefined && isTerminalGoalState(goalResult.state)) {
+          // The durable command receipt is enough for a lost-response retry.
+          // Serialize same-Goal work so release cannot invalidate a concurrent
+          // retry or evict a replacement proof.
+          await releaseCachedProof(goalId, proof);
         }
-        leaseProofs.delete(goalId);
+        return goalResult;
+      } catch (error) {
+        if (proof !== undefined && await isDurablyTerminal(goalId)) await releaseCachedProof(goalId, proof);
+        if (error instanceof PersistenceStaleGoalLeaseError) leaseProofs.delete(goalId);
+        if (error instanceof GoalServiceError) throw error;
+        if (error instanceof PersistenceCommandIdReuseError) throw new CommandIdReuseError();
+        if (error instanceof PersistenceLeaseUnavailableError) throw new LeaseUnavailableError();
+        if (error instanceof PersistenceStaleGoalLeaseError) throw new StaleLeaseError();
+        throw new DurableStoreUnavailableError();
       }
-      return goalResult;
-    } catch (error) {
-      if (error instanceof PersistenceStaleGoalLeaseError) leaseProofs.delete(goalId);
-      if (error instanceof GoalServiceError) throw error;
-      if (error instanceof PersistenceCommandIdReuseError) throw new CommandIdReuseError();
-      if (error instanceof PersistenceLeaseUnavailableError) throw new LeaseUnavailableError();
-      if (error instanceof PersistenceStaleGoalLeaseError) throw new StaleLeaseError();
-      throw new DurableStoreUnavailableError();
-    }
+    });
   }
 
   async function transitionControl(
@@ -179,13 +209,15 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
       });
     },
     async withGoalLease(goalId, operation) {
-      let proof = await leaseFor(goalId);
-      const renew = async () => {
-        proof = await renewGoalLease(options.pool, proof, leaseDurationMs);
-        leaseProofs.set(goalId, proof);
-        return proof;
-      };
-      return operation(proof, renew);
+      return inGoalQueue(goalId, async () => {
+        let proof = await leaseFor(goalId);
+        const renew = async () => {
+          proof = await renewGoalLease(options.pool, proof, leaseDurationMs);
+          leaseProofs.set(goalId, proof);
+          return proof;
+        };
+        return operation(proof, renew);
+      });
     },
     async getGoal(goalId, projectId) {
       try {

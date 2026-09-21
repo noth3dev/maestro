@@ -110,6 +110,49 @@ describe("durable goal service lease-proof retention", () => {
     expect(persistence.renewGoalLease).not.toHaveBeenCalled();
   });
 
+  it("serializes a terminal release before a concurrent same-command retry", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    let releaseGateResolve!: () => void;
+    const releaseGate = new Promise<void>((resolve) => { releaseGateResolve = resolve; });
+    let releaseStartedResolve!: () => void;
+    const releaseStarted = new Promise<void>((resolve) => { releaseStartedResolve = resolve; });
+    persistence.releaseGoalLease.mockImplementation(async () => {
+      releaseStartedResolve();
+      await releaseGate;
+    });
+    persistence.executeGoalCommand.mockResolvedValue({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 });
+    const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+
+    const first = service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
+    await releaseStarted;
+    const second = service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
+    await Promise.resolve();
+
+    expect(persistence.executeGoalCommand).toHaveBeenCalledTimes(1);
+    releaseGateResolve();
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.releaseGoalLease).toHaveBeenCalledTimes(2);
+  });
+
+  it("evicts the cached proof when a later command discovers a terminal Goal", async () => {
+    persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.releaseGoalLease.mockResolvedValue(undefined);
+    persistence.executeGoalCommand
+      .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 })
+      .mockResolvedValueOnce({ outcome: "rejected", goalId: proof.goalId, code: "invalid_transition" });
+    const pool = { query: vi.fn(async (sql: string) => sql.includes("SELECT state FROM goals")
+      ? { rowCount: 1, rows: [{ state: "stopped" }] }
+      : { rowCount: 0, rows: [] }) };
+    const service = createDurableGoalService({ pool: pool as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
+
+    await service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
+    await expect(service.transitionGoal(proof.goalId, { projectId, expectedVersion: 1, to: "ready_for_confirmation" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", operator)).rejects.toMatchObject({ name: "InvalidTransitionError" });
+
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.releaseGoalLease).toHaveBeenCalledTimes(2);
+  });
+
   it("retains the lease proof and still renews on retry when the command result is nonterminal", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
     persistence.renewGoalLease.mockResolvedValue(proof);
