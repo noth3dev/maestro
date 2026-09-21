@@ -877,8 +877,12 @@ it("streams authenticated durable events from the reconnect cursor", async () =>
   };
   const fetch = vi.fn().mockResolvedValue(new Response(`id: 8\nevent: goal-event\ndata: ${JSON.stringify(event)}\n\n: heartbeat\n\n`));
   const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
+  let connected = false;
+  const stream = client.streamEvents({ projectId, after: "7" }, { onConnected: () => { connected = true; } });
+  expect(connected).toBe(false);
   const received = [];
-  for await (const item of client.streamEvents({ projectId, after: "7" })) received.push(item);
+  for await (const item of stream) received.push(item);
+  expect(connected).toBe(true);
   expect(received).toEqual([event]);
   expect(fetch).toHaveBeenCalledWith(
     `https://maestro.test/v1/events/stream?projectId=${projectId}&after=7`,

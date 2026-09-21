@@ -251,7 +251,7 @@ export interface ApiClient {
   getBudgetSummary(goalId: string, query: GoalQuery): Promise<GoalBudgetSummary>;
   getBillingSummary(projectId: string): Promise<BillingReadModel>;
   listEvents(query: EventQuery): Promise<GoalEventPage>;
-  streamEvents(query: EventQuery, options?: { signal?: AbortSignal }): AsyncIterable<GoalEvent>;
+  streamEvents(query: EventQuery, options?: { signal?: AbortSignal; onConnected?: () => void }): AsyncIterable<GoalEvent>;
   listMetronomeChallenges(goalId: string, query: GoalQuery): Promise<MetronomeChallengeList>;
   listEncoreCouncilRounds(goalId: string, query: GoalQuery): Promise<EncoreCouncilRoundList>;
   listCertifications(goalId: string, query: GoalQuery): Promise<CertificationList>;

@@ -13,7 +13,7 @@ export type EventStreamMessage =
   | { kind: "error"; message: string };
 
 export type EventStreamSubscriber = (query: EventQuery, listener: (message: EventStreamMessage) => void) => () => void;
-export type EventStreamSource = (query: EventQuery, options: { signal: AbortSignal }) => AsyncIterable<GoalEvent>;
+export type EventStreamSource = (query: EventQuery, options: { signal: AbortSignal; onConnected: () => void }) => AsyncIterable<GoalEvent>;
 export type EventStreamEmitter = (message: EventStreamMessage) => void;
 
 function redactStreamError(value: string): string {
@@ -115,13 +115,15 @@ export async function pumpEventStream(
   emit: EventStreamEmitter,
 ): Promise<void> {
   let connected = false;
+  const markConnected = (): void => {
+    if (connected || signal.aborted) return;
+    connected = true;
+    emit({ kind: "connected" });
+  };
   try {
-    for await (const event of source(query, { signal })) {
+    for await (const event of source(query, { signal, onConnected: markConnected })) {
       if (signal.aborted) return;
-      if (!connected) {
-        connected = true;
-        emit({ kind: "connected" });
-      }
+      markConnected();
       emit({ kind: "event", event });
     }
     if (!signal.aborted) emit({ kind: "end" });

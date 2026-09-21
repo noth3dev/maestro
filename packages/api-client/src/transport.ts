@@ -29,6 +29,7 @@ export async function* readEventStream(
   headers: Record<string, string>,
   query: EventQuery,
   signal?: AbortSignal,
+  onConnected?: () => void,
 ): AsyncGenerator<GoalEvent> {
   const parsed = EventQuerySchema.parse(query);
   const url = new URL("v1/events/stream", base);
@@ -50,6 +51,7 @@ export async function* readEventStream(
     throw new Error(`Control plane event stream returned HTTP ${response.status}`);
   }
   if (response.body === null) throw new Error("Control plane event stream returned no body");
+  onConnected?.();
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

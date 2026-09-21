@@ -15,7 +15,7 @@ export function createEventsMethods(ctx: MethodContext): Pick<ApiClient, "listEv
       );
     },
     streamEvents(query, options) {
-      return readEventStream(fetch, base, headers, query, options?.signal);
+      return readEventStream(fetch, base, headers, query, options?.signal, options?.onConnected);
     },
   };
 }

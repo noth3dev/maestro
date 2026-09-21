@@ -65,6 +65,15 @@ describe("Carnegie Electron durable event bridge", () => {
     expect(subscriber.unsubscribeCount).toBe(2);
   });
 
+  it("forwards an upstream response acknowledgement while the stream is idle", async () => {
+    const messages: EventStreamMessage[] = [];
+    await pumpEventStream((_query, options) => {
+      options.onConnected?.();
+      return (async function* () { await Promise.resolve(); yield* [] as typeof event[]; })();
+    }, query, new AbortController().signal, (message) => messages.push(message));
+    expect(messages).toEqual([{ kind: "connected" }, { kind: "end" }]);
+  });
+
   it("emits events, completion, and non-abort errors without leaking credentials", async () => {
     const messages: EventStreamMessage[] = [];
     await pumpEventStream(async function* () { yield event; }, query, new AbortController().signal, (message) => messages.push(message));
