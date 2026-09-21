@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
-import { runMigrations, MigrationChecksumMismatchError } from "./migrate.js";
+import { readMigrationFiles, runMigrations, MigrationChecksumMismatchError } from "./migrate.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -54,25 +54,29 @@ describeDatabase("production migration runner", () => {
     }
   });
 
-  it("only applies newly added migration files on a later run, leaving already-applied ledger rows untouched", async () => {
+  it("only applies migration files added after the initial run, leaving prior ledger rows untouched", async () => {
     const { pool, drop } = await freshSchema();
     try {
       const first = await runMigrations(pool);
-      const firstAppliedAt = await pool.query<{ filename: string; applied_at: Date }>(
-        "SELECT filename, applied_at FROM schema_migrations ORDER BY filename",
+      const firstLedger = await pool.query<{ filename: string; checksum: string; applied_at: Date }>(
+        "SELECT filename, checksum, applied_at FROM schema_migrations ORDER BY filename",
       );
+      const added = {
+        filename: "9999_test_added_migration.sql",
+        sql: "CREATE TABLE migration_added_after_initial_run (id integer NOT NULL)",
+      };
 
-      // Re-running with the exact same migration set on disk must be a no-op
-      // (proves "additive, never reapplies") -- covered by the idempotency
-      // test above. This test proves the ledger rows themselves are stable
-      // (never rewritten) across that no-op run.
-      await runMigrations(pool);
-      const secondAppliedAt = await pool.query<{ filename: string; applied_at: Date }>(
-        "SELECT filename, applied_at FROM schema_migrations ORDER BY filename",
-      );
-
-      expect(secondAppliedAt.rows).toEqual(firstAppliedAt.rows);
+      const second = await runMigrations(pool, [...readMigrationFiles(), added]);
+      expect(second.applied).toEqual([added.filename]);
       expect(first.applied.length).toBeGreaterThan(0);
+
+      const priorLedger = await pool.query<{ filename: string; checksum: string; applied_at: Date }>(
+        "SELECT filename, checksum, applied_at FROM schema_migrations WHERE filename <> $1 ORDER BY filename",
+        [added.filename],
+      );
+      expect(priorLedger.rows).toEqual(firstLedger.rows);
+      const addedTable = await pool.query("SELECT to_regclass('migration_added_after_initial_run') AS exists");
+      expect(addedTable.rows[0]!.exists).not.toBeNull();
     } finally {
       await drop();
     }

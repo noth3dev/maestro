@@ -6,6 +6,18 @@ import type { Pool, PoolClient } from "pg";
 
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 
+export interface MigrationFile {
+  readonly filename: string;
+  readonly sql: string;
+}
+
+export function readMigrationFiles(): readonly MigrationFile[] {
+  return readdirSync(migrationsDirectory)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .map((filename) => ({ filename, sql: readFileSync(join(migrationsDirectory, filename), "utf8") }));
+}
+
 /**
  * A fixed, arbitrary 64-bit advisory-lock key reserved for this migration
  * runner only. Any two processes calling pg_advisory_lock with this exact
@@ -54,16 +66,12 @@ export async function ensureMigrationLedgerTable(client: PoolClient): Promise<vo
  * so migrations are never applied twice concurrently; the lock is always
  * released, even on error.
  */
-export async function runMigrations(pool: Pool): Promise<MigrationResult> {
+export async function runMigrations(pool: Pool, migrations: readonly MigrationFile[] = readMigrationFiles()): Promise<MigrationResult> {
   const client = await pool.connect();
   try {
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY.toString()]);
     try {
       await ensureMigrationLedgerTable(client);
-
-      const filenames = readdirSync(migrationsDirectory)
-        .filter((name) => name.endsWith(".sql"))
-        .sort();
 
       const recorded = await client.query<{ filename: string; checksum: string }>(
         "SELECT filename, checksum FROM schema_migrations",
@@ -71,8 +79,7 @@ export async function runMigrations(pool: Pool): Promise<MigrationResult> {
       const recordedByFilename = new Map(recorded.rows.map((row) => [row.filename, row.checksum]));
 
       const applied: string[] = [];
-      for (const filename of filenames) {
-        const sql = readFileSync(join(migrationsDirectory, filename), "utf8");
+      for (const { filename, sql } of migrations) {
         const checksum = computeMigrationChecksum(sql);
         const existingChecksum = recordedByFilename.get(filename);
         if (existingChecksum !== undefined) {
