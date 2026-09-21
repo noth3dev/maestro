@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { HeadCouncil } from "@maestro/contracts";
+import type { DepartmentPlan, HeadCouncil, HeadParticipation, MissionBundle } from "@maestro/contracts";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import { EmptyState } from "../components/EmptyState.js";
@@ -8,7 +8,13 @@ import {
   activateDepartmentHead,
   currentPlanningStage,
   decideHeadCouncil,
+  departmentIdFromHead,
+  departmentPlanDetails,
+  isMissionBundleSelectionValid,
+  loadDepartmentPlan,
   loadHeadCouncil,
+  loadMissionBundle,
+  missionBundleDetails,
   openHeadCouncil,
   revealHeadCouncil,
   selectOvertureRolesForContract,
@@ -25,27 +31,40 @@ export function Planning({ onNavigate }: { onNavigate: (view: ViewName) => void 
   const { goals, selectedGoalId } = useGoals();
   const goal = goals?.find((candidate) => candidate.goalId === selectedGoalId);
 
-  const [departmentId, setDepartmentId] = useState("");
+  const [requestedDepartmentId, setRequestedDepartmentId] = useState("");
   const [overtureDone, setOvertureDone] = useState(false);
-  const [headActive, setHeadActive] = useState(false);
+  const [headParticipation, setHeadParticipation] = useState<HeadParticipation | undefined>(undefined);
   const [council, setCouncil] = useState<HeadCouncil | undefined>(undefined);
+  const [departmentPlan, setDepartmentPlan] = useState<DepartmentPlan | undefined>(undefined);
+  const [missionBundle, setMissionBundle] = useState<MissionBundle | undefined>(undefined);
+  const [itemId, setItemId] = useState("");
   const [briefText, setBriefText] = useState({ interpretation: "", contribution: "", risks: "", dependencies: "" });
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [error, setError] = useState<unknown>(undefined);
 
-  useEffect(() => { setCouncil(undefined); setOvertureDone(false); setHeadActive(false); setError(undefined); }, [selectedGoalId]);
+  useEffect(() => {
+    setCouncil(undefined);
+    setDepartmentPlan(undefined);
+    setMissionBundle(undefined);
+    setItemId("");
+    setOvertureDone(false);
+    setHeadParticipation(undefined);
+    setError(undefined);
+  }, [selectedGoalId]);
 
   if (config === undefined) return <EmptyState />;
   if (goal === undefined) return <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard before planning it." />;
   if (goal.contractId === undefined) return <EmptyState title="No Task Contract launched" hint="This Goal has no launched Task Contract yet; planning starts once one launches." />;
 
   const contractId = goal.contractId;
+  const activatedDepartmentId = departmentIdFromHead(headParticipation);
+  const headActive = headParticipation?.status === "active";
   const stage = currentPlanningStage({
     overtureSelected: overtureDone,
     headActive,
     council,
-    departmentPlanExists: false,
-    missionBundleExists: false,
+    departmentPlanExists: departmentPlan !== undefined,
+    missionBundleExists: missionBundle !== undefined,
   });
 
   const run = async (label: string, action: () => Promise<void>) => {
@@ -101,23 +120,23 @@ export function Planning({ onNavigate }: { onNavigate: (view: ViewName) => void 
           <h2 id="planning-head">2. Head activation</h2>
           <label className="dash-field">
             <span>Department ID</span>
-            <input value={departmentId} onChange={(event) => setDepartmentId(event.target.value)} placeholder="e.g. engineering" />
+            <input value={activatedDepartmentId ?? requestedDepartmentId} onChange={(event) => setRequestedDepartmentId(event.target.value)} placeholder="e.g. engineering" disabled={headParticipation !== undefined} />
           </label>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={busy !== undefined || departmentId.trim() === ""}
+            disabled={busy !== undefined || requestedDepartmentId.trim() === "" || headParticipation !== undefined}
             onClick={() => void run("head", async () => {
-              await activateDepartmentHead(window.maestro.api, goal.goalId, {
+              const activated = await activateDepartmentHead(window.maestro.api, goal.goalId, {
                 projectId: config.projectId,
-                departmentId: departmentId.trim(),
+                departmentId: requestedDepartmentId.trim(),
                 requestedContribution: "Planning this Goal from Carnegie",
                 urgency: "normal",
                 contextScope: [goal.goalId],
                 budgetEffect: "none declared yet",
                 reason: "Operator-initiated planning from Carnegie",
               });
-              setHeadActive(true);
+              setHeadParticipation(activated);
             })}
           >
             {busy === "head" ? "Activating…" : "Activate Head"}
@@ -158,9 +177,9 @@ export function Planning({ onNavigate }: { onNavigate: (view: ViewName) => void 
                   <button
                     type="button"
                     className="btn"
-                    disabled={busy !== undefined || departmentId.trim() === "" || briefText.interpretation.trim() === "" || briefText.contribution.trim() === ""}
+                    disabled={busy !== undefined || activatedDepartmentId === undefined || briefText.interpretation.trim() === "" || briefText.contribution.trim() === ""}
                     onClick={() => void run("brief", async () => {
-                      await submitDepartmentBrief(window.maestro.api, council.councilId, departmentId.trim(), {
+                      await submitDepartmentBrief(window.maestro.api, council.councilId, activatedDepartmentId!, {
                         projectId: config.projectId,
                         brief: {
                           interpretation: briefText.interpretation.trim(),
@@ -209,7 +228,7 @@ export function Planning({ onNavigate }: { onNavigate: (view: ViewName) => void 
                         executionDisposition: "executable",
                         selectedDirection: "Proceed with the reviewed briefs",
                         rejectedAlternatives: [],
-                        departmentOwnership: departmentId.trim() === "" ? [] : [{ departmentId: departmentId.trim(), responsibility: "Own the reviewed scope" }],
+                        departmentOwnership: activatedDepartmentId === undefined ? [] : [{ departmentId: activatedDepartmentId, responsibility: "Own the reviewed scope" }],
                         workerPlan: [],
                         completionCriteria: ["Reviewed briefs satisfied"],
                         failureCriteria: ["Reviewed briefs contradicted by evidence"],
@@ -228,11 +247,80 @@ export function Planning({ onNavigate }: { onNavigate: (view: ViewName) => void 
               )}
 
               {council.state === "resolved" && (
-                <p className="dash-empty">
-                  Council resolved. Department Plan and Mission Bundle creation need a per-item authoring surface this
-                  screen does not build yet — read them once created via the Dashboard's Goal office detail, or create
-                  them through the CLI for now.
-                </p>
+                <>
+                  <section className="office-panel" aria-labelledby="planning-plan">
+                    <h2 id="planning-plan">4. Department Plan</h2>
+                    <p className="dash-empty">Load the durable plan for the Head department. No local plan is treated as accepted.</p>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy !== undefined || activatedDepartmentId === undefined}
+                      onClick={() => void run("department-plan", async () => {
+                        setDepartmentPlan(undefined);
+                        setMissionBundle(undefined);
+                        setItemId("");
+                        const loaded = await loadDepartmentPlan(window.maestro.api, council.councilId, activatedDepartmentId!, config.projectId);
+                        setDepartmentPlan(loaded);
+                      })}
+                    >
+                      {busy === "department-plan" ? "Loading…" : "Load Department Plan"}
+                    </button>
+                    {departmentPlan !== undefined && (() => {
+                      const details = departmentPlanDetails(departmentPlan);
+                      return (
+                        <div className="office-subpanel">
+                          <div className="office-panel-row"><span>version {details.scope.version}</span><span>{details.scope.contentHash}</span></div>
+                          <p>{departmentPlan.substance.contribution}</p>
+                          <p className="dash-empty">Scope: {details.scope.projectId} · Goal {details.scope.goalId} · Council {details.scope.councilId} · Department {details.scope.departmentId} · Head {details.scope.headRoleId}</p>
+                          <p className="dash-empty">Constraints: {details.constraints.join(" · ")}</p>
+                          <p className="dash-empty">Validation: {details.validation.join(" · ")}</p>
+                          <ul>
+                            {details.items.map((item) => (
+                              <li key={item.itemId}>
+                                <button type="button" className="btn btn-ghost" onClick={() => { setItemId(item.itemId); setMissionBundle(undefined); }}>{item.itemId}</button>
+                                <span>{item.kind}: {item.objective} · depends on: {item.dependsOn.join(", ") || "none"} · worker: {item.workerAssignment || "none"} · evidence: {item.evidenceReferences.join(", ") || "none"}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
+                  </section>
+                  <section className="office-panel" aria-labelledby="planning-bundle">
+                    <h2 id="planning-bundle">5. Mission Bundle</h2>
+                    <p className="dash-empty">Load a bundle only after the server has confirmed the exact plan version and item.</p>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy !== undefined || departmentPlan === undefined || activatedDepartmentId === undefined || !isMissionBundleSelectionValid(departmentPlan, itemId)}
+                      onClick={() => void run("mission-bundle", async () => {
+                        setMissionBundle(undefined);
+                        const loaded = await loadMissionBundle(window.maestro.api, council.councilId, activatedDepartmentId!, departmentPlan!.version, itemId, config.projectId);
+                        if (loaded.departmentId !== activatedDepartmentId || loaded.planVersion !== departmentPlan!.version || loaded.itemId !== itemId || loaded.planContentHash !== departmentPlan!.contentHash) {
+                          throw new Error("Mission Bundle identity does not match the loaded Department Plan");
+                        }
+                        setMissionBundle(loaded);
+                      })}
+                    >
+                      {busy === "mission-bundle" ? "Loading…" : "Load Mission Bundle"}
+                    </button>
+                    {missionBundle !== undefined && (() => {
+                      const details = missionBundleDetails(missionBundle);
+                      return (
+                        <div className="office-subpanel">
+                          <div className="office-panel-row"><span>{details.scope.itemId} · plan {details.scope.planVersion}</span><span>{details.scope.contentHash}</span></div>
+                          <p>Scope: Council {details.scope.councilId} · Department {details.scope.departmentId} · Parent {details.scope.parentRef} · Plan hash {details.scope.planContentHash}</p>
+                          <p>{details.validation.deliverable}</p>
+                          <p className="dash-empty">Worker inputs: {details.workerInputs.goalBrief} · role {details.workerInputs.role} · profile {details.workerInputs.profileRef} · models {details.workerInputs.approvedModels.join(", ")} · skills {details.workerInputs.allowedSkills.join(", ")} · tools {details.workerInputs.allowedTools.join(", ")} · paths {details.workerInputs.allowedPaths.join(", ")} · environment {details.workerInputs.environment.join(", ")}</p>
+                          <p className="dash-empty">Authority: {details.workerInputs.authorityBoundary.join(" · ")} · external: {details.workerInputs.externalServiceBoundary.join(" · ")} · data: {details.workerInputs.dataBoundary.join(" · ")}</p>
+                          <p className="dash-empty">Evidence: {details.validation.evidenceRequirements.join(" · ")} · validation: {details.validation.validationCriteria.join(" · ")} · termination: {details.validation.terminationConditions.join(" · ")}</p>
+                          <p className="dash-empty">Ceilings: cost {details.workerInputs.costCeiling} · time {details.workerInputs.timeCeiling} · retries {details.workerInputs.retryCeiling} · workers {details.workerInputs.workerCeiling}</p>
+                          <p className="dash-empty">Worker execution is the next task. This screen does not invent a Worker action.</p>
+                        </div>
+                      );
+                    })()}
+                  </section>
+                </>
               )}
             </div>
           )}

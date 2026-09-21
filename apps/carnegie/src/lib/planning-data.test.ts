@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
+import type { DepartmentPlan, MissionBundle } from "@maestro/contracts";
 import {
   activateDepartmentHead,
   currentPlanningStage,
   decideHeadCouncil,
+  departmentIdFromHead,
+  departmentPlanDetails,
+  isMissionBundleSelectionValid,
+  missionBundleDetails,
+  loadDepartmentPlan,
   loadHeadCouncil,
+  loadMissionBundle,
   openHeadCouncil,
   revealHeadCouncil,
   selectOvertureRolesForContract,
@@ -84,11 +91,117 @@ describe("planning stage transitions use the previous stage's real server IDs", 
     expect(loaded.state).toBe("resolved");
   });
 
+  it("reloads a Department Plan through its durable, project-scoped GET method", async () => {
+    const plan = { version: 4, departmentId: "engineering" };
+    const api = fakeApi({ getDepartmentPlan: vi.fn().mockResolvedValue(plan) });
+    const loaded = await loadDepartmentPlan(api, councilId, "engineering", projectId);
+    expect(api.getDepartmentPlan).toHaveBeenCalledWith(councilId, "engineering", projectId);
+    expect(loaded).toBe(plan);
+  });
+
+  it("reloads a Mission Bundle using the server plan version and real item identity", async () => {
+    const bundle = { itemId: "exec-1", planVersion: 4 };
+    const api = fakeApi({ getMissionBundle: vi.fn().mockResolvedValue(bundle) });
+    const loaded = await loadMissionBundle(api, councilId, "engineering", 4, "exec-1", projectId);
+    expect(api.getMissionBundle).toHaveBeenCalledWith(councilId, "engineering", 4, "exec-1", projectId);
+    expect(loaded).toBe(bundle);
+  });
+
   it("generates a fresh command id when the caller does not supply one", async () => {
     const api = fakeApi();
     await revealHeadCouncil(api, councilId, projectId);
     const [, , usedCommandId] = (api.revealCouncil as ReturnType<typeof vi.fn>).mock.calls[0] as [string, string, string];
     expect(usedCommandId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+describe("durable planning identity and rendering", () => {
+  const plan = {
+    projectId,
+    goalId,
+    councilId,
+    contractId,
+    departmentId: "engineering",
+    headRoleId: "head-eng",
+    version: 4,
+    councilSnapshotHash: "a".repeat(64),
+    decisionPacketHash: "b".repeat(64),
+    contractVersion: 2,
+    contractContentHash: "c".repeat(64),
+    contentHash: "d".repeat(64),
+    substance: {
+      contribution: "Implement the approved slice",
+      nonGoals: ["No unrelated refactor"],
+      items: [{ itemId: "item-1", kind: "execution", objective: "Ship the slice", dependsOn: ["item-0"], scoutQuestion: "", workerAssignment: "worker-1", evidenceReferences: ["evidence-1"] }],
+      requiredHandoffs: ["handoff-1"],
+      budgetCeiling: "10 USD",
+      expectedTime: "1 hour",
+      maxRetries: 2,
+      maxWorkers: 1,
+      gitRepository: "repo",
+      gitBranch: "main",
+      integrationPath: "pull-request",
+      risks: ["risk-1"],
+      safePausePoints: ["after-test"],
+      escalationTriggers: ["scope-change"],
+      evidenceReferences: ["evidence-1"],
+      validationCriteria: ["tests pass"],
+    },
+  } as unknown as DepartmentPlan;
+  const bundle = {
+    councilId,
+    departmentId: "engineering",
+    planVersion: 4,
+    planContentHash: "d".repeat(64),
+    itemId: "item-1",
+    parentRef: "plan:4:item-1",
+    contentHash: "e".repeat(64),
+    substance: {
+      role: "execution",
+      profileRef: "profile-1",
+      goalBrief: "Ship the approved slice",
+      taskDemand: { taskKinds: ["coding"], provenance: { taskContractRef: contractId, headDecisionRef: "decision-1" } },
+      approvedModels: ["model-1"],
+      allowedSkills: ["typescript"],
+      allowedTools: ["ipython"],
+      allowedPaths: ["apps/carnegie"],
+      environment: ["node"],
+      authorityBoundary: ["read-write worktree"],
+      externalServiceBoundary: ["none"],
+      dataBoundary: ["repository files only"],
+      costCeiling: "10 USD",
+      timeCeiling: "1 hour",
+      retryCeiling: 2,
+      workerCeiling: 1,
+      deliverable: "working code",
+      evidenceRequirements: ["test log"],
+      validationCriteria: ["tests pass"],
+      terminationConditions: ["tests pass"],
+    },
+  } as unknown as MissionBundle;
+
+  it("locks later planning calls to the department identity returned by Head activation", () => {
+    expect(departmentIdFromHead({ departmentId: "returned-department", goalId, headRoleId: "head", contractId, contextId: null, status: "active", activeSessionRef: "session" })).toBe("returned-department");
+    expect(departmentIdFromHead(undefined)).toBeUndefined();
+  });
+
+  it("accepts only an item that belongs to the loaded Department Plan", () => {
+    expect(isMissionBundleSelectionValid(plan, "item-1")).toBe(true);
+    expect(isMissionBundleSelectionValid(plan, "invented-item")).toBe(false);
+  });
+
+  it("exposes durable Department Plan scope, dependencies, worker assignments, and constraints", () => {
+    const details = departmentPlanDetails(plan);
+    expect(details.scope).toEqual(expect.objectContaining({ projectId, goalId, councilId, departmentId: "engineering", version: 4 }));
+    expect(details.items[0]).toEqual(expect.objectContaining({ itemId: "item-1", dependsOn: ["item-0"], workerAssignment: "worker-1", evidenceReferences: ["evidence-1"] }));
+    expect(details.constraints).toEqual(expect.arrayContaining(["10 USD", "1 hour", "main", "pull-request"]));
+  });
+
+  it("exposes durable Mission Bundle worker inputs, evidence, validation, and termination conditions", () => {
+    const details = missionBundleDetails(bundle);
+    expect(details.scope).toEqual(expect.objectContaining({ councilId, departmentId: "engineering", planVersion: 4, itemId: "item-1" }));
+    expect(details.workerInputs).toEqual(expect.objectContaining({ approvedModels: ["model-1"], allowedTools: ["ipython"], allowedPaths: ["apps/carnegie"], authorityBoundary: ["read-write worktree"] }));
+    expect(details.validation).toEqual(expect.objectContaining({ evidenceRequirements: ["test log"], validationCriteria: ["tests pass"], terminationConditions: ["tests pass"] }));
   });
 });
 
