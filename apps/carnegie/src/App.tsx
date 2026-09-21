@@ -7,6 +7,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { Setup } from "./views/Setup.js";
 import { Home } from "./views/Home.js";
 import { Dashboard } from "./views/Dashboard.js";
+import { Planning } from "./views/Planning.js";
 import { Channel } from "./views/Channel.js";
 import { Git } from "./views/Git.js";
 import { Floor } from "./views/Floor.js";
@@ -33,6 +34,7 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
     switch (view) {
       case "home": return <Home onNavigate={setView} mode={homeMode} onModeChange={setHomeMode} />;
       case "dashboard": return <Dashboard onNavigate={setView} eventState={eventState} />;
+      case "planning": return <Planning onNavigate={setView} />;
       case "channel": return <Channel onNavigate={setView} />;
       case "git": return <Git onBack={() => setView("channel")} />;
       case "floor": return <Floor onBack={() => setView("home")} eventCursor={eventState.cursor} />;

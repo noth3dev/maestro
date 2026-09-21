@@ -61,6 +61,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
           {navItem("home", "search", t.nav.search)}
           {navItem("inbox", "inbox", t.nav.inbox, pendingApprovalCount)}
           {navItem("dashboard", "layout-dashboard", t.nav.dashboard)}
+          {navItem("planning", "clipboard-list", t.nav.planning)}
           {navItem("flashmob", "zap", t.nav.flashmob)}
         </div>
         <div className="sb-fixed-menu-group" />
