@@ -90,6 +90,9 @@ export function createUnavailableNativeExecutionKernel(reason = "Model Gateway i
 export function createNativeExecutionKernel(options: NativeExecutionKernelOptions): ExecutionKernelPort & { close(): Promise<void> } {
   const executions = new Map<ExecutionRef, RuntimeRecord>();
   const invocations = new Map<InvocationRef, RuntimeRecord>();
+  const invocationExecutions = new Map<InvocationRef, ExecutionRef>();
+  const executionInvocations = new Map<ExecutionRef, Set<InvocationRef>>();
+  const pendingChildSpawns = new Map<ExecutionRef, number>();
   let closed = false;
 
   async function admitRoot(request: SpawnRequest): Promise<RuntimeRecord> {
@@ -124,20 +127,49 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     return invocations.get(invocation);
   }
 
+  async function maybeReleaseExecution(execution: ExecutionRef): Promise<void> {
+    const references = executionInvocations.get(execution);
+    if (references === undefined || references.size > 0 || (pendingChildSpawns.get(execution) ?? 0) > 0) return;
+    const record = executions.get(execution);
+    executionInvocations.delete(execution);
+    pendingChildSpawns.delete(execution);
+    if (record === undefined) return;
+    executions.delete(execution);
+    await record.runtime.close?.().catch(() => undefined);
+  }
+
   const kernel: ExecutionKernelPort & { close(): Promise<void> } = {
     async spawn(request): Promise<SpawnedInvocation> {
       if (closed) throw new Error("native execution kernel is closed");
       if (request.parent !== undefined) {
         const parent = runtimeForExecution(request.parent);
-        const spawned = await parent.runtime.spawn(request);
-        invocations.set(spawned.invocation, parent);
-        return spawned;
+        const pending = pendingChildSpawns.get(request.parent) ?? 0;
+        pendingChildSpawns.set(request.parent, pending + 1);
+        try {
+          const spawned = await parent.runtime.spawn(request);
+          const references = executionInvocations.get(request.parent);
+          if (references === undefined) {
+            await parent.runtime.release?.(spawned.invocation).catch(() => undefined);
+            throw new ExecutionKernelUnavailableError("prompt");
+          }
+          references.add(spawned.invocation);
+          invocations.set(spawned.invocation, parent);
+          invocationExecutions.set(spawned.invocation, request.parent);
+          return spawned;
+        } finally {
+          const remaining = (pendingChildSpawns.get(request.parent) ?? 1) - 1;
+          if (remaining === 0) pendingChildSpawns.delete(request.parent);
+          else pendingChildSpawns.set(request.parent, remaining);
+          await maybeReleaseExecution(request.parent);
+        }
       }
       const record = await admitRoot(request);
       try {
         const spawned = await record.runtime.spawn(request);
         executions.set(spawned.execution, record);
+        executionInvocations.set(spawned.execution, new Set([spawned.invocation]));
         invocations.set(spawned.invocation, record);
+        invocationExecutions.set(spawned.invocation, spawned.execution);
         return spawned;
       } catch (error) {
         await record.runtime.close?.().catch(() => undefined);
@@ -215,6 +247,11 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       if (record === undefined) return;
       await record.runtime.release?.(invocation);
       invocations.delete(invocation);
+      const execution = invocationExecutions.get(invocation);
+      invocationExecutions.delete(invocation);
+      if (execution === undefined) return;
+      executionInvocations.get(execution)?.delete(invocation);
+      await maybeReleaseExecution(execution);
     },
 
     async close() {
@@ -223,7 +260,10 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       const unique = new Set([...executions.values()]);
       await Promise.all([...unique].map((record) => record.runtime.close?.()));
       executions.clear();
+      executionInvocations.clear();
+      pendingChildSpawns.clear();
       invocations.clear();
+      invocationExecutions.clear();
       await options.gateway.close();
     },
   };

@@ -169,4 +169,78 @@ describe("native Control Plane execution kernel", () => {
     await kernel.close();
   });
 
+  it("evicts a released root execution and keeps duplicate release idempotent", async () => {
+    const { kernel } = createKernel();
+    const spawned = await kernel.spawn(rootRequest());
+
+    await kernel.release!(spawned.invocation);
+
+    await expect(kernel.getModelIdentity(spawned.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.observe(spawned.execution)).resolves.toEqual([]);
+    await expect(kernel.release!(spawned.invocation)).resolves.toBeUndefined();
+    await expect(kernel.release!("unknown-invocation" as never)).resolves.toBeUndefined();
+  });
+
+  it("retains a shared execution for a child until the child is released", async () => {
+    const { kernel } = createKernel();
+    const request = rootRequest();
+    const root = await kernel.spawn({
+      ...request,
+      grant: { ...request.grant!, remaining: { ...request.grant!.remaining, childCalls: 1 } },
+    });
+    const child = await kernel.spawn({
+      name: "native-child",
+      parent: root.execution,
+      prompt: "child prompt",
+      context: request.context,
+      grant: {
+        ...request.grant!,
+        grantId: "child-grant",
+        parentGrantId: request.grant!.grantId,
+        remaining: { ...request.grant!.remaining, childCalls: 0 },
+      },
+      modelPolicy: request.modelPolicy,
+      idempotencyKey: "child-command-1",
+    });
+
+    await kernel.release!(root.invocation);
+
+    expect(await kernel.getInvocationStatus(root.invocation)).toBe("unknown");
+    expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
+    expect((await kernel.observe(root.execution)).some((item) => item.invocation === child.invocation)).toBe(true);
+    await kernel.sendMessage(root.execution, child.invocation, "continue child");
+
+    await kernel.release!(child.invocation);
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+  });
+
+  it("keeps the root execution after child release until the root is released", async () => {
+    const { kernel } = createKernel();
+    const request = rootRequest();
+    const root = await kernel.spawn({
+      ...request,
+      grant: { ...request.grant!, remaining: { ...request.grant!.remaining, childCalls: 1 } },
+    });
+    const child = await kernel.spawn({
+      name: "native-child",
+      parent: root.execution,
+      prompt: "child prompt",
+      context: request.context,
+      grant: {
+        ...request.grant!,
+        grantId: "child-grant",
+        parentGrantId: request.grant!.grantId,
+        remaining: { ...request.grant!.remaining, childCalls: 0 },
+      },
+      modelPolicy: request.modelPolicy,
+      idempotencyKey: "child-command-1",
+    });
+
+    await kernel.release!(child.invocation);
+
+    expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
+    await kernel.release!(root.invocation);
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+  });
+
 });

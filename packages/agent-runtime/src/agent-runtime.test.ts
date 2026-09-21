@@ -829,4 +829,47 @@ describe("native Maestro agent runtime", () => {
     expect(receivedMessageCount!).toBeLessThanOrEqual(128);
     expect(await runtime.getInvocationStatus(spawned.invocation)).toBe("succeeded");
   });
+
+  it("keeps child observations after root release until the child is released", async () => {
+    const runtime = createMaestroAgentRuntime({ gateway: gateway(), binding, tools: new ToolRegistry() });
+    const context = {
+      operatorId: "operator-1",
+      projectId: "project-1",
+      goalId: "goal-1",
+      missionBundleId: "bundle-1",
+      policyVersion: "policy-1",
+      accountRef: "account-1",
+      authorityPolicyVersion: 2,
+      controlEpoch: "epoch-1",
+      budgetEffectCents: 0,
+    };
+    const parentGrant = { ...grant, grantId: "parent-grant", remaining: { ...grant.remaining, childCalls: 1 } };
+    const root = await runtime.spawn({
+      name: "parent",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "parent-1",
+      context,
+      grant: parentGrant,
+    });
+    const child = await runtime.spawn({
+      name: "child",
+      parent: root.execution,
+      prompt: "child prompt",
+      modelPolicy: ["fake/model-a"],
+      idempotencyKey: "child-1",
+      context,
+      grant: { ...parentGrant, grantId: "child-grant", parentGrantId: parentGrant.grantId, remaining: { ...parentGrant.remaining, childCalls: 0 } },
+    });
+
+    await runtime.release!(root.invocation);
+
+    expect(await runtime.getInvocationStatus(root.invocation)).toBe("unknown");
+    expect((await runtime.observe(root.execution)).map((item) => item.invocation)).toContain(child.invocation);
+    await runtime.sendMessage(root.execution, child.invocation, "continue child");
+
+    await runtime.release!(child.invocation);
+    await expect(runtime.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    await expect(runtime.observe(root.execution)).resolves.toEqual([]);
+    await expect(runtime.release!(child.invocation)).resolves.toBeUndefined();
+  });
 });
