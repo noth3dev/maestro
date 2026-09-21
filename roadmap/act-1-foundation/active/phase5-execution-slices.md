@@ -1,6 +1,8 @@
 # Phase 5 Execution Slices — Runtime, Device, Operator
 
 > **Current status (2026-09-07):** The original `hardening/lifecycle` baseline is historical. Use `roadmap/act-1-foundation/active/operations/task_plan.md` and `roadmap/act-1-foundation/active/operations/progress.md` for the current `main` pointer; this slice plan does not override the native backend migration or current repository evidence.
+>
+> **Superseded (2026-09-11):** [`../../../execution/plan-5.md`](../../../execution/plan-5.md) is the governing Phase 5 plan. This document's Slice 1 and Slice 2 have since landed as the native runtime cutover and the device authority path; plan-5.md's §4 S1–S5 have since landed the isolation proof, capacity/queue, safe pause/resume, and Portfolio Council slices this document left open. Do not execute this document; it is kept for provenance only.
 
 
 **Decision date:** 2026-09-05  
