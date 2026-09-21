@@ -148,4 +148,44 @@ describe("native execution kernel child registration race", () => {
     await kernel.close();
     expect(gateway.close).toHaveBeenCalledOnce();
   });
+
+  it("closes a root runtime that finishes admitting after kernel close", async () => {
+    const admissionEntered = deferred<void>();
+    const admissionGate = deferred<GatewayBinding>();
+    const runtimeClose = vi.fn(async () => undefined);
+    const runtime = {
+      async spawn() {
+        return { execution: "late-execution" as ExecutionRef, invocation: "late-invocation" as InvocationRef };
+      },
+      async close() {
+        await runtimeClose();
+      },
+    } as unknown as MaestroAgentRuntime;
+    vi.mocked(createMaestroAgentRuntime).mockReturnValue(runtime);
+    const gateway = {
+      admit: vi.fn(async () => {
+        admissionEntered.resolve();
+        return admissionGate.promise;
+      }),
+      close: vi.fn(async () => undefined),
+    } as unknown as ModelGatewayPort & { admit: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> };
+    const kernel = createNativeExecutionKernel({
+      gateway,
+      gatewayOperatorId: "operator-1",
+      accountRefs: { test: "test-account" },
+      dataPolicyHash: "policy-race",
+      tools: new ToolRegistry(),
+    });
+
+    const pendingSpawn = kernel.spawn(rootRequest());
+    await admissionEntered.promise;
+    const closing = kernel.close();
+    admissionGate.resolve(binding);
+
+    await expect(pendingSpawn).rejects.toThrow("native execution kernel is closed");
+    await closing;
+    expect(runtimeClose).toHaveBeenCalledOnce();
+    expect(gateway.close).toHaveBeenCalledOnce();
+  });
+
 });

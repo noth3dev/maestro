@@ -53,12 +53,15 @@ function requireAdmission(request: SpawnRequest): {
   return { modelRef, model, ...(accountRef === undefined ? {} : { accountRef }) };
 }
 
-function assertBindingMatches(binding: GatewayBinding, model: ModelIdentity, accountRef: string): void {
+function assertBindingMatches(binding: GatewayBinding, model: ModelIdentity, accountRef: string, dataPolicyHash: string): void {
   if (binding.provider.provider !== model.provider || binding.provider.id !== model.id) {
     throw new Error("model gateway returned an unexpected model identity");
   }
   if (binding.account.providerId !== model.provider || binding.account.accountRef !== accountRef) {
     throw new Error("model gateway returned an unexpected account binding");
+  }
+  if (binding.dataPolicyHash !== dataPolicyHash) {
+    throw new Error("model gateway returned an unexpected data policy");
   }
 }
 
@@ -112,7 +115,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       accountRef,
       dataPolicyHash: options.dataPolicyHash,
     });
-    assertBindingMatches(binding, admission.model, accountRef);
+    assertBindingMatches(binding, admission.model, accountRef, options.dataPolicyHash);
     return {
       binding,
       runtime: createMaestroAgentRuntime({ gateway: options.gateway, binding, tools: options.tools, ...(request.workerProfile === undefined ? {} : { workerProfile: request.workerProfile }), closeGateway: false }),
@@ -169,7 +172,9 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       }
       const record = await admitRoot(request);
       try {
+        if (closed) throw new Error("native execution kernel is closed");
         const spawned = await record.runtime.spawn(request);
+        if (closed) throw new Error("native execution kernel is closed");
         executions.set(spawned.execution, record);
         rootInvocations.set(spawned.execution, spawned.invocation);
         executionInvocations.set(spawned.execution, new Set([spawned.invocation]));

@@ -124,6 +124,14 @@ describe("native Control Plane execution kernel", () => {
     expect(gateway.admit).toHaveBeenCalledOnce();
   });
 
+  it("rejects a gateway binding whose data policy differs from the host policy", async () => {
+    const gateway = fakeGateway();
+    gateway.admit.mockResolvedValueOnce({ ...binding, dataPolicyHash: "gateway-policy" });
+    const { kernel } = createKernel(gateway);
+    await expect(kernel.spawn(rootRequest())).rejects.toThrow("unexpected data policy");
+    expect(gateway.admit).toHaveBeenCalledOnce();
+  });
+
   it("closes a shared gateway once after multiple native runtimes are admitted", async () => {
     const { gateway, kernel } = createKernel();
     await kernel.spawn(rootRequest());
