@@ -3,7 +3,7 @@ import { startEmbeddedDatabase } from "@maestro/persistence";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, configuredEmbeddedDatabasePort, resolveInstalledControlPlaneEntry, resolveLocalConnection, resolvePackagedAppEntry, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, buildNodeChildEnvironment, configuredEmbeddedDatabasePort, resolveInstalledControlPlaneEntry, resolveLocalConnection, resolvePackagedAppEntry, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
 import { resolveCodexAppServerCommand } from "@maestro/model-provider-openai";
 
 function secretStore(initial?: string): LocalSecretStore {
@@ -16,6 +16,19 @@ function secretStore(initial?: string): LocalSecretStore {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+describe("Electron child runtime environment", () => {
+  it("runs script children as Node when composed inside Electron", () => {
+    expect(buildNodeChildEnvironment({ PATH: "/usr/bin" }, "33.4.11")).toMatchObject({
+      PATH: "/usr/bin",
+      ELECTRON_RUN_AS_NODE: "1",
+    });
+  });
+
+  it("does not opt normal Node children into Electron mode", () => {
+    expect(buildNodeChildEnvironment({ PATH: "/usr/bin" }, undefined)).toEqual({ PATH: "/usr/bin" });
+  });
+});
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });

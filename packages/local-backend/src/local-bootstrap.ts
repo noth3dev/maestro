@@ -848,8 +848,17 @@ export function buildLocalControlPlaneEnvironment(options: LocalControlPlaneLaun
   });
 }
 
+export function buildNodeChildEnvironment(
+  inheritedEnvironment: NodeJS.ProcessEnv = process.env,
+  electronVersion: string | undefined = process.versions.electron,
+): NodeJS.ProcessEnv {
+  const environment = { ...inheritedEnvironment };
+  if (electronVersion !== undefined) environment.ELECTRON_RUN_AS_NODE = "1";
+  return environment;
+}
+
 function cleanEnvironment(values: Record<string, string | undefined>): Record<string, string | undefined> {
-  const safe: Record<string, string | undefined> = {};
+  const safe = buildNodeChildEnvironment({}, process.versions.electron);
   for (const name of ["PATH", "HOME", "LANG", "NODE_OPTIONS"]) {
     const value = process.env[name];
     if (value !== undefined) safe[name] = value;

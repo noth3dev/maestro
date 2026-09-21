@@ -9,6 +9,7 @@ import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
 import { EVENT_STREAM_CHANNELS, pumpEventStream, type EventStreamMessage } from "./event-stream-bridge.js";
 import { abortAllEventStreams, abortEventStreamsForSender, type ActiveEventStream } from "./event-stream-lifecycle.js";
+import { DEFAULT_ZOOM_FACTOR, zoomFactorAfterInput } from "./window-settings.js";
 
 const dirName = dirname(fileURLToPath(import.meta.url));
 
@@ -151,12 +152,11 @@ function createWindow(): void {
   // WSLg (and some other Linux/X11 setups) doesn't report the host's real display scale to
   // Chromium, so content renders at 1x while the rest of the desktop is scaled up — hence "too
   // small". Start bigger by default and let the user fine-tune with the normal browser zoom keys.
-  window.webContents.setZoomFactor(1.35);
+  window.webContents.setZoomFactor(DEFAULT_ZOOM_FACTOR);
   window.webContents.on("before-input-event", (_event, input) => {
     if (!input.control || input.type !== "keyDown") return;
-    if (input.key === "=" || input.key === "+") window.webContents.setZoomFactor(window.webContents.getZoomFactor() + 0.1);
-    else if (input.key === "-") window.webContents.setZoomFactor(Math.max(0.5, window.webContents.getZoomFactor() - 0.1));
-    else if (input.key === "0") window.webContents.setZoomFactor(1.35);
+    const nextZoomFactor = zoomFactorAfterInput(window.webContents.getZoomFactor(), input.key);
+    if (nextZoomFactor !== window.webContents.getZoomFactor()) window.webContents.setZoomFactor(nextZoomFactor);
   });
 
   window.webContents.on("console-message", (_event, _level, message) => console.log("[renderer]", message));

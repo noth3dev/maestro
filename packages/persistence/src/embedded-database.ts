@@ -26,8 +26,10 @@ export interface EmbeddedDatabaseHandle {
 export function buildEmbeddedDatabaseChildEnvironment(
   options: EmbeddedDatabaseOptions,
   inheritedEnvironment: NodeJS.ProcessEnv = process.env,
+  electronVersion: string | undefined = process.versions.electron,
 ): NodeJS.ProcessEnv {
   const environment = { ...inheritedEnvironment };
+  if (electronVersion !== undefined) environment.ELECTRON_RUN_AS_NODE = "1";
   environment.MAESTRO_EMBEDDED_DATABASE_DIR = options.dataDir;
   environment.MAESTRO_EMBEDDED_DATABASE_MARKER = join(options.dataDir, "embedded-postgres", "server.json");
   if (options.host !== undefined) environment.MAESTRO_EMBEDDED_DATABASE_HOST = options.host;

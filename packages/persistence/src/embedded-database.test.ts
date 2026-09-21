@@ -18,4 +18,13 @@ describe("embedded database child environment", () => {
     );
     expect(environment.MAESTRO_EMBEDDED_DATABASE_PORT).toBe("55434");
   });
+
+  it("runs the detached database as Node when composed inside Electron", () => {
+    const environment = buildEmbeddedDatabaseChildEnvironment(
+      { dataDir: "/tmp/maestro-test", detached: true },
+      { PATH: "/usr/bin" },
+      "33.4.11",
+    );
+    expect(environment.ELECTRON_RUN_AS_NODE).toBe("1");
+  });
 });
