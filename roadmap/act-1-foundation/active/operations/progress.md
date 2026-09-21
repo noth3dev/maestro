@@ -4799,3 +4799,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 
 
 - E5 Task 3 final gate: the fresh root non-integration suite passes 301 files / 2,086 tests with 9 skipped; Carnegie build, focused 3-file / 19-test coverage, changed-file ESLint, and `git diff --check` pass. The independent no-edit §0.3 review verified status preservation, retry identity, pagination, boundary checks, cancel control, and no fake success, returning `REVIEW: PASS`. Live Electron acceptance remains pending under the recorded backend/provider blocker; the operator-updated plan now adds Task 1.5 zero-config local bootstrap before later live checks.
+
+
+- Task 1.5 first implementation slice after operator plan update: `initializeCarnegieConnection` now forwards `LocalBootstrapStepEvent`, Electron starts the window before local bootstrap finishes, exposes `maestro:bootstrap:status` plus push events, and the renderer displays the current bootstrap message while loading. RED/GREEN bootstrap boundary coverage passes 7 tests; Carnegie build passes. Full root verification is pending; live auto-bootstrap remains unclaimed until Docker or packaged local binaries are available.
+
+
+- Task 1.5 remediation and final gate: fixed truthful bootstrap status after manual save/clear, rendered labels for message-less local steps, guarded overlapping renderer refreshes, and added 3 progress-label regression tests. Focused coverage passes 2 files / 10 tests; Carnegie build, changed-file lint, and diff-check pass; fresh root non-integration suite passes 302 files / 2,090 tests with 9 skipped; independent final §0.3 review returned `REVIEW: PASS`. Live first-run Electron acceptance remains pending because this sandbox lacks a usable Control Plane/provider listener or packaged local binaries.

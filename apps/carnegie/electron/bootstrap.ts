@@ -1,4 +1,4 @@
-import { resolveLocalConnection, type ConnectionEnvironment, type ConnectionState, type LocalBootstrapOptions } from "@maestro/local-backend";
+import { resolveLocalConnection, type ConnectionEnvironment, type ConnectionState, type LocalBootstrapOptions, type LocalBootstrapStepEvent } from "@maestro/local-backend";
 import type { ConnectionConfig } from "./store.js";
 
 export interface CarnegieBootstrapResult {
@@ -11,6 +11,7 @@ export interface CarnegieBootstrapOptions {
   load: () => ConnectionConfig | undefined;
   save: (config: ConnectionConfig) => void;
   resolveLocalConnection?: (options: LocalBootstrapOptions) => Promise<ConnectionState>;
+  onStep?: (event: LocalBootstrapStepEvent) => void;
 }
 
 function hasConnectionEnvironmentOverride(env: ConnectionEnvironment): boolean {
@@ -26,7 +27,11 @@ export async function initializeCarnegieConnection(options: CarnegieBootstrapOpt
 
   let local: ConnectionState;
   try {
-    local = await (options.resolveLocalConnection ?? resolveLocalConnection)({ env: options.env, includeProjectId: true });
+    local = await (options.resolveLocalConnection ?? resolveLocalConnection)({
+      env: options.env,
+      includeProjectId: true,
+      ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
+    });
   } catch (error) {
     return { setupError: error instanceof Error ? error.message : "Local automatic setup failed" };
   }

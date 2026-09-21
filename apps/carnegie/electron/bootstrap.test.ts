@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { initializeCarnegieConnection } from "./bootstrap.js";
 import type { ConnectionConfig } from "./store.js";
+import type { LocalBootstrapStepEvent } from "@maestro/local-backend";
 
 const bootstrapped: ConnectionConfig = {
   apiUrl: "http://127.0.0.1:4310",
@@ -23,6 +24,25 @@ describe("initializeCarnegieConnection", () => {
     });
     expect(resolveLocalConnection).toHaveBeenCalledWith({ env: {}, includeProjectId: true });
     expect(save).toHaveBeenCalledWith(bootstrapped);
+  });
+
+  it("forwards real local bootstrap progress to the Electron startup boundary", async () => {
+    const events: LocalBootstrapStepEvent[] = [];
+    const resolveLocalConnection = vi.fn(async (options: { onStep?: (event: LocalBootstrapStepEvent) => void }) => {
+      options.onStep?.({ step: "docker-check", status: "started" });
+      options.onStep?.({ step: "docker-check", status: "completed", message: "Docker is ready" });
+      return { kind: "configured" as const, apiUrl: bootstrapped.apiUrl, token: bootstrapped.token, projectId: bootstrapped.projectId };
+    });
+
+    await expect(initializeCarnegieConnection({ env: {}, load: () => undefined, save: vi.fn(), resolveLocalConnection, onStep: (event) => events.push(event) })).resolves.toEqual({ config: bootstrapped });
+    expect(resolveLocalConnection).toHaveBeenCalledWith(expect.objectContaining({ env: {}, includeProjectId: true, onStep: expect.any(Function) }));
+    const forwarded = vi.mocked(resolveLocalConnection).mock.calls[0]?.[0].onStep;
+    forwarded?.({ step: "postgres-ready", status: "completed" });
+    expect(events).toEqual([
+      { step: "docker-check", status: "started" },
+      { step: "docker-check", status: "completed", message: "Docker is ready" },
+      { step: "postgres-ready", status: "completed" },
+    ]);
   });
 
   it("does not bootstrap over an existing saved connection", async () => {

@@ -92,6 +92,14 @@ contextBridge.exposeInMainWorld("maestro", {
     save: (config: { apiUrl: string; token: string; projectId: string }) => ipcRenderer.invoke("maestro:config:save", config),
     clear: () => ipcRenderer.invoke("maestro:config:clear"),
   },
+  bootstrap: {
+    status: () => ipcRenderer.invoke("maestro:bootstrap:status"),
+    onStatus: (listener: (status: unknown) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: unknown) => listener(status);
+      ipcRenderer.on("maestro:bootstrap-status", handler);
+      return () => ipcRenderer.removeListener("maestro:bootstrap-status", handler);
+    },
+  },
   preferences: {
     get: () => ipcRenderer.invoke("maestro:preferences:get"),
     save: (preferences: { theme: string; locale: string }) => ipcRenderer.invoke("maestro:preferences:save", preferences),

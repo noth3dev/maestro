@@ -25,6 +25,7 @@ import type { HomeMode } from "./homeMode.js";
 import type { EventQuery } from "@maestro/api-client";
 import { createRendererEventStream } from "../electron/event-stream-bridge.js";
 import { useDurableEvents, type UseDurableEventsResult } from "./useDurableEvents.js";
+import { bootstrapProgressText } from "./bootstrap-status.js";
 
 function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
   const [view, setView] = useState<ViewName>("home");
@@ -83,8 +84,17 @@ function ConnectedWorkspace({ projectId }: { projectId: string }) {
 }
 
 function Connected() {
-  const { config, loading } = useConnection();
-  if (loading) return <div className="app" aria-busy="true" />;
+  const { config, loading, bootstrap } = useConnection();
+  if (loading) {
+    return (
+      <div className="app" aria-busy="true" aria-live="polite">
+        <div className="home-main">
+          <div className="home-title">starting local workspace</div>
+          <p className="form-hint">{bootstrapProgressText(bootstrap)}</p>
+        </div>
+      </div>
+    );
+  }
   if (config === undefined) return <Setup />;
   return <ConnectedWorkspace projectId={config.projectId} />;
 }

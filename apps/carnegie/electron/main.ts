@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import type { ApiClient } from "@maestro/api-client";
+import type { LocalBootstrapStepEvent } from "@maestro/local-backend";
 import type { WebContents } from "electron";
 import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type ConnectionConfig } from "./store.js";
 import { initializeCarnegieConnection } from "./bootstrap.js";
@@ -37,6 +38,11 @@ if (process.platform === "linux") app.commandLine.appendSwitch("password-store",
 
 let api: ApiClient | undefined;
 let setupError: string | undefined;
+type BootstrapStatus =
+  | { phase: "starting"; step?: LocalBootstrapStepEvent }
+  | { phase: "ready" }
+  | { phase: "setup-required"; reason?: string };
+let bootstrapStatus: BootstrapStatus = { phase: "starting" };
 type EventStreamSender = Pick<WebContents, "isDestroyed" | "send" | "once" | "removeListener">;
 const activeEventStreams = new Map<string, ActiveEventStream>();
 
@@ -55,6 +61,34 @@ function sendEventStreamMessage(sender: EventStreamSender, streamId: string, mes
 function connect(config: ConnectionConfig | undefined): void {
   stopAllEventStreams();
   api = config === undefined ? undefined : createBridgedApi(config);
+}
+
+function publishBootstrapStatus(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send("maestro:bootstrap-status", bootstrapStatus);
+  }
+}
+
+async function initializeConnection(): Promise<void> {
+  try {
+    const result = await initializeCarnegieConnection({
+      env: process.env,
+      load: loadConnectionConfig,
+      save: saveConnectionConfig,
+      onStep: (step) => {
+        bootstrapStatus = { phase: "starting", step };
+        publishBootstrapStatus();
+      },
+    });
+    setupError = result.setupError;
+    connect(result.config);
+    bootstrapStatus = result.config === undefined ? { phase: "setup-required", ...(result.setupError === undefined ? {} : { reason: result.setupError }) } : { phase: "ready" };
+  } catch (error) {
+    setupError = error instanceof Error ? error.message : "Could not load the saved connection";
+    connect(undefined);
+    bootstrapStatus = { phase: "setup-required", reason: setupError };
+  }
+  publishBootstrapStatus();
 }
 
 // ponytail: never delegate maximize to the native call — under WSLg it's relayed through the
@@ -211,19 +245,25 @@ function registerIpcHandlers(): void {
     return config === undefined ? undefined : { apiUrl: config.apiUrl, projectId: config.projectId };
   });
 
+  ipcMain.handle("maestro:bootstrap:status", () => bootstrapStatus);
+
   ipcMain.handle("maestro:config:error", () => setupError);
 
   ipcMain.handle("maestro:config:save", (_event, config: ConnectionConfig) => {
     const publicConfig = saveConnectionConfig(config);
     setupError = undefined;
     connect(config);
+    bootstrapStatus = { phase: "ready" };
+    publishBootstrapStatus();
     return publicConfig;
   });
 
   ipcMain.handle("maestro:config:clear", () => {
     clearConnectionConfig();
-    setupError = undefined;
+    setupError = "Control Plane connection is not configured";
     connect(undefined);
+    bootstrapStatus = { phase: "setup-required", reason: setupError };
+    publishBootstrapStatus();
   });
 
   ipcMain.handle("maestro:preferences:get", () => loadPreferences());
@@ -368,17 +408,10 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(async () => {
-  try {
-    const result = await initializeCarnegieConnection({ env: process.env, load: loadConnectionConfig, save: saveConnectionConfig });
-    setupError = result.setupError;
-    connect(result.config);
-  } catch (error) {
-    setupError = error instanceof Error ? error.message : "Could not load the saved connection";
-    connect(undefined);
-  }
+app.whenReady().then(() => {
   registerIpcHandlers();
   createWindow();
+  void initializeConnection();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

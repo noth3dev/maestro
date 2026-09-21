@@ -19,6 +19,11 @@ export interface Preferences {
   locale: LocalePreference;
 }
 
+export type BootstrapStatus =
+  | { phase: "starting"; step?: { step: string; status: string; message?: string } }
+  | { phase: "ready" }
+  | { phase: "setup-required"; reason?: string };
+
 export interface MaestroBridge {
   api: BridgedApi;
   config: {
@@ -26,6 +31,10 @@ export interface MaestroBridge {
     error(): Promise<string | undefined>;
     save(config: ConnectionInput): Promise<PublicConnectionConfig>;
     clear(): Promise<void>;
+  };
+  bootstrap: {
+    status(): Promise<BootstrapStatus>;
+    onStatus(listener: (status: BootstrapStatus) => void): () => void;
   };
   preferences: {
     get(): Promise<Preferences>;
