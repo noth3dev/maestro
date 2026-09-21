@@ -1,0 +1,1096 @@
+# E5 Carnegie GUI Full Project-Execution Implementation Plan
+
+> **For agentic workers:** Execute this plan task-by-task. Use the project's existing worktree, TDD, independent review, live Electron verification, and `execution/PENDING_LIVE_CHECKS.md` rules. Every unchecked item is an explicit implementation or verification task.
+
+**Goal:** Make Carnegie a real operator console that can converse with the Concertmaster, create and confirm a Task Contract, launch it, and drive a real project through planning, workers, Git, approvals, evidence, certification, and final reporting.
+
+**Architecture:** Keep the Control Plane, contracts, authority gateway, leases/fencing, and durable PostgreSQL state as the source of truth. Carnegie is a renderer over a narrowly allow-listed Electron bridge; every write uses the existing API client's command/idempotency and version/hash fields. Build the GUI as a sequence of real vertical slices, not as disconnected mock screens. A capability is complete only when the real API, success state, rejection state, and live Electron path work.
+
+**Tech Stack:** Electron 33, React 19, TypeScript, Vite, `@maestro/api-client`, `@maestro/contracts`, Vitest, Playwright, axe-core, the existing local backend, PostgreSQL, and the existing durable event stream.
+
+**Spec:** This document's `Capability Contract`, `Scope`, and `Definition of Done` sections are the E5 specification.
+
+## Global Constraints
+
+- Never store or expose plaintext provider tokens; keep the existing encrypted main-process storage boundary.
+- Never bypass `AuthorizedEffectExecutor`, authority levels, approval records, leases, fencing, idempotency, or append-only evidence rules.
+- Never use illustrative/example data for an operation that claims to be live.
+- Every renderer write must cross the explicit `exposedApiMethods` allow-list in `apps/carnegie/electron/apiBridge.ts`.
+- Every mutating command must use a fresh command/idempotency ID and the server's expected version/content hash where the contract requires it.
+- Confirmation and launch remain separate actions. A user confirmation must not silently execute the project.
+- Destructive controls require a visible effect summary and an explicit confirmation step; `emergency-stop` must remain visually and semantically distinct.
+- Existing Act 1 backend contracts are the implementation boundary. If a required backend contract is absent, record the exact dependency in `execution/PENDING_LIVE_CHECKS.md` and do not fake the feature.
+- Flashmob/Vanguard and Muze/Transcription remain outside the Act 1 execution slice unless their roadmap gates are explicitly opened by the project owner.
+- Any change touching `apps/carnegie/src/**` must run `cd apps/carnegie && npm run build`.
+- Any claim that the project progressed must include a real task ID/Goal ID, durable state evidence, and the actual live outcome.
+- Keep the existing dark neutral palette, terracotta accent, native cursor, frameless window chrome, and work-area maximization behavior.
+
+## Scope
+
+E5 covers the full operator path for implemented Act 1 capabilities:
+
+1. Connection and local bootstrap.
+2. Project and Goal selection.
+3. Goal-less natural-language conversation with the Concertmaster.
+4. Task Contract drafting, review, edit, confirmation, and launch.
+5. Overture role selection and Head/Council planning.
+6. Department Plan and Mission Bundle inspection.
+7. Worker spawn, observation, messaging, cancellation, worktree, integration, acceptance, and certification.
+8. Goal lifecycle controls and durable event/projection updates.
+9. Critical-action request, approval, denial, and full-access selection.
+10. Inbox and Concertmaster discussion.
+11. Channel messaging and roster state.
+12. Git integration state and evidence/certification/report views.
+13. Metronome, Encore Council, budget, billing, persona, and arrangements reads/actions that have real backend contracts.
+14. Accessibility, loading/error/empty states, reconnect behavior, responsive layouts, and live Electron acceptance.
+
+E5 does not silently invent a durable Luthiery registry or Flashmob backend. Those screens must become honest, useful blocked/dependency states until their contracts exist.
+
+## Capability Contract
+
+For each capability, the implementation must record one of these statuses in `execution/e5-capability-matrix.md`:
+
+- **Live:** the GUI calls a real Control Plane method, renders durable success state, renders a real error/rejection, and has a passing automated or live test.
+- **Partial:** a real read or write works, but a required next action is not yet available; the missing method and dependency are named.
+- **Backend-blocked:** the GUI has no valid server contract or durable source of truth; no fake action is presented.
+- **Out-of-scope:** excluded by an explicit roadmap gate, with the gate and re-entry condition named.
+
+The primary E5 acceptance scenario is:
+
+```text
+open Carnegie
+→ connect to the real project
+→ speak to the Concertmaster without selecting a Goal
+→ receive a real response and Task Contract draft
+→ edit the draft
+→ confirm the exact version and content hash
+→ explicitly launch
+→ observe Goal/Plan/Council/Department/Mission state
+→ spawn or observe a real Worker
+→ inspect its real evidence and Git state
+→ approve a real critical action when policy requires it
+→ accept/certify the work
+→ read the durable evidence bundle and Concertmaster report
+→ see the project progress in the live Dashboard, Inbox, Channel, and Git views
+```
+
+## Current Code Map
+
+- Electron bridge: `apps/carnegie/electron/apiBridge.ts`, `preload.cts`, `main.ts`, `store.ts`, `connection-storage.ts`.
+- Renderer shell: `apps/carnegie/src/App.tsx`, `views.ts`, `connection.tsx`, `goals.tsx`, `useDurableEvents.ts`.
+- Existing task authoring: `apps/carnegie/src/views/Home.tsx`, `src/lib/task-contract-authoring.ts`.
+- Existing Dashboard reads/controls: `apps/carnegie/src/views/Dashboard.tsx`, `useGoalDetail.ts`, `useGoalWorkers.ts`, `useGoalEvidenceBundle.ts`, `views/panels/useGoalProjection.ts`, `src/lib/goal-control.ts`.
+- Existing connected views: `Channel.tsx`, `Inbox.tsx`, `EvidenceLog.tsx`, `Git.tsx`, `Floor.tsx`, `Billing.tsx`, `Settings.tsx`, `Persona.tsx`, `Arrangements.tsx`.
+- Existing honest blocked views: `Luthiery.tsx`, `Flashmob.tsx`, `FlashmobSession.tsx`.
+- API client contracts: `packages/api-client/src/client.ts`, `packages/api-client/src/methods/**`, `packages/contracts/src/**`.
+- Control Plane routes/services: `apps/control-plane/src/**` and the corresponding API-client method modules.
+- Live verification records: `execution/PENDING_LIVE_CHECKS.md` and `roadmap/act-1-foundation/active/operations/progress.md`.
+
+## API Surface Required by E5
+
+The bridge must expose every API-client method used by the GUI, while retaining the separate renderer event subscription path. The missing bridge methods currently needed for full execution include the following groups:
+
+- Workspace: `createGoal`, `listProjects`, `getOrganization`, `provisionProjectAccess`.
+- Conversation: `getConversation`, `cancelConversation`, `listConversationEvents`.
+- Goal: `transitionGoal`, `activateHead`.
+- Planning: `getCouncil`, `getDepartmentPlan`, `getMissionBundle`.
+- Worker: `getWorker`, `observeWorker`, `sendWorkerMessage`.
+- Git: `freezeGoalIntegrationRevision`, `advanceWorkerIntegration`.
+- Evidence: `captureEvidence`, `getEvidenceDump`.
+- Oversight: `scanMetronome`, `raiseMetronomeChallenge`, `resolveMetronomeChallenge`, `runEncoreReview`.
+- Reporting: `generateConcertmasterReport`.
+- Account/provider paths only when their existing UI contract requires them: `startAccountLogin`, `accountLoginStatus`, `cancelAccountLogin`, `logoutAccount`.
+
+The implementation must compare this list against the current `ApiClient` interface before editing it. Do not expose a method merely because it exists; expose it only when a real Carnegie screen and acceptance path use it.
+
+---
+
+## Task 0: Establish the E5 baseline and capability matrix
+
+**Files:**
+- Create: `execution/e5-capability-matrix.md`
+- Modify: `execution/PENDING_LIVE_CHECKS.md`
+- Modify: `roadmap/act-1-foundation/active/operations/progress.md`
+- Inspect: `apps/carnegie/src/App.tsx`, `apps/carnegie/src/views/*.tsx`, `apps/carnegie/electron/apiBridge.ts`, `packages/api-client/src/client.ts`, `packages/contracts/src/**`
+
+**Deliverable:** A source-backed matrix that prevents a “looks implemented” screen from being counted as a working feature.
+
+- [ ] **Step 1: Capture the clean baseline.**
+
+  Run:
+
+  ```bash
+  git status --short
+  cd apps/carnegie && npm run build
+  cd ../.. && npm test -- --runInBand
+  ```
+
+  Record the exact results. If the repository's Vitest command does not accept `--runInBand`, run `npm test` and record that exact command instead.
+
+- [ ] **Step 2: Enumerate every reachable view.**
+
+  Read `apps/carnegie/src/App.tsx`, `src/views.ts`, and `src/components/Sidebar.tsx`. Put every view, nested panel, action button, and current navigation route in the matrix. Include Home, Dashboard, Channel, Git, Floor, Inbox, Evidence Log, Billing, Settings, Persona, Arrangements, Luthiery, Flashmob, and Flashmob Session.
+
+- [ ] **Step 3: Map each action to a typed API method or an explicit blocked reason.**
+
+  For every button and form, record the exact method name, input type, command/idempotency argument, expected version/hash requirement, and resulting durable read. A row with no method must say `backend-blocked` or `out-of-scope`; it must not say “wire later.”
+
+- [ ] **Step 4: Add the first live blockers to `execution/PENDING_LIVE_CHECKS.md`.**
+
+  Preserve existing entries. Add only verified blockers, each with: reproduction command, observed error, owning layer, smallest next check, and the evidence file or log path.
+
+- [ ] **Step 5: Record the baseline in `progress.md`.**
+
+  Prefix the entry `E5 baseline:` and include the build/test commands, current bridge method count, current connected-view count, and the matrix path.
+
+- [ ] **Step 6: Commit the planning artifact.**
+
+  ```bash
+  git add execution/e5-capability-matrix.md execution/PENDING_LIVE_CHECKS.md roadmap/act-1-foundation/active/operations/progress.md
+  git commit -m "docs(carnegie): establish E5 GUI capability matrix"
+  ```
+
+**Acceptance:** The matrix contains a row for every visible user action and no row claims Live without a real API method and evidence path.
+
+---
+
+## Task 1: Complete the secure Electron API bridge
+
+**Files:**
+- Modify: `apps/carnegie/electron/apiBridge.ts`
+- Modify: `apps/carnegie/electron/preload.cts`
+- Modify: `apps/carnegie/src/global.d.ts`
+- Test: `apps/carnegie/electron/apiBridge.test.ts`
+- Inspect: `packages/api-client/src/client.ts`
+
+**Interfaces:**
+
+```ts
+export const exposedApiMethods: readonly (keyof ApiClient)[];
+export type ExposedApiMethod = (typeof exposedApiMethods)[number];
+export function isExposedMethod(method: string): method is ExposedApiMethod;
+export function createBridgedApi(config: ConnectionConfig): ApiClient;
+```
+
+- [ ] **Step 1: Write failing allow-list tests.**
+
+  Add tests that assert every method needed by Tasks 3–11 is exposed, `streamEvents` is not callable as a renderer property, an unknown method is rejected, and the bridge does not return the connection token.
+
+  ```ts
+  it("exposes every method used by the full project execution path", () => {
+    expect(isExposedMethod("createConversation")).toBe(true);
+    expect(isExposedMethod("sendConversationTurn")).toBe(true);
+    expect(isExposedMethod("getCouncil")).toBe(true);
+    expect(isExposedMethod("observeWorker")).toBe(true);
+    expect(isExposedMethod("advanceWorkerIntegration")).toBe(true);
+    expect(isExposedMethod("getEvidenceDump")).toBe(true);
+    expect(isExposedMethod("generateConcertmasterReport")).toBe(true);
+  });
+  ```
+
+- [ ] **Step 2: Run the bridge tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/electron/apiBridge.test.ts
+  ```
+
+  Expected: failure for at least the currently missing methods.
+
+- [ ] **Step 3: Extend the explicit allow-list and generated renderer type.**
+
+  Add only the methods backed by `ApiClient` and used by a planned Carnegie surface. Keep `streamEvents` on the existing `events.subscribe` bridge. Keep credentials in the main process.
+
+- [ ] **Step 4: Run bridge tests and the Carnegie build.**
+
+  ```bash
+  npx vitest run apps/carnegie/electron/apiBridge.test.ts
+  cd apps/carnegie && npm run build
+  ```
+
+- [ ] **Step 5: Commit the bridge slice.**
+
+  ```bash
+  git add apps/carnegie/electron/apiBridge.ts apps/carnegie/electron/preload.cts apps/carnegie/src/global.d.ts apps/carnegie/electron/apiBridge.test.ts
+  git commit -m "feat(carnegie): expose full project execution API safely"
+  ```
+
+**Acceptance:** A renderer can call every method required by the E5 vertical slice, cannot call arbitrary methods, and cannot read plaintext connection credentials.
+
+---
+
+## Task 2: Add shared renderer action, error, confirmation, and reconnect primitives
+
+**Files:**
+- Create: `apps/carnegie/src/components/AsyncState.tsx`
+- Create: `apps/carnegie/src/components/ConfirmActionDialog.tsx`
+- Create: `apps/carnegie/src/components/ApiErrorNotice.tsx`
+- Create: `apps/carnegie/src/lib/command-id.ts`
+- Modify: `apps/carnegie/src/useDurableEvents.ts`
+- Modify: `apps/carnegie/src/App.tsx`
+- Test: `apps/carnegie/src/components/AsyncState.test.tsx`
+- Test: `apps/carnegie/src/components/ConfirmActionDialog.test.tsx`
+- Test: `apps/carnegie/src/lib/command-id.test.ts`
+
+**Interfaces:**
+
+```ts
+export function newCommandId(): string;
+export function classifyApiError(error: unknown): { title: string; detail: string; retryable: boolean };
+export function ConfirmActionDialog(props: {
+  open: boolean;
+  title: string;
+  effectSummary: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): JSX.Element | null;
+```
+
+- [ ] **Step 1: Write tests for stable error classification and explicit confirmation.**
+
+  Cover `ApiError` status/code extraction, stale-version errors as retryable, authority denial as non-retryable until approval, missing connection as actionable, and dialog keyboard cancel/confirm behavior.
+
+- [ ] **Step 2: Run the focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/components/AsyncState.test.tsx apps/carnegie/src/components/ConfirmActionDialog.test.tsx apps/carnegie/src/lib/command-id.test.ts
+  ```
+
+- [ ] **Step 3: Implement the primitives without adding a state library.**
+
+  Reuse the existing CSS tokens and `ApiError` type. Generate command IDs with `crypto.randomUUID()`. Make the dialog focusable, labelled, keyboard-operable, and impossible to confirm by accidental Enter on an unrelated control.
+
+- [ ] **Step 4: Add reconnect visibility to the existing durable event stream.**
+
+  Preserve the last durable cursor, show stale state while reconnecting, and let each affected screen retry without resetting the selected Goal.
+
+- [ ] **Step 5: Run tests, renderer typecheck, and build.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/components/AsyncState.test.tsx apps/carnegie/src/components/ConfirmActionDialog.test.tsx apps/carnegie/src/lib/command-id.test.ts
+  cd apps/carnegie && npm run build
+  ```
+
+- [ ] **Step 6: Commit.**
+
+  ```bash
+  git add apps/carnegie/src/components apps/carnegie/src/lib/command-id.ts apps/carnegie/src/useDurableEvents.ts apps/carnegie/src/App.tsx
+  git commit -m "feat(carnegie): add shared safe action states"
+  ```
+
+**Acceptance:** Every later screen can show loading, stale, retryable failure, authority denial, and explicit confirmation using one tested pattern.
+
+---
+
+## Task 3: Finish the real Concertmaster conversation and Task Contract flow
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Home.tsx`
+- Modify: `apps/carnegie/src/lib/task-contract-authoring.ts`
+- Modify: `apps/carnegie/src/global.d.ts`
+- Create: `apps/carnegie/src/lib/conversation-data.ts`
+- Test: `apps/carnegie/src/lib/task-contract-authoring.test.ts`
+- Test: `apps/carnegie/src/lib/conversation-data.test.ts`
+- Test: `apps/carnegie/src/views/Home.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type GoalLessIntakeApi = Pick<ApiClient,
+  "listModels" | "createConversation" | "getConversation" |
+  "listConversationEvents" | "sendConversationTurn" | "cancelConversation"
+>;
+
+export type ConversationMessage = {
+  id: string;
+  role: "operator" | "concertmaster" | "system";
+  content: string;
+  createdAt: string;
+};
+
+export async function loadConversation(
+  api: GoalLessIntakeApi,
+  input: { conversationId: string; projectId: string },
+): Promise<ConversationMessage[]>;
+```
+
+- [ ] **Step 1: Add RED tests for the complete no-Goal path.**
+
+  Test that Home creates a conversation only once, sends real turns with idempotency keys, renders the real assistant response, parses a valid `TaskContract` draft, keeps non-JSON responses visible without fabricating a draft, and reloads a conversation from durable events.
+
+- [ ] **Step 2: Add RED tests for draft safety.**
+
+  Test edit → `updateTaskContract(expectedVersion)` → exact hash confirmation → separate `launchTaskContract`, including stale-version failure and launch failure. Test that a confirmed draft cannot be edited and a launched draft cannot be launched twice.
+
+- [ ] **Step 3: Run the focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/task-contract-authoring.test.ts apps/carnegie/src/lib/conversation-data.test.ts apps/carnegie/src/views/Home.test.tsx
+  ```
+
+- [ ] **Step 4: Implement the conversation transcript and follow-up composer.**
+
+  Keep the selected Goal optional. For no Goal, use `createConversation({ projectId, goalId: null, model })`, then `sendConversationTurn`. For a selected Goal, preserve the existing direct Task Contract authoring path unless the Control Plane contract explicitly supports a Goal-attached conversation. Display conversation ID, turn status, real response, and retry action.
+
+- [ ] **Step 5: Implement the review/confirm/launch state machine.**
+
+  Use the existing `submitHomeBrief`, `updateTaskContractDraft`, `confirmTaskContractDraft`, and `launchTaskContractDraft` helpers. Do not replace server version/content-hash checks with client-only state. Add visible transition labels: `conversation`, `draft`, `confirmed`, `launched`, `rejected`.
+
+- [ ] **Step 6: Add an explicit “continue conversation” path after a non-draft response.**
+
+  The operator must be able to answer the Concertmaster instead of being forced to create a local placeholder draft. A local draft is allowed only when the server returns a valid contract or when the existing attached-Goal contract explicitly permits direct authoring.
+
+- [ ] **Step 7: Run the focused tests and Carnegie build.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/task-contract-authoring.test.ts apps/carnegie/src/lib/conversation-data.test.ts apps/carnegie/src/views/Home.test.tsx
+  cd apps/carnegie && npm run build
+  ```
+
+- [ ] **Step 8: Perform the first real Electron conversation.**
+
+  Start Carnegie with the existing CDP command, connect to a real project, enter a bounded non-destructive request, read the real Concertmaster response, and save the screenshot plus conversation/contract IDs. If the Control Plane reports `Durable store is unavailable` or another real blocker, record it verbatim in `execution/PENDING_LIVE_CHECKS.md`.
+
+- [ ] **Step 9: Commit.**
+
+  ```bash
+  git add apps/carnegie/src/views/Home.tsx apps/carnegie/src/lib/task-contract-authoring.ts apps/carnegie/src/lib/conversation-data.ts apps/carnegie/src/global.d.ts apps/carnegie/src/**/*.test.tsx apps/carnegie/src/**/*.test.ts
+  git commit -m "feat(carnegie): complete Concertmaster task intake flow"
+  ```
+
+**Acceptance:** An operator can speak to the real assistant, see the real response, review/edit a real Task Contract, confirm its exact server version/hash, and launch it through two explicit actions. No fake assistant message or fake launch is possible.
+
+---
+
+## Task 4: Make Goal creation, selection, Dashboard, projection, and lifecycle real
+
+**Files:**
+- Modify: `apps/carnegie/src/goals.tsx`
+- Modify: `apps/carnegie/src/views/Dashboard.tsx`
+- Modify: `apps/carnegie/src/views/Floor.tsx`
+- Modify: `apps/carnegie/src/lib/goal-control.ts`
+- Create: `apps/carnegie/src/lib/goal-operations.ts`
+- Test: `apps/carnegie/src/lib/goal-control.test.ts`
+- Test: `apps/carnegie/src/lib/goal-operations.test.ts`
+- Test: `apps/carnegie/src/views/Dashboard.test.tsx`
+
+**Interfaces:**
+
+```ts
+export async function loadGoalsAfterLaunch(
+  api: Pick<ApiClient, "listGoals">,
+  input: { projectId: string },
+): Promise<GoalList>;
+
+export async function runGoalControlAction(
+  api: Pick<ApiClient, "pauseGoal" | "resumeGoal" | "stopGoal" | "emergencyStopGoal">,
+  input: { goalId: string; projectId: string; action: GoalControlAction; expectedVersion: number },
+): Promise<GoalResult>;
+```
+
+- [ ] **Step 1: Add RED tests for selected Goal persistence and refresh.**
+
+  Cover initial selection, explicit selection changes, selected Goal disappearing, refresh after a durable event, and retaining selection during reconnect.
+
+- [ ] **Step 2: Add RED tests for all lifecycle actions.**
+
+  Assert exact input shape, expected version, command ID, confirmation requirement for stop/emergency-stop, and a refresh after success. Assert stale version and authority denial are rendered as actionable errors rather than generic failure.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/goal-control.test.ts apps/carnegie/src/lib/goal-operations.test.ts apps/carnegie/src/views/Dashboard.test.tsx
+  ```
+
+- [ ] **Step 4: Implement real Goal creation/selection and lifecycle controls.**
+
+  Use `createGoal` only when the server contract says the launched contract produces a Goal directly; otherwise read the resulting Goal from the durable event/projection. Never invent a local Goal ID. Add explicit confirmations for stop and emergency-stop.
+
+- [ ] **Step 5: Render durable projection sections.**
+
+  The Dashboard must show Goal state, durable version, budget, workers, certifications, evidence, Metronome, Encore, final report, and stale/reconnect status from their real methods. The Floor must use `getProjection` with the selected Goal and current event cursor.
+
+- [ ] **Step 6: Run tests and build.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/goal-control.test.ts apps/carnegie/src/lib/goal-operations.test.ts apps/carnegie/src/views/Dashboard.test.tsx
+  cd apps/carnegie && npm run build
+  ```
+
+- [ ] **Step 7: Live-check Goal lifecycle.**
+
+  On a disposable or explicitly bounded real Goal, select it, pause/resume it, and verify the durable version and event cursor change. Do not stop or emergency-stop a real operator Goal without explicit confirmation. Record unavailable operations honestly.
+
+- [ ] **Step 8: Commit.**
+
+  ```bash
+  git add apps/carnegie/src/goals.tsx apps/carnegie/src/views/Dashboard.tsx apps/carnegie/src/views/Floor.tsx apps/carnegie/src/lib/goal-control.ts apps/carnegie/src/lib/goal-operations.ts
+  git commit -m "feat(carnegie): drive real goal lifecycle and projection"
+  ```
+
+**Acceptance:** Goal state is durable and refreshable; lifecycle actions reach the real Control Plane with concurrency and authority safeguards; Dashboard and Floor never show locally invented operational state.
+
+---
+
+## Task 5: Add the Overture → Head → Council → Department Plan → Mission Bundle flow
+
+**Files:**
+- Create: `apps/carnegie/src/views/Planning.tsx`
+- Create: `apps/carnegie/src/lib/planning-data.ts`
+- Modify: `apps/carnegie/src/views/Home.tsx`
+- Modify: `apps/carnegie/src/views/Dashboard.tsx`
+- Modify: `apps/carnegie/src/views.ts`
+- Modify: `apps/carnegie/src/components/Sidebar.tsx`
+- Test: `apps/carnegie/src/lib/planning-data.test.ts`
+- Test: `apps/carnegie/src/views/Planning.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type PlanningApi = Pick<ApiClient,
+  "selectOvertureRoles" | "activateHead" | "createCouncil" |
+  "getCouncil" | "submitCouncilBrief" | "revealCouncil" | "decideCouncil" |
+  "getDepartmentPlan" | "getMissionBundle" | "createDepartmentPlan" | "createMissionBundle"
+>;
+
+export type PlanningStage = "overture" | "head" | "council" | "department-plan" | "mission-bundle" | "ready-for-worker";
+```
+
+- [ ] **Step 1: Add RED tests for stage transitions and server IDs.**
+
+  Test that each stage uses the ID produced by the previous stage, does not permit a later action before its prerequisite, passes project/Goal scope, sends command IDs, and reloads each stage through a durable GET method.
+
+- [ ] **Step 2: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/planning-data.test.ts apps/carnegie/src/views/Planning.test.tsx
+  ```
+
+- [ ] **Step 3: Implement Overture role selection.**
+
+  Show the server's available roles and selected roles. Submit via `selectOvertureRoles` and display the returned selection ID/version. Do not treat a local checkbox selection as accepted until the server returns success.
+
+- [ ] **Step 4: Implement Head activation and Council creation.**
+
+  Show department/Head status, call `activateHead` where the contract permits, create a Council with the selected Goal and departments, and display the Council's durable state.
+
+- [ ] **Step 5: Implement brief/reveal/decide with explicit action state.**
+
+  Provide separate buttons for submit brief, reveal, and decide. Show authority and validation errors next to the affected stage. Do not auto-reveal or auto-decide after a brief submission.
+
+- [ ] **Step 6: Implement Department Plan and Mission Bundle reads/actions.**
+
+  Render plan version, item IDs, dependencies, scope, worker inputs, and stopping conditions. Call `getDepartmentPlan` and `getMissionBundle`; use creation methods only where the server contract requires an explicit command.
+
+- [ ] **Step 7: Link planning output to the Worker screen.**
+
+  The “ready for worker” action must carry real `councilId`, `departmentId`, `planVersion`, and `itemId`; it must not use sample IDs.
+
+- [ ] **Step 8: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/planning-data.test.ts apps/carnegie/src/views/Planning.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Planning.tsx apps/carnegie/src/lib/planning-data.ts apps/carnegie/src/views/Home.tsx apps/carnegie/src/views/Dashboard.tsx apps/carnegie/src/views.ts apps/carnegie/src/components/Sidebar.tsx
+  git commit -m "feat(carnegie): add durable planning workflow"
+  ```
+
+**Acceptance:** A real launched task can be progressed through the actual planning records without skipping a server stage or presenting a local-only plan.
+
+---
+
+## Task 6: Add real Worker execution, observation, messaging, and cancellation
+
+**Files:**
+- Create: `apps/carnegie/src/views/Workers.tsx`
+- Create: `apps/carnegie/src/lib/worker-data.ts`
+- Modify: `apps/carnegie/src/views/Dashboard.tsx`
+- Modify: `apps/carnegie/src/views/Inbox.tsx`
+- Modify: `apps/carnegie/src/views.ts`
+- Modify: `apps/carnegie/src/components/Sidebar.tsx`
+- Test: `apps/carnegie/src/lib/worker-data.test.ts`
+- Test: `apps/carnegie/src/views/Workers.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type WorkerApi = Pick<ApiClient,
+  "spawnWorker" | "getWorker" | "observeWorker" | "sendWorkerMessage" |
+  "cancelWorker" | "listWorkersForGoal" | "createWorkerWorktree"
+>;
+
+export async function loadWorkers(api: WorkerApi, goalId: string, projectId: string): Promise<WorkerList>;
+export async function cancelWorkerWithConfirmation(api: WorkerApi, workerId: string, projectId: string): Promise<Worker>;
+```
+
+- [ ] **Step 1: Add RED tests for worker identity and scope.**
+
+  Assert that a Worker is spawned only from real planning IDs, that worker list entries reload through `listWorkersForGoal`, that observation uses `getWorker`/`observeWorker`, and that messages carry the selected Worker ID and command ID.
+
+- [ ] **Step 2: Add RED tests for cancellation and stale worker state.**
+
+  Require explicit confirmation, reject cancellation of an already terminal Worker without pretending success, and refresh after cancellation.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/views/Workers.test.tsx
+  ```
+
+- [ ] **Step 4: Implement worker list/detail tabs.**
+
+  Show status, department, mission item, lease/fencing status if returned, latest observation, cost/budget, and terminal reason. Use a real empty state when no Worker exists.
+
+- [ ] **Step 5: Implement spawn, observe, message, and cancel actions.**
+
+  `spawnWorker` must receive the actual `councilId`, `departmentId`, and server-defined `SpawnWorkerInput`. `observeWorker` and `sendWorkerMessage` must remain scoped to the selected project/Goal. Use the shared confirmation dialog for cancellation.
+
+- [ ] **Step 6: Implement durable refresh.**
+
+  Refresh workers from the event cursor and provide a manual retry. Do not poll aggressively or replace a newer durable state with an older response.
+
+- [ ] **Step 7: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/views/Workers.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Workers.tsx apps/carnegie/src/lib/worker-data.ts apps/carnegie/src/views/Dashboard.tsx apps/carnegie/src/views/Inbox.tsx apps/carnegie/src/views.ts apps/carnegie/src/components/Sidebar.tsx
+  git commit -m "feat(carnegie): add real worker operations"
+  ```
+
+**Acceptance:** The GUI can start only a real Worker from a real Mission Bundle, observe its real status, send a real scoped message, and cancel it through the authority path.
+
+---
+
+## Task 7: Add Git integration, worktree, acceptance, certification, and evidence
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Git.tsx`
+- Modify: `apps/carnegie/src/views/EvidenceLog.tsx`
+- Modify: `apps/carnegie/src/views/Inbox.tsx`
+- Create: `apps/carnegie/src/views/WorkerReview.tsx`
+- Create: `apps/carnegie/src/lib/integration-data.ts`
+- Test: `apps/carnegie/src/lib/integration-data.test.ts`
+- Test: `apps/carnegie/src/views/Git.test.tsx`
+- Test: `apps/carnegie/src/views/WorkerReview.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type IntegrationApi = Pick<ApiClient,
+  "createGoalIntegrationBranch" | "createDepartmentBranch" |
+  "createWorkerWorktree" | "advanceWorkerIntegration" |
+  "freezeGoalIntegrationRevision" | "getGitIntegrationState" |
+  "acceptWorker" | "certifyWorker" | "certifyConditionalWorker" |
+  "captureEvidence" | "getEvidenceBundle" | "getEvidenceDump" |
+  "listCertifications"
+>;
+```
+
+- [ ] **Step 1: Add RED tests for branch/worktree identity.**
+
+  Test that Goal integration branch creation is scoped to the selected Goal and base revision, Worker worktree creation uses the real Worker ID, and integration advances cannot run without the server's current revision/input.
+
+- [ ] **Step 2: Add RED tests for review gates.**
+
+  Require real evidence and test results before acceptance/certification UI enables. Verify conditional certification displays its condition and never looks like a passed certification.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/integration-data.test.ts apps/carnegie/src/views/Git.test.tsx apps/carnegie/src/views/WorkerReview.test.tsx
+  ```
+
+- [ ] **Step 4: Implement Git state and integration actions.**
+
+  Add controls for creating the Goal branch, department branch, Worker worktree, advancing integration, and freezing a revision only when the corresponding backend state allows it. Render repository path, branch, base revision, frozen revision, commit SHA, and rejection reason from the API.
+
+- [ ] **Step 5: Implement Worker acceptance and certification.**
+
+  Show evidence bundle, test output references, diff/integration state, and the exact certification input before enabling `acceptWorker`, `certifyWorker`, or `certifyConditionalWorker`. Require explicit review confirmation.
+
+- [ ] **Step 6: Implement evidence capture and read-only evidence dump.**
+
+  Add `captureEvidence` only for the documented evidence input. Render `getEvidenceBundle`, `listCertifications`, and `getEvidenceDump` as durable records. Do not allow editing or deleting evidence.
+
+- [ ] **Step 7: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/integration-data.test.ts apps/carnegie/src/views/Git.test.tsx apps/carnegie/src/views/WorkerReview.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Git.tsx apps/carnegie/src/views/EvidenceLog.tsx apps/carnegie/src/views/Inbox.tsx apps/carnegie/src/views/WorkerReview.tsx apps/carnegie/src/lib/integration-data.ts
+  git commit -m "feat(carnegie): connect git evidence and certification workflow"
+  ```
+
+**Acceptance:** A Worker can progress from real worktree/integration state to real acceptance and certification, and the evidence log shows immutable durable records.
+
+---
+
+## Task 8: Complete approval, authority, Inbox, and Concertmaster discussion
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Inbox.tsx`
+- Create: `apps/carnegie/src/views/Approvals.tsx`
+- Create: `apps/carnegie/src/lib/approval-data.ts`
+- Modify: `apps/carnegie/src/lib/inbox-data.ts`
+- Test: `apps/carnegie/src/lib/approval-data.test.ts`
+- Test: `apps/carnegie/src/views/Inbox.test.tsx`
+- Test: `apps/carnegie/src/views/Approvals.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type ApprovalApi = Pick<ApiClient,
+  "listInbox" | "requestCriticalAction" | "approveAndRunCriticalAction" |
+  "denyCriticalAction" | "selectFullAccessMode" | "createConversation" |
+  "sendConversationTurn"
+>;
+```
+
+- [ ] **Step 1: Add RED tests for approval expiry and idempotency.**
+
+  Cover expired approval rejection, wrong command ID rejection, double approval handling, denial, and discussion with the Concertmaster retaining Goal/project scope.
+
+- [ ] **Step 2: Add RED tests for authority escalation.**
+
+  Show the requested effect, capability scope, duration, and reason. Require explicit selection before `selectFullAccessMode`; never treat a UI toggle as an active capability session before the server confirms it.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/approval-data.test.ts apps/carnegie/src/views/Inbox.test.tsx apps/carnegie/src/views/Approvals.test.tsx
+  ```
+
+- [ ] **Step 4: Implement Inbox grouping.**
+
+  Group pending critical actions, worker/certification decisions, and Concertmaster discussions. Each item must show target, effect, reason, scope, expiry, and current state from `listInbox`.
+
+- [ ] **Step 5: Implement request/approve/deny/full-access flows.**
+
+  Use the existing `approveInboxItem` and `denyInboxItem` patterns, but show the exact command and expiry values used. Route approval through `approveAndRunCriticalAction`; route denial through `denyCriticalAction`.
+
+- [ ] **Step 6: Implement real discussion.**
+
+  Create or resume a scoped conversation and render the actual assistant response. Do not use a local canned answer. Preserve the pending approval while discussion is open.
+
+- [ ] **Step 7: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/approval-data.test.ts apps/carnegie/src/views/Inbox.test.tsx apps/carnegie/src/views/Approvals.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Inbox.tsx apps/carnegie/src/views/Approvals.tsx apps/carnegie/src/lib/approval-data.ts apps/carnegie/src/lib/inbox-data.ts
+  git commit -m "feat(carnegie): complete approval and authority workflows"
+  ```
+
+**Acceptance:** A real critical action can be requested, discussed, approved and run, or denied, with expiry, scope, authority, and durable state visible to the operator.
+
+---
+
+## Task 9: Make Channel, durable events, and live refresh useful for project progress
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Channel.tsx`
+- Modify: `apps/carnegie/src/useDurableEvents.ts`
+- Modify: `apps/carnegie/src/views/EvidenceLog.tsx`
+- Create: `apps/carnegie/src/lib/event-data.ts`
+- Test: `apps/carnegie/src/lib/event-data.test.ts`
+- Test: `apps/carnegie/src/views/Channel.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type EventApi = Pick<ApiClient, "getChannel" | "postChannelMessage" | "listEvents">;
+export async function loadEventPage(api: EventApi, query: EventQuery): Promise<GoalEventPage>;
+```
+
+- [ ] **Step 1: Add RED tests for channel scope and message idempotency.**
+
+  Assert selected Goal/project/channel selector are passed exactly, Enter submits one message, retries reuse the same command ID only when the API contract says the request is retry-safe, and errors leave the draft text intact.
+
+- [ ] **Step 2: Add RED tests for event cursor handling.**
+
+  Assert out-of-order events do not overwrite newer state, reconnect resumes from the last durable cursor, and stale state is announced accessibly.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/event-data.test.ts apps/carnegie/src/views/Channel.test.tsx
+  ```
+
+- [ ] **Step 4: Implement live Channel refresh and roster actions.**
+
+  Replace clickable non-button roster toggle with a labelled button. Refresh the selected channel after a successful message and on relevant durable events. Keep all message content server-backed.
+
+- [ ] **Step 5: Implement event filtering and evidence links.**
+
+  Let the operator filter by Goal, event type, cursor range, and time window using `EventQuery`. Link execution/certification events to the relevant Worker, Git, Evidence, Inbox, or Dashboard state.
+
+- [ ] **Step 6: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/event-data.test.ts apps/carnegie/src/views/Channel.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Channel.tsx apps/carnegie/src/useDurableEvents.ts apps/carnegie/src/views/EvidenceLog.tsx apps/carnegie/src/lib/event-data.ts
+  git commit -m "feat(carnegie): connect live channels and durable event refresh"
+  ```
+
+**Acceptance:** Operators can communicate in a real Goal channel and see durable project progress update without losing messages or cursor ordering.
+
+---
+
+## Task 10: Complete settings, provider/model configuration, billing, budget, and session recovery
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Settings.tsx`
+- Modify: `apps/carnegie/src/views/Billing.tsx`
+- Modify: `apps/carnegie/src/connection.tsx`
+- Create: `apps/carnegie/src/lib/settings-data.ts`
+- Test: `apps/carnegie/src/lib/settings-data.test.ts`
+- Test: `apps/carnegie/src/views/Settings.test.tsx`
+- Test: `apps/carnegie/src/views/Billing.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type SettingsApi = Pick<ApiClient,
+  "getSettings" | "updateSettingsPreferences" | "updateSettingsModelPool" |
+  "updateSettingsAuthorityDefaults" | "listModels" | "listProviderConnections" |
+  "loginProvider" | "logoutProvider" | "getBudgetSummary" | "getBillingSummary"
+>;
+```
+
+- [ ] **Step 1: Add RED tests for provider and settings writes.**
+
+  Test optimistic state is not treated as saved, server-returned settings replace stale local state, provider tokens never render or enter logs, and failed updates leave the previous saved values visible.
+
+- [ ] **Step 2: Add RED tests for billing/budget empty and error states.**
+
+  Cover no Goal, no billing record, provider error, currency/cents formatting, and stale budget state.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/settings-data.test.ts apps/carnegie/src/views/Settings.test.tsx apps/carnegie/src/views/Billing.test.tsx
+  ```
+
+- [ ] **Step 4: Implement settings/provider model pool.**
+
+  Keep provider credential input in a secure form, submit to the main-process-backed API route, render only provider identity/status, and clear the input after a successful or failed submit. Add model availability checks before conversation creation.
+
+- [ ] **Step 5: Implement authority defaults with visible safety copy.**
+
+  Show current defaults and their effect. Require save confirmation for changes that raise authority. Display the server-returned settings version.
+
+- [ ] **Step 6: Implement budget and billing reads.**
+
+  Use `getBudgetSummary(goalId, query)` and `getBillingSummary(projectId)`; render reserved, actual, remaining, provider, and period fields exactly as returned. Never infer cost from UI-local timers.
+
+- [ ] **Step 7: Test session recovery.**
+
+  Clear/invalid session, API 401, durable store unavailable, and reconnect must each show a distinct recovery action without printing tokens.
+
+- [ ] **Step 8: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/settings-data.test.ts apps/carnegie/src/views/Settings.test.tsx apps/carnegie/src/views/Billing.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Settings.tsx apps/carnegie/src/views/Billing.tsx apps/carnegie/src/connection.tsx apps/carnegie/src/lib/settings-data.ts
+  git commit -m "feat(carnegie): connect settings provider and billing state"
+  ```
+
+**Acceptance:** The operator can configure the real provider/model and authority settings, recover from connection failure, and read real budget/billing state without token leakage.
+
+---
+
+## Task 11: Complete Persona and Act 3 read-only surfaces without faking mutation
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Persona.tsx`
+- Modify: `apps/carnegie/src/views/Arrangements.tsx`
+- Create: `apps/carnegie/src/lib/persona-data.ts`
+- Test: `apps/carnegie/src/lib/persona-data.test.ts`
+- Test: `apps/carnegie/src/views/Persona.test.tsx`
+- Test: `apps/carnegie/src/views/Arrangements.test.tsx`
+
+**Interfaces:**
+
+```ts
+export type PersonaApi = Pick<ApiClient, "getPersona" | "proposePersona" | "editPersonaCandidate">;
+export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovementDigestsForGoal" | "listEncoreCouncilRounds">;
+```
+
+- [ ] **Step 1: Add RED tests for server-backed candidate editing.**
+
+  Test `getPersona` load, `proposePersona`, `editPersonaCandidate`, candidate version conflicts, and the difference between a proposal and an active persona.
+
+- [ ] **Step 2: Add RED tests for arrangement read-only truth.**
+
+  Test active/candidate/Encore/negative-evidence tabs use `getArrangements` and do not enable a mutation that lacks a GUI/API contract.
+
+- [ ] **Step 3: Run focused tests and confirm RED.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/persona-data.test.ts apps/carnegie/src/views/Persona.test.tsx apps/carnegie/src/views/Arrangements.test.tsx
+  ```
+
+- [ ] **Step 4: Implement Persona proposal/edit states.**
+
+  Render current persona, candidate, version, status, rationale, and server errors. Use explicit “propose” and “save candidate edit” actions; do not label a candidate active until the backend says so.
+
+- [ ] **Step 5: Implement Arrangements evidence links.**
+
+  Show content hash, evaluation stages, metric deltas, rollout status, Council judgments, and negative evidence. Use an explicit Act 3 read-only badge.
+
+- [ ] **Step 6: Run tests, build, and commit.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/lib/persona-data.test.ts apps/carnegie/src/views/Persona.test.tsx apps/carnegie/src/views/Arrangements.test.tsx
+  cd apps/carnegie && npm run build
+  git add apps/carnegie/src/views/Persona.tsx apps/carnegie/src/views/Arrangements.tsx apps/carnegie/src/lib/persona-data.ts
+  git commit -m "feat(carnegie): make persona and arrangement state truthful"
+  ```
+
+**Acceptance:** Persona and Act 3 data shown in Carnegie is real and versioned; unavailable mutation remains visibly unavailable instead of pretending to execute.
+
+---
+
+## Task 12: Make Luthiery and Flashmob honest, useful, and gate-safe
+
+**Files:**
+- Modify: `apps/carnegie/src/views/Luthiery.tsx`
+- Modify: `apps/carnegie/src/views/Flashmob.tsx`
+- Modify: `apps/carnegie/src/views/FlashmobSession.tsx`
+- Modify: `apps/carnegie/src/views/Home.tsx`
+- Test: `apps/carnegie/src/views/Luthiery.test.tsx`
+- Test: `apps/carnegie/src/views/Flashmob.test.tsx`
+
+- [ ] **Step 1: Add RED tests proving no illustrative state is presented as live.**
+
+  Test that Flashmob example sessions are labelled as examples or replaced with an explicit deferred-feature state, the disabled composer cannot submit, and “promote to Goal” cannot create a Goal without a real backend method.
+
+- [ ] **Step 2: Replace sample sessions with an honest deferred state.**
+
+  Keep the screen navigable, but show the roadmap gate, missing durable contract, and the exact re-entry condition. Remove text that looks like a current active Worker or completed project.
+
+- [ ] **Step 3: Keep Luthiery as a capability dependency view.**
+
+  Show that no durable skill/tool registry API is exposed, list the required future contract (`listSkills`, `getSkill`, certification/usage reads), and disable mutation buttons. Do not create a local registry.
+
+- [ ] **Step 4: Run tests and build.**
+
+  ```bash
+  npx vitest run apps/carnegie/src/views/Luthiery.test.tsx apps/carnegie/src/views/Flashmob.test.tsx
+  cd apps/carnegie && npm run build
+  ```
+
+- [ ] **Step 5: Update the capability matrix and commit.**
+
+  Mark these surfaces `backend-blocked` or `out-of-scope` with the roadmap citation and evidence path.
+
+  ```bash
+  git add apps/carnegie/src/views/Luthiery.tsx apps/carnegie/src/views/Flashmob.tsx apps/carnegie/src/views/FlashmobSession.tsx apps/carnegie/src/views/Home.tsx execution/e5-capability-matrix.md
+  git commit -m "fix(carnegie): remove misleading deferred feature examples"
+  ```
+
+**Acceptance:** No user can mistake a sample Flashmob session or absent Luthiery registry for real project progress.
+
+---
+
+## Task 13: Accessibility, visual polish, responsive behavior, and window-scale verification
+
+**Files:**
+- Modify: `apps/carnegie/src/styles/components.css`
+- Modify: `apps/carnegie/src/styles/index.css`
+- Modify: affected views/components under `apps/carnegie/src/**`
+- Modify: `apps/carnegie/playwright.config.ts`
+- Create: `apps/carnegie/tests/e5-live-acceptance.spec.ts`
+- Create: `apps/carnegie/tests/e5-a11y.spec.ts`
+- Test: `apps/carnegie/src/setup-layout.test.ts`
+
+- [ ] **Step 1: Add RED browser checks for keyboard and semantics.**
+
+  Cover sidebar navigation, Home textarea, draft form labels, confirmation dialog focus, loading/error announcements, selected Goal state, channel send, approval actions, and native window controls through the existing Electron/CDP test setup.
+
+- [ ] **Step 2: Run the browser checks and record current failures.**
+
+  ```bash
+  cd apps/carnegie && npx playwright test tests/e5-a11y.spec.ts --reporter=line
+  ```
+
+- [ ] **Step 3: Implement semantic controls and focus order.**
+
+  Replace clickable `div` actions with buttons, add labels and `aria-describedby` for effect summaries, preserve focus after modal close, and mark live updates with `role=status` or `role=alert` only where appropriate.
+
+- [ ] **Step 4: Implement responsive states.**
+
+  Verify 1280px, 1920px, and the observed 2879px viewport; verify narrow content widths without horizontal clipping; keep the frameless header and controls usable.
+
+- [ ] **Step 5: Verify zoom without changing backend behavior.**
+
+  Apply the agreed Electron page zoom at load, preserve `Ctrl +/-/0`, and verify text/button sizing with a real Electron capture. Do not globally inflate CSS values as a substitute for page-scale behavior.
+
+- [ ] **Step 6: Run build, browser accessibility, and visual capture.**
+
+  ```bash
+  cd apps/carnegie && npm run build
+  npx playwright test tests/e5-a11y.spec.ts --reporter=line
+  node scripts/electron-radial-renderer-smoke.mjs
+  ```
+
+  Save captures under `/tmp` during iteration and record final evidence paths in `progress.md`.
+
+- [ ] **Step 7: Commit.**
+
+  ```bash
+  git add apps/carnegie/src/styles apps/carnegie/src apps/carnegie/tests apps/carnegie/playwright.config.ts
+  git commit -m "feat(carnegie): harden full workflow accessibility and layout"
+  ```
+
+**Acceptance:** Every E5 screen is keyboard usable, readable at the supported window sizes, announces durable state changes, and passes the renderer build plus automated accessibility checks.
+
+---
+
+## Task 14: Run the real end-to-end project progression
+
+**Files:**
+- Modify: `execution/e5-capability-matrix.md`
+- Modify: `execution/PENDING_LIVE_CHECKS.md`
+- Modify: `roadmap/act-1-foundation/active/operations/progress.md`
+- Create: `execution/e5-live-evidence/README.md`
+- Create: `apps/carnegie/tests/e5-live-acceptance.spec.ts`
+
+**Live preconditions:**
+
+- Use the existing authenticated session; do not log out, revoke, rotate, or reset it.
+- Use a disposable/bounded project or a Goal explicitly approved for live testing.
+- Use a real model/provider connection already configured by the operator.
+- Do not run irreversible external effects unless the operator explicitly approves that exact effect.
+
+- [ ] **Step 1: Start the real local backend and Carnegie.**
+
+  Use the project's documented start command and the existing CDP port:
+
+  ```bash
+  npm run --workspace @maestro/carnegie start -- --remote-debugging-port=9222
+  ```
+
+  Confirm the actual Electron window is visible and record the API URL, project ID (not the token), viewport, window bounds, and commit SHA.
+
+- [ ] **Step 2: Execute the real assistant-to-Task flow.**
+
+  In the visible window, send a bounded project request. Save: screenshot of the assistant response, conversation ID, Task Contract ID, contract version, and content hash. Verify the response is not a fixture.
+
+- [ ] **Step 3: Edit, confirm, and launch the real contract.**
+
+  Change one success criterion, save, verify a new server version, confirm the exact hash, and launch explicitly. Save the durable response and resulting Goal ID.
+
+- [ ] **Step 4: Execute the real planning path.**
+
+  Select Overture roles, activate a permitted Head, create/inspect Council, submit a brief, reveal/decide only when permitted, read Department Plan, and read Mission Bundle. Save IDs and screenshots for each durable transition.
+
+- [ ] **Step 5: Execute the real Worker path.**
+
+  Spawn a bounded Worker, observe it, send one scoped message, inspect its status, and verify event updates in Dashboard/Channel. Do not claim completion until the server returns the terminal state.
+
+- [ ] **Step 6: Execute the real Git/evidence/review path.**
+
+  Create or inspect the real integration branch/worktree, freeze/advance only when the backend permits, read evidence, accept/certify only with actual evidence, and verify the certification appears in Inbox and Evidence Log.
+
+- [ ] **Step 7: Execute the real approval path where required.**
+
+  Trigger a safe approval-required action, inspect its exact effect and expiry, discuss it with the Concertmaster, then deny or approve according to explicit operator authorization. Record the final durable state.
+
+- [ ] **Step 8: Execute reporting and recovery checks.**
+
+  Read budget, billing, Metronome, Encore, final Concertmaster report, event log, and Git state. Force or wait for a reconnect if safe, verify stale state and recovery, and ensure no token appears in screenshots/logs.
+
+- [ ] **Step 9: Update the matrix honestly.**
+
+  A row becomes `Live` only with the evidence listed above. A failed live check becomes a precise `backend-blocked`/`partial` entry in `PENDING_LIVE_CHECKS.md`; do not convert a unit-test pass into a live pass.
+
+- [ ] **Step 10: Record the dogfood result.**
+
+  Prefix the progress entry `Dogfood loop:` and include exact screens, API methods, IDs, captures, errors, and whether the project actually advanced.
+
+**Acceptance:** One real bounded task progresses through the visible Carnegie workflow far enough to produce durable project state, Worker/evidence/certification/report records, or a fully evidenced blocker at the exact failing boundary.
+
+---
+
+## Task 15: Final verification and E5 completion gate
+
+**Files:**
+- Modify: `execution/e5-capability-matrix.md`
+- Modify: `execution/PENDING_LIVE_CHECKS.md`
+- Modify: `roadmap/act-1-foundation/active/operations/progress.md`
+- Inspect: all changed files and `git diff --check`
+
+- [ ] **Step 1: Run the complete automated verification set.**
+
+  ```bash
+  npm run build
+  cd apps/carnegie && npm run build
+  cd ../.. && npm test
+  cd apps/carnegie && npx playwright test --reporter=line
+  cd ../.. && git diff --check
+  ```
+
+  Record each command's exit code and output summary. Do not call the plan complete while a required command is failing; if an existing unrelated failure remains, isolate it with a reproduction and record it as a blocker.
+
+- [ ] **Step 2: Run the independent no-edit review.**
+
+  Review the diff against this plan. Check bridge allow-list, token boundaries, command IDs, expected versions/hashes, authority/approval gates, fake data removal, stale state, and all live evidence. The reviewer must not edit files.
+
+- [ ] **Step 3: Run the real Electron smoke capture.**
+
+  Verify frameless chrome, custom controls, maximized work-area fit, page zoom, Dashboard readability, Home conversation, Task Contract review, Inbox, Worker, Git, and Evidence states. Keep the window visible during the check.
+
+- [ ] **Step 4: Close or document every matrix row.**
+
+  No row may remain blank. Use only `Live`, `Partial`, `Backend-blocked`, or `Out-of-scope`, with evidence and next action.
+
+- [ ] **Step 5: Run secret and artifact checks.**
+
+  Search changed files, captures, and logs for provider token values, authorization headers, and raw credential fields. Remove sensitive artifacts before commit; retain only redacted evidence.
+
+- [ ] **Step 6: Final commit and handoff.**
+
+  ```bash
+  git add execution/e5-capability-matrix.md execution/PENDING_LIVE_CHECKS.md roadmap/act-1-foundation/active/operations/progress.md execution/e5-live-evidence apps/carnegie
+  git commit -m "feat(carnegie): complete E5 project execution console"
+  git status --short
+  ```
+
+**E5 completion gate:**
+
+- Every GUI action is classified in the capability matrix.
+- The real assistant-to-Task Contract flow works or has an evidenced Control Plane blocker.
+- A real task reaches the furthest permitted project stage through Carnegie.
+- No fake progress, sample session, local-only Goal, or false certification remains.
+- Build, tests, accessibility checks, Electron capture, independent review, and secret checks have evidence.
+- Any remaining backend work is named as a separate dependency rather than hidden inside a GUI TODO.
+
+## Execution Order
+
+Run tasks in this order:
+
+```text
+0 baseline/matrix
+→ 1 secure bridge
+→ 2 shared action/reconnect primitives
+→ 3 real assistant + Task Contract
+→ 4 Goal/Dashboard/lifecycle
+→ 5 planning
+→ 6 Worker execution
+→ 7 Git/evidence/certification
+→ 8 approvals/authority/Inbox
+→ 9 Channel/events
+→ 10 settings/provider/billing
+→ 11 Persona/Arrangements
+→ 12 blocked/deferred surfaces
+→ 13 accessibility/layout/live browser checks
+→ 14 real project progression
+→ 15 final gate
+```
+
+Do not start Tasks 5–8 as isolated UI mockups. Task 3 and Task 4 must first prove that a real request becomes a real durable Goal. If Task 14 is blocked by `Durable store is unavailable`, provider behavior, or another external dependency, stop at the failing boundary, preserve the evidence, and update `PENDING_LIVE_CHECKS.md` rather than bypassing the dependency.
