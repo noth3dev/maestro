@@ -1,7 +1,9 @@
 import type { GoalResult, CreateGoalInput, TransitionGoalInput, GoalControlInput } from "@maestro/contracts";
+import { isTerminalGoalState } from "@maestro/domain";
 import {
   acquireGoalLease,
   renewGoalLease,
+  releaseGoalLease,
   executeGoalCommand,
   CommandIdReuseError as PersistenceCommandIdReuseError,
   LeaseUnavailableError as PersistenceLeaseUnavailableError,
@@ -96,10 +98,19 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
       const proof = await leaseFor(goalId);
       const result = await executeGoalCommand(options.pool, command, proof);
       const goalResult = commandResult(result, command.projectId);
-      // Keep the proof after terminal writes. A client may lose the response
-      // after commit and retry the same idempotency key; receipt replay still
-      // requires the current lease proof. The proof is replaced on expiry or
-      // fencing, and terminal Goals cannot accept a different command.
+      if (goalResult.state !== undefined && isTerminalGoalState(goalResult.state)) {
+        // The durable command receipt is enough for a lost-response retry. Do
+        // not retain a terminal proof forever; release the lease and evict the
+        // in-memory entry after the terminal write has committed. A release
+        // failure must not turn an already-successful command into an error.
+        try {
+          await releaseGoalLease(options.pool, proof);
+        } catch {
+          // The proof is still evicted below, so memory retention remains
+          // bounded even if the durable lease has already gone stale.
+        }
+        leaseProofs.delete(goalId);
+      }
       return goalResult;
     } catch (error) {
       if (error instanceof PersistenceStaleGoalLeaseError) leaseProofs.delete(goalId);

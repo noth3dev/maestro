@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const persistence = vi.hoisted(() => ({
   acquireGoalLease: vi.fn(),
   renewGoalLease: vi.fn(),
+  releaseGoalLease: vi.fn(),
   executeGoalCommand: vi.fn(),
   assertProjectRole: vi.fn(),
 }));
@@ -90,20 +91,23 @@ describe("durable goal service lease-proof retention", () => {
     vi.clearAllMocks();
   });
 
-  it("retains the lease proof after a terminal Goal state so retries can replay receipts", async () => {
+  it("releases the lease proof after a terminal Goal state and reacquires for a retry", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
+    persistence.releaseGoalLease.mockResolvedValue(undefined);
     persistence.executeGoalCommand.mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "succeeded", version: 1 });
     const service = createDurableGoalService({ pool: { query: vi.fn(async () => ({ rowCount: 0, rows: [] })) } as never, actorId: "operator-A", leaseOwnerId: "instance-A" });
 
     await service.createGoal({ projectId }, commandId, operator);
     expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
+    expect(persistence.releaseGoalLease).toHaveBeenCalledWith(expect.anything(), proof);
     expect(persistence.renewGoalLease).not.toHaveBeenCalled();
 
     persistence.executeGoalCommand.mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "succeeded", version: 2 });
     await service.transitionGoal(commandId, { projectId, expectedVersion: 1, to: "succeeded" }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", operator);
 
-    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
-    expect(persistence.renewGoalLease).toHaveBeenCalledTimes(1);
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.releaseGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.renewGoalLease).not.toHaveBeenCalled();
   });
 
   it("retains the lease proof and still renews on retry when the command result is nonterminal", async () => {
@@ -182,9 +186,9 @@ describe("durable goal service control operations", () => {
   });
 
 
-  it("retains the terminal lease proof so a lost response can replay the same idempotent command", async () => {
+  it("releases a terminal lease proof so a lost response can replay the same idempotent command", async () => {
     persistence.acquireGoalLease.mockResolvedValue(proof);
-    persistence.renewGoalLease.mockResolvedValue(proof);
+    persistence.releaseGoalLease.mockResolvedValue(undefined);
     persistence.executeGoalCommand
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 })
       .mockResolvedValueOnce({ outcome: "succeeded", goalId: proof.goalId, state: "stopped", version: 2 });
@@ -193,8 +197,9 @@ describe("durable goal service control operations", () => {
     await service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator);
     await expect(service.emergencyStopGoal(proof.goalId, { projectId, expectedVersion: 1 }, "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f04", operator)).resolves.toMatchObject({ state: "stopped", version: 2 });
 
-    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(1);
-    expect(persistence.renewGoalLease).toHaveBeenCalledTimes(1);
+    expect(persistence.acquireGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.releaseGoalLease).toHaveBeenCalledTimes(2);
+    expect(persistence.renewGoalLease).not.toHaveBeenCalled();
   });
 
 });
