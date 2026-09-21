@@ -1460,4 +1460,4 @@ Remote push is authorized for this closeout pass. External provider, Discord, re
 - [x] Build, lint, focused regression suites, PostgreSQL integration suites, and diff check verified.
 - [x] E4 live evidence captured where authentication and durable store access permitted; unavailable external/auth state recorded without claiming success.
 - [x] Disposable worktrees, branches, PostgreSQL container, orphaned embedded server, and internal heartbeat removed.
-- [ ] Push verified `main` to `origin/main`.
+- [x] Push verified `main` to `origin/main` at `b1f10789`.
