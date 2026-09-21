@@ -21,6 +21,7 @@ import {
   submitDepartmentBrief,
 } from "../lib/planning-data.js";
 import type { ViewName } from "../views.js";
+import { spawnWorkerFromMissionBundle } from "../lib/worker-data.js";
 
 function linesOf(value: string): readonly string[] {
   return value.split("\n").map((line) => line.trim()).filter((line) => line !== "");
@@ -315,7 +316,18 @@ export function Planning({ onNavigate }: { onNavigate: (view: ViewName) => void 
                           <p className="dash-empty">Authority: {details.workerInputs.authorityBoundary.join(" · ")} · external: {details.workerInputs.externalServiceBoundary.join(" · ")} · data: {details.workerInputs.dataBoundary.join(" · ")}</p>
                           <p className="dash-empty">Evidence: {details.validation.evidenceRequirements.join(" · ")} · validation: {details.validation.validationCriteria.join(" · ")} · termination: {details.validation.terminationConditions.join(" · ")}</p>
                           <p className="dash-empty">Ceilings: cost {details.workerInputs.costCeiling} · time {details.workerInputs.timeCeiling} · retries {details.workerInputs.retryCeiling} · workers {details.workerInputs.workerCeiling}</p>
-                          <p className="dash-empty">Worker execution is the next task. This screen does not invent a Worker action.</p>
+                          <p className="dash-empty">Worker admission uses this exact durable Mission Bundle. The Worker will appear in its Goal-scoped Channel roster after the durable event is observed.</p>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={busy !== undefined}
+                            onClick={() => void run("spawn-worker", async () => {
+                              await spawnWorkerFromMissionBundle(window.maestro.api, config.projectId, missionBundle);
+                              onNavigate("channel");
+                            })}
+                          >
+                            {busy === "spawn-worker" ? "Dispatching…" : "Dispatch Worker to Channel"}
+                          </button>
                         </div>
                       );
                     })()}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkerList } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
@@ -21,11 +21,16 @@ export function useGoalWorkers(refreshCursor = "0"): {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [loadedFor, setLoadedFor] = useState<GoalReadScope | undefined>(undefined);
+  const scopeIdentityRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    setWorkers(undefined);
-    setLoadedFor(undefined);
-    setError(undefined);
+    const scopeIdentity = config === undefined || selectedGoalId === undefined ? undefined : `${config.projectId}:${selectedGoalId}`;
+    if (scopeIdentityRef.current !== scopeIdentity) {
+      scopeIdentityRef.current = scopeIdentity;
+      setWorkers(undefined);
+      setLoadedFor(undefined);
+      setError(undefined);
+    }
     if (config === undefined || selectedGoalId === undefined) {
       setLoading(false);
       return;
@@ -39,6 +44,7 @@ export function useGoalWorkers(refreshCursor = "0"): {
         if (!cancelled) {
           setWorkers(result.workers);
           setLoadedFor(scope);
+          setError(undefined);
         }
       })
       .catch((cause: unknown) => {

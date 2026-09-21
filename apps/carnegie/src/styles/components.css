@@ -275,6 +275,24 @@
 .roster-head { padding:11px 14px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-secondary); font-weight:500; }
 .roster-section { padding:8px 14px 2px; font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; }
 
+.worker-detail-panel { width:100%; padding:12px; overflow-y:auto; }
+.worker-detail-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+.worker-detail-head h2 { margin:0; font-size:13px; }
+.worker-roster, .worker-scope, .worker-conversation { padding:10px 0; border-bottom:1px solid var(--border); }
+.worker-detail-panel h3 { margin:0 0 7px; font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.03em; }
+.worker-roster-item { width:100%; display:flex; justify-content:space-between; gap:6px; padding:6px 7px; border:0; border-radius:var(--radius); background:transparent; color:var(--text-secondary); font:inherit; font-size:11px; text-align:left; cursor:pointer; }
+.worker-roster-item.selected { background:var(--surface-1); color:var(--text-primary); }
+.worker-scope p, .worker-conversation p { margin:4px 0; font-size:10.5px; overflow-wrap:anywhere; }
+.worker-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.worker-conversation textarea { min-height:56px; margin-top:5px; font-size:11px; }
+.worker-conversation .btn { margin-top:6px; }
+.worker-activity { color:var(--text-secondary); }
+.worker-activity span { color:var(--olive-text); font-weight:600; }
+.worker-detail-panel .alert { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+.worker-detail-panel .alert > span { flex:1 1 100%; }
+.roster > .worker-detail-panel { flex:1; min-width:0; }
+.roster-item { width:100%; border:0; background:transparent; font:inherit; text-align:left; }
+
 /* ── git view ── */
 .gitbar { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--border); font-size:12px; }
 .gitbar-back { display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--text-secondary); background:none; border:none; }

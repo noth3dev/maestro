@@ -531,17 +531,23 @@ export type PlanningStage = "overture" | "head" | "council" | "department-plan" 
 
 ---
 
-## Task 6: Add real Worker execution, observation, messaging, and cancellation
+## Task 6: Add real Worker execution inside the Secretary Office conversation surface
+
+**Design correction:** The approved mockup and Phase 7/Phase 2 design do not define a standalone Worker CRUD screen or a top-level Worker navigation item. Workers are temporary, Goal-bound participants. The operator sees their durable activity in the selected Department Channel and opens Worker detail from the Channel roster. Dashboard and Floor summarize execution; Channel is the conversational surface; Inbox remains the approval surface; Git/Evidence remain lineage surfaces.
 
 **Files:**
-- Create: `apps/carnegie/src/views/Workers.tsx`
+- Create: `apps/carnegie/src/views/Workers.tsx` (contextual Worker detail/operations panel, not a primary navigation route)
 - Create: `apps/carnegie/src/lib/worker-data.ts`
-- Modify: `apps/carnegie/src/views/Dashboard.tsx`
-- Modify: `apps/carnegie/src/views/Inbox.tsx`
-- Modify: `apps/carnegie/src/views.ts`
-- Modify: `apps/carnegie/src/components/Sidebar.tsx`
+- Modify: `apps/carnegie/src/views/Channel.tsx`
+- Modify: `apps/carnegie/src/useGoalWorkers.ts` (preserve same-scope stale roster during refresh)
+- Test: `apps/carnegie/src/useGoalWorkers.test.ts`
+- Modify: `apps/carnegie/src/views/Planning.tsx` (dispatch only the loaded Mission Bundle)
+- Modify: `apps/carnegie/src/App.tsx` (pass the durable event cursor to Channel)
+- Modify: `apps/carnegie/src/styles/components.css`
 - Test: `apps/carnegie/src/lib/worker-data.test.ts`
 - Test: `apps/carnegie/src/views/Workers.test.tsx`
+- Modify/test as needed: `apps/carnegie/src/views/Channel.test.tsx`
+- Modify/test as needed: `apps/carnegie/src/views/Planning.test.tsx`
 
 **Interfaces:**
 
@@ -552,47 +558,62 @@ export type WorkerApi = Pick<ApiClient,
 >;
 
 export async function loadWorkers(api: WorkerApi, goalId: string, projectId: string): Promise<WorkerList>;
-export async function cancelWorkerWithConfirmation(api: WorkerApi, workerId: string, projectId: string): Promise<Worker>;
+export async function spawnWorkerFromMissionBundle(
+  api: Pick<WorkerApi, "spawnWorker">,
+  projectId: string,
+  bundle: MissionBundle,
+  commandId?: string,
+): Promise<Worker>;
+export function missionBundleMatchesWorker(bundle: MissionBundle, worker: Worker): boolean;
+export async function loadWorkerObservation(api: Pick<WorkerApi, "listWorkersForGoal" | "getWorker" | "observeWorker">, workerId: string, scope: WorkerActionScope, commandId?: string): Promise<WorkerObservation>;
+export async function sendWorkerMessage(api: Pick<WorkerApi, "listWorkersForGoal" | "getWorker" | "sendWorkerMessage">, workerId: string, scope: WorkerActionScope, message: string, commandId?: string): Promise<Worker>;
+export type WorkerActionScope = { goalId: string; projectId: string; bundle: MissionBundle };
+export async function cancelWorkerAfterConfirmation(
+  api: Pick<WorkerApi, "listWorkersForGoal" | "getWorker" | "cancelWorker">,
+  workerId: string,
+  scope: WorkerActionScope,
+  confirmed: boolean,
+  commandId?: string,
+): Promise<Worker>;
 ```
 
-- [ ] **Step 1: Add RED tests for worker identity and scope.**
+- [x] **Step 1: Add RED tests for Worker identity, scope, and conversation placement.**
 
-  Assert that a Worker is spawned only from real planning IDs, that worker list entries reload through `listWorkersForGoal`, that observation uses `getWorker`/`observeWorker`, and that messages carry the selected Worker ID and command ID.
+  Assert that a Worker is spawned only from real Mission Bundle council/department/plan/item identity, that worker list entries reload through `listWorkersForGoal`, that observation uses `getWorker`/`observeWorker`, and that messages carry the selected Worker ID, project scope, and command ID. Assert that the Worker surface is opened from the Channel roster and does not become a new top-level sidebar item. Assert that only durable Channel messages and Worker observations/tool events are rendered; the renderer must not fabricate agent-to-agent messages.
 
-- [ ] **Step 2: Add RED tests for cancellation and stale worker state.**
+- [x] **Step 2: Add RED tests for cancellation and stale Worker state.**
 
-  Require explicit confirmation, reject cancellation of an already terminal Worker without pretending success, and refresh after cancellation.
+  Require explicit confirmation, reject cancellation of an already terminal Worker without pretending success, reject a Mission Bundle whose content hash or scope does not match the selected Worker, and refresh after cancellation. A stale or disconnected read must remain visibly stale and must not clear a newer durable Worker state.
 
-- [ ] **Step 3: Run focused tests and confirm RED.**
+- [x] **Step 3: Run focused tests and confirm RED.**
 
   ```bash
-  npx vitest run apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/views/Workers.test.tsx
+  npx vitest run apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/useGoalWorkers.test.ts apps/carnegie/src/views/Workers.test.tsx apps/carnegie/src/views/Channel.test.tsx apps/carnegie/src/views/Planning.test.tsx
   ```
 
-- [ ] **Step 4: Implement worker list/detail tabs.**
+- [x] **Step 4: Implement the contextual Worker detail surface.**
 
-  Show status, department, mission item, lease/fencing status if returned, latest observation, cost/budget, and terminal reason. Use a real empty state when no Worker exists.
+  Keep the Channel feed as the primary conversation. Dispatch is available only from the already loaded Mission Bundle in Planning, and the resulting Worker becomes selectable from the Goal-scoped Channel roster after the durable event arrives. Show status, durable identity, department, mission item, Mission Bundle content hash, lease/fencing state if returned, latest observation, tool activity, cost/budget when returned, terminal reason, and a real empty state. Use progressive disclosure; do not add a Worker management route or wake a Worker just to inspect its durable profile.
 
-- [ ] **Step 5: Implement spawn, observe, message, and cancel actions.**
+- [x] **Step 5: Implement scoped operations.**
 
-  `spawnWorker` must receive the actual `councilId`, `departmentId`, and server-defined `SpawnWorkerInput`. `observeWorker` and `sendWorkerMessage` must remain scoped to the selected project/Goal. Use the shared confirmation dialog for cancellation.
+  Planning's `spawnWorker` action must receive the actual loaded Mission Bundle council/department identity and a schema-valid server-defined `SpawnWorkerInput`; the operator cannot type those IDs. `observeWorker`, `sendWorkerMessage`, and cancellation must revalidate the current Goal roster Worker against the loaded Mission Bundle and project scope before the effect; UI-only checks are insufficient. Worker messages and bounded cross-worker coordination are displayed only through durable Goal-scoped channel/observation data. Do not post a fake worker-authored Channel message from the renderer. Use explicit confirmation for cancellation and preserve the server's terminal/unknown result.
 
-- [ ] **Step 6: Implement durable refresh.**
+- [x] **Step 6: Implement durable refresh.**
 
-  Refresh workers from the event cursor and provide a manual retry. Do not poll aggressively or replace a newer durable state with an older response.
+  Refresh the selected channel and Worker roster from the durable event cursor and provide a manual retry. Do not poll aggressively or replace newer durable state with an older response. When the existing backend does not yet project a Worker-originated message into Channel history, record that exact backend dependency instead of simulating it.
 
-- [ ] **Step 7: Run tests, build, and commit.**
+- [x] **Step 7: Run tests, build, and commit.**
 
   ```bash
-  npx vitest run apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/views/Workers.test.tsx
+  npx vitest run apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/useGoalWorkers.test.ts apps/carnegie/src/views/Workers.test.tsx apps/carnegie/src/views/Channel.test.tsx apps/carnegie/src/views/Planning.test.tsx
   cd apps/carnegie && npm run build
-  git add apps/carnegie/src/views/Workers.tsx apps/carnegie/src/lib/worker-data.ts apps/carnegie/src/views/Dashboard.tsx apps/carnegie/src/views/Inbox.tsx apps/carnegie/src/views.ts apps/carnegie/src/components/Sidebar.tsx
+  git add apps/carnegie/src/views/Workers.tsx apps/carnegie/src/lib/worker-data.ts apps/carnegie/src/useGoalWorkers.ts apps/carnegie/src/useGoalWorkers.test.ts apps/carnegie/src/views/Channel.tsx apps/carnegie/src/views/Planning.tsx apps/carnegie/src/App.tsx apps/carnegie/src/styles/components.css apps/carnegie/src/lib/worker-data.test.ts apps/carnegie/src/views/Workers.test.tsx apps/carnegie/src/views/Channel.test.tsx apps/carnegie/src/views/Planning.test.tsx execution/plan-E5-gui-implementation.md
   git commit -m "feat(carnegie): add real worker operations"
   ```
 
-**Acceptance:** The GUI can start only a real Worker from a real Mission Bundle, observe its real status, send a real scoped message, and cancel it through the authority path.
+**Acceptance:** Planning can dispatch only the loaded real Mission Bundle; the Secretary Office then shows that Worker in the Goal-scoped Channel roster, where the operator can observe its durable status, send a real scoped message, and cancel it through the authority path. The interface visibly supports durable agent conversation without inventing messages or introducing a standalone Worker CRUD surface.
 
----
 
 ## Task 7: Add Git integration, worktree, acceptance, certification, and evidence
 

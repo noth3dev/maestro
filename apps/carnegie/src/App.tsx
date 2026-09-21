@@ -36,7 +36,7 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
       case "home": return <Home onNavigate={setView} mode={homeMode} onModeChange={setHomeMode} />;
       case "dashboard": return <Dashboard onNavigate={setView} eventState={eventState} />;
       case "planning": return <Planning onNavigate={setView} />;
-      case "channel": return <Channel onNavigate={setView} />;
+      case "channel": return <Channel onNavigate={setView} eventCursor={eventState.cursor} />;
       case "git": return <Git onBack={() => setView("channel")} />;
       case "floor": return <Floor onBack={() => setView("home")} eventCursor={eventState.cursor} />;
       case "inbox": return <Inbox onNavigate={setView} />;

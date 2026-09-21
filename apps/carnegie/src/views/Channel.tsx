@@ -3,9 +3,13 @@ import { CHANNEL_SELECTORS, type ChannelRead, type ChannelSelector } from "@maes
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
+import { useGoalWorkers } from "../useGoalWorkers.js";
+import { Workers } from "./Workers.js";
+import type { MissionBundle } from "@maestro/contracts";
 import { useGoalDetail } from "../useGoalDetail.js";
 import { useGoals } from "../goals.js";
 import { loadChannel, postChannelMessage } from "../lib/channel-data.js";
+import { missionBundleMatchesWorker } from "../lib/worker-data.js";
 import type { ViewName } from "../views.js";
 
 const defaultSelector: ChannelSelector = { kind: "department", channelId: "engineering" };
@@ -15,9 +19,11 @@ function selectorKey(selector: ChannelSelector): string {
   return `${selector.kind}:${selector.channelId}`;
 }
 
-export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewName) => void }) {
+export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavigate: (view: ViewName) => void; eventCursor?: string }) {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
+  const [workerRefreshKey, setWorkerRefreshKey] = useState(0);
+  const { workers, loading: workersLoading, error: workersError } = useGoalWorkers(`${eventCursor}:${workerRefreshKey}`);
   const { detail, loading: detailLoading, error: detailError } = useGoalDetail();
   const [channel, setChannel] = useState<ChannelRead | undefined>(undefined);
   const [selector, setSelector] = useState<ChannelSelector>(defaultSelector);
@@ -26,6 +32,13 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [rosterHidden, setRosterHidden] = useState(false);
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | undefined>(undefined);
+  const [missionBundle, setMissionBundle] = useState<MissionBundle | undefined>(undefined);
+
+  useEffect(() => {
+    setSelectedWorkerId(undefined);
+    setMissionBundle(undefined);
+  }, [config, selectedGoalId, selector]);
 
   useEffect(() => {
     if (config === undefined || selectedGoalId === undefined) {
@@ -40,7 +53,35 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
       .catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load channel"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [config, selectedGoalId, selector]);
+  }, [config, selectedGoalId, selector, eventCursor]);
+
+  useEffect(() => {
+    if (config === undefined || selectedWorkerId === undefined || workers === undefined) {
+      setMissionBundle(undefined);
+      return;
+    }
+    const worker = workers.find((candidate) => candidate.workerId === selectedWorkerId);
+    if (worker === undefined) {
+      setSelectedWorkerId(undefined);
+      setMissionBundle(undefined);
+      return;
+    }
+    let cancelled = false;
+    setMissionBundle(undefined);
+    void window.maestro.api
+      .getMissionBundle(worker.councilId, worker.departmentId, worker.planVersion, worker.itemId, config.projectId)
+      .then((bundle) => {
+        if (cancelled) return;
+        if (!missionBundleMatchesWorker(bundle, worker)) {
+          setError("The loaded Mission Bundle does not match the selected Worker.");
+          setMissionBundle(undefined);
+          return;
+        }
+        setMissionBundle(bundle);
+      })
+      .catch(() => { if (!cancelled) setMissionBundle(undefined); });
+    return () => { cancelled = true; };
+  }, [config, selectedWorkerId, workers]);
 
   const send = async () => {
     if (config === undefined || selectedGoalId === undefined || content.trim() === "" || sending) return;
@@ -57,7 +98,7 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
   };
 
   if (config === undefined) return <EmptyState />;
-  const displayError = error ?? detailError;
+  const displayError = error ?? detailError ?? workersError;
   return (
     <div className="channel-wrap" style={{ position: "relative" }}>
       <div className="channel-feed">
@@ -66,16 +107,16 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
           <label className="channel-selector-label">Channel
             <select aria-label="Channel" value={selectorKey(selector)} onChange={(event) => {
               const next = channelSelectors.find((candidate) => selectorKey(candidate) === event.target.value);
-              if (next !== undefined) { setChannel(undefined); setSelector(next); }
+              if (next !== undefined) { setChannel(undefined); setSelectedWorkerId(undefined); setMissionBundle(undefined); setSelector(next); }
             }}>
               {channelSelectors.map((candidate) => <option key={selectorKey(candidate)} value={selectorKey(candidate)}>{`#${candidate.channelId}`}</option>)}
             </select>
           </label>
           <span className="goalname">{selectedGoalId ?? "no Goal selected"}</span>
-          <div className="roster-toggle-btn" onClick={() => setRosterHidden((current) => !current)} title="toggle roster"><Icon name="panel-right" /></div>
+          <button type="button" className="roster-toggle-btn" onClick={() => setRosterHidden((current) => !current)} aria-label={rosterHidden ? "Show roster" : "Hide roster"}><Icon name="panel-right" /></button>
         </div>
         <div className="channel-messages">
-          {(loading || detailLoading) && <p>loading…</p>}
+          {(loading || detailLoading || workersLoading) && <p>{workersLoading && workers !== undefined ? "refreshing Worker roster; showing last durable state…" : "loading…"}</p>}
           {displayError !== undefined && <div className="alert alert-warning">{displayError}</div>}
           {channel?.messages.map((message) => (
             <div key={message.messageId} className="msg">
@@ -103,9 +144,30 @@ export function Channel({ onNavigate: _onNavigate }: { onNavigate: (view: ViewNa
         </div>
       </div>
       <div className={`roster${rosterHidden ? " hide" : ""}`}>
-        <div className="roster-head">roster{channel === undefined ? "" : ` · ${channel.members.length}`}</div>
-        {channel?.members.map((member) => <div key={`${member.identityKind}:${member.identityId}`} className="roster-item"><div className="avatar avatar-sm av-terracotta">{(member.departmentId?.slice(0, 2) ?? "OR").toUpperCase()}</div><span>{member.displayName}</span><span className="roster-role-badge">{member.identityKind}</span><div className={`roster-dot ${member.status === "active" || member.status === "running" || member.status === "spawned" || member.status === "standing" ? "dot-active" : "dot-idle"}`} /></div>)}
-        {channel !== undefined && channel.members.length === 0 && <EmptyState title="No active roster" hint="The live Goal roster has no active members in this channel." />}
+        {selectedWorkerId !== undefined && selectedGoalId !== undefined && config !== undefined ? (
+          <Workers
+            api={window.maestro.api}
+            projectId={config.projectId}
+            goalId={selectedGoalId}
+            workers={workers ?? []}
+            missionBundle={missionBundle}
+            selectedWorkerId={selectedWorkerId}
+            channelName={channel?.channel.displayName ?? `#${selector.channelId}`}
+            onOpenChannel={() => setSelectedWorkerId(undefined)}
+            onSelectWorker={(workerId) => { setSelectedWorkerId(workerId); setMissionBundle(undefined); }}
+            onRefresh={() => setWorkerRefreshKey((current) => current + 1)}
+          />
+        ) : (
+          <>
+            <div className="roster-head">roster{channel === undefined ? "" : ` · ${channel.members.length}`}</div>
+            {channel?.members.map((member) => {
+              const isWorker = member.identityKind === "worker";
+              const content = <><div className="avatar avatar-sm av-terracotta">{(member.departmentId?.slice(0, 2) ?? "OR").toUpperCase()}</div><span>{member.displayName}</span><span className="roster-role-badge">{member.identityKind}</span><div className={`roster-dot ${member.status === "active" || member.status === "running" || member.status === "spawned" || member.status === "standing" ? "dot-active" : "dot-idle"}`} /></>;
+              return isWorker ? <button key={`${member.identityKind}:${member.identityId}`} type="button" className="roster-item" onClick={() => { setRosterHidden(false); setSelectedWorkerId(member.identityId); }}>{content}</button> : <div key={`${member.identityKind}:${member.identityId}`} className="roster-item">{content}</div>;
+            })}
+            {channel !== undefined && channel.members.length === 0 && <EmptyState title="No active roster" hint="The live Goal roster has no active members in this channel." />}
+          </>
+        )}
       </div>
     </div>
   );
