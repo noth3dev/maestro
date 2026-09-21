@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { GoalResult } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
+import { loadGoalsAfterLaunch, selectedGoalIdAfterRefresh } from "./lib/goal-operations.js";
 
 interface GoalsContextValue {
   goals: GoalResult[] | undefined;
@@ -18,9 +19,9 @@ export function GoalsProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (config === undefined) return;
-    const page = await window.maestro.api.listGoals(config.projectId);
+    const page = await loadGoalsAfterLaunch(window.maestro.api, { projectId: config.projectId });
     setGoals(page.goals);
-    setSelectedGoalId((current) => current ?? page.goals[0]?.goalId);
+    setSelectedGoalId((current) => selectedGoalIdAfterRefresh(current, page.goals));
   }, [config]);
 
   useEffect(() => {
