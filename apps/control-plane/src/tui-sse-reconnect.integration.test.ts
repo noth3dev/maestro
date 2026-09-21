@@ -110,7 +110,10 @@ describeDatabase("TUI SSE cursor and failure semantics against real PostgreSQL",
           if (message.kind === "event") pushController.abort();
         },
       );
-      expect(pushed[0]).toMatchObject({ kind: "event", event: { eventId: durableIds[0] } });
+      expect(pushed).toEqual([
+        { kind: "connected" },
+        { kind: "event", event: expect.objectContaining({ eventId: durableIds[0] }) },
+      ]);
       expect(pushed.some((message) => message.kind === "error")).toBe(false);
       const calls: string[] = [];
       let streamAttempt = 0;

@@ -218,6 +218,37 @@ export function createBridgedApi(config: ConnectionConfig): ApiClient;
 
 ---
 
+## Task 1.5: Zero-config local bootstrap on launch
+
+**Added 2026-09-21, operator instruction:** "GUI를 켜자마자 GUI만 켜도 추가적인 연결 등등 없이 쓸 수 있도록" — opening Carnegie must be enough by itself, with no separate manual step to start a Control Plane, database, or provider gateway first.
+
+**Why this is now Task 1.5, not a later task:** every live-run blocker recorded in `execution/PENDING_LIVE_CHECKS.md` for plan-E5 so far (`no MAESTRO_TEST_DATABASE_URL`, `no Control Plane/provider listener`, the Task 3 Step 8 live attempt failing with `Control plane request failed`) is a **manual-setup-not-done** problem, not a genuine missing-capability problem — `packages/local-backend/src/local-bootstrap.ts` (955 lines, already implemented and unit-tested: `resolveLocalConnection`, `ensureLocalControlPlane`, embedded-Postgres and Docker-Postgres paths, `buildLocalControlPlaneEnvironment`/`buildLocalModelGatewayEnvironment`, a five-step bootstrap sequence `LOCAL_BOOTSTRAP_STEP_ORDER = ["docker-check", "postgres-ready", "migrations", "control-plane-up", "model-gateway-up"]`, and a `LocalSecretStore` for the generated token) is a **complete, tested, already-built local-stack launcher that Carnegie's Electron main process never calls.**
+
+**Confirmed gap (read, not guessed):** `apps/carnegie/electron/store.ts` imports only `createLocalSecretStore` from `@maestro/local-backend` — for token storage, nothing else. `apps/carnegie/electron/main.ts`'s `maestro:config:get` handler only ever calls `loadConnectionConfig()` (a previously *manually saved* config) and returns `undefined` if none exists, at which point `App.tsx`'s `Connected()` renders `<Setup />` and blocks on the operator typing an API URL/token/project ID by hand. `resolveLocalConnection`/`ensureLocalControlPlane` are never imported or called anywhere in `apps/carnegie/electron/**`.
+
+**Files:**
+- Modify: `apps/carnegie/electron/main.ts` (the `maestro:config:get`/app-ready path)
+- Inspect, do not duplicate: `packages/local-backend/src/local-bootstrap.ts`, `local-control-plane.ts`, `connection.ts`
+- Create (if the design needs one): a small orchestration module, e.g. `apps/carnegie/electron/local-launch.ts`, that calls `resolveLocalConnection` and adapts its `ConnectionState`/`onStep` events to what `main.ts` and the renderer need
+- Modify: `apps/carnegie/src/connection.tsx` (loading state should reflect real bootstrap step progress, not just a boolean)
+- Modify: `apps/carnegie/src/views/Setup.tsx` (becomes the genuine-failure fallback, not the default first screen)
+- Test: unit tests for the new orchestration module; keep `local-bootstrap.test.ts`'s existing coverage as the source of truth for `resolveLocalConnection` itself — do not re-test its internals here
+
+**Design constraints:**
+- On app ready, before ever showing `<Setup />`, call `resolveLocalConnection` with a real `ConnectionEnvironment` (respecting any operator-set `MAESTRO_API_URL`/`MAESTRO_LOCAL_DATABASE_URL`/etc. env overrides — never silently ignore an explicit operator configuration in favor of auto-bootstrap).
+- Stream `onStep` bootstrap events (`docker-check` → `postgres-ready` → `migrations` → `control-plane-up` → `model-gateway-up`) to the renderer so the UI can show real progress ("starting local database…", "running migrations…") instead of a blank/frozen window during what may be a several-second first-run cold start.
+- On `{ kind: "configured", ... }`: save/use that config exactly as if the operator had typed it into `Setup.tsx` — same `saveConnectionConfig`/`connect` path, no second code path.
+- On `{ kind: "setup-required", reason }`: **this** is when `Setup.tsx` should appear, now pre-filled with the concrete `reason` (e.g., "Docker is not available and no packaged Control Plane was found") so the operator isn't blankly asked to type a URL for a problem that has nothing to do with a URL.
+- `includeProjectId` (an existing `LocalBootstrapOptions` field): use it so a fresh local install gets a real default project auto-provisioned too — the operator should not need to separately create a project before Task 3's conversation flow works.
+- Never start a second, competing local Control Plane/database if one is already reachable — `resolveLocalConnection` already needs to own this reuse-vs-launch decision; do not reimplement that logic at the Electron layer.
+- This must not weaken `Setup.tsx`'s existing ability to point at a real remote/shared Control Plane — auto-bootstrap is the *default first-run path*, not the only path. An operator who wants to connect elsewhere must still be able to, via `Setup.tsx` or a "use a different Control Plane" escape hatch.
+
+**Acceptance:** a completely fresh install/launch of Carnegie — no prior `maestro:config:save`, no manually-started Control Plane, no manually-started database — reaches a connected, usable Home/Dashboard without the operator typing anything, using only what `resolveLocalConnection` can start itself (embedded/Docker Postgres, migrations, Control Plane, Model Gateway). `Setup.tsx` is reached only when auto-bootstrap genuinely cannot succeed (e.g., no Docker and no packaged binaries found), with the real reason shown, not a generic "not connected" message.
+
+**Side effect worth noting for whoever picks this up:** once this lands, most of `PENDING_LIVE_CHECKS.md`'s current plan-E5 blockers (empty `MAESTRO_TEST_DATABASE_URL`, no Control Plane/provider listener) stop being environment gaps this sandbox can't fix — they become "launch Carnegie and let Task 1.5 do its job" instead. Re-attempt Task 3 Step 8's live conversation and Task 14 after this task closes, in whatever environment has Docker or a packaged Control Plane binary available (this specific sandbox may still lack both — check before assuming this alone unblocks every live check).
+
+---
+
 ## Task 2: Add shared renderer action, error, confirmation, and reconnect primitives
 
 **Files:**
@@ -1077,6 +1108,7 @@ Run tasks in this order:
 ```text
 0 baseline/matrix
 → 1 secure bridge
+→ 1.5 zero-config local bootstrap on launch
 → 2 shared action/reconnect primitives
 → 3 real assistant + Task Contract
 → 4 Goal/Dashboard/lifecycle
@@ -1094,3 +1126,5 @@ Run tasks in this order:
 ```
 
 Do not start Tasks 5–8 as isolated UI mockups. Task 3 and Task 4 must first prove that a real request becomes a real durable Goal. If Task 14 is blocked by `Durable store is unavailable`, provider behavior, or another external dependency, stop at the failing boundary, preserve the evidence, and update `PENDING_LIVE_CHECKS.md` rather than bypassing the dependency.
+
+**Task 1.5 should land before any later task attempts a live check.** Every live-run step from Task 3 Step 8 onward assumes a reachable Control Plane; until Task 1.5 lands, those steps keep re-discovering the same "no Control Plane/provider" blocker Task 1.5 exists to remove. Re-attempt any live step recorded as blocked in `PENDING_LIVE_CHECKS.md` once Task 1.5 is closed, before assuming it's still blocked.

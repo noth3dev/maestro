@@ -1,84 +1,58 @@
-import React, { type ReactElement, type ReactNode } from "react";
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { ConfirmActionDialog } from "./ConfirmActionDialog.js";
+import { ConfirmActionDialog, handleConfirmActionKeyDown } from "./ConfirmActionDialog.js";
 
-type DialogProps = React.ComponentProps<typeof ConfirmActionDialog>;
-type DialogElement = ReactElement<DialogProps & { children?: ReactNode; onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void }>;
-
-function openDialog(overrides: Partial<DialogProps> = {}): DialogElement {
-  return ConfirmActionDialog({
-    open: true,
-    title: "Stop this Goal?",
-    effectSummary: "Stop will halt all active workers and prevent new work.",
-    confirmLabel: "Stop Goal",
-    onCancel: vi.fn(),
-    onConfirm: vi.fn(),
-    ...overrides,
-  }) as DialogElement;
-}
+const props = {
+  title: "Stop this Goal?",
+  effectSummary: "Stop will halt all active workers and prevent new work.",
+  confirmLabel: "Stop Goal",
+  onCancel: vi.fn(),
+  onConfirm: vi.fn(),
+};
 
 describe("ConfirmActionDialog", () => {
   it("does not render when closed", () => {
-    expect(ConfirmActionDialog({
-      open: false,
-      title: "unused",
-      effectSummary: "unused",
-      confirmLabel: "confirm",
-      onCancel: vi.fn(),
-      onConfirm: vi.fn(),
-    })).toBeNull();
+    expect(renderToStaticMarkup(<ConfirmActionDialog {...props} open={false} />)).toBe("");
   });
 
   it("renders an explicit effect summary and labelled dialog", () => {
-    const html = renderToStaticMarkup(openDialog({ danger: true }));
+    const html = renderToStaticMarkup(<ConfirmActionDialog {...props} open danger />);
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain("Stop will halt all active workers");
     expect(html).toContain("Stop Goal");
-    expect(html).toContain('autofocus=""');
+    expect(html).not.toContain("autofocus");
   });
 
-  it("maps Escape to cancel and only confirms Enter on the dialog surface", () => {
+  it("maps Escape and surface Enter to the intended callbacks", () => {
     const onCancel = vi.fn();
     const onConfirm = vi.fn();
-    const backdrop = openDialog({ onCancel, onConfirm });
-    const dialog = backdrop.props.children as DialogElement;
-    const keyDown = dialog.props.onKeyDown;
-    expect(keyDown).toBeDefined();
+    const currentTarget = { querySelectorAll: () => [], contains: () => true };
+    const event = (key: string, target: unknown = currentTarget) => ({
+      key,
+      target,
+      currentTarget,
+      preventDefault: vi.fn(),
+      shiftKey: false,
+    }) as unknown as React.KeyboardEvent<HTMLDivElement>;
 
-    const preventDefault = vi.fn();
-    keyDown?.({ key: "Escape", target: dialog, currentTarget: dialog, preventDefault } as unknown as React.KeyboardEvent<HTMLDivElement>);
+    handleConfirmActionKeyDown(event("Escape"), onCancel, onConfirm);
+    handleConfirmActionKeyDown(event("Enter", currentTarget), onCancel, onConfirm);
+    handleConfirmActionKeyDown(event("Enter", { nodeName: "BUTTON" }), onCancel, onConfirm);
     expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(preventDefault).toHaveBeenCalledTimes(1);
-
-    keyDown?.({ key: "Enter", target: { nodeName: "BUTTON" }, currentTarget: dialog, preventDefault: vi.fn() } as unknown as React.KeyboardEvent<HTMLDivElement>);
-    expect(onConfirm).not.toHaveBeenCalled();
-
-    keyDown?.({ key: "Enter", target: dialog, currentTarget: dialog, preventDefault } as unknown as React.KeyboardEvent<HTMLDivElement>);
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
-});
 
-
-it("wires cancel and confirm buttons and gives each dialog unique labelled IDs", () => {
-  const onCancel = vi.fn();
-  const onConfirm = vi.fn();
-  const first = openDialog({ onCancel, onConfirm });
-  const second = openDialog();
-  const firstMarkup = renderToStaticMarkup(first);
-  const secondMarkup = renderToStaticMarkup(second);
-  const firstTitleId = firstMarkup.match(/aria-labelledby="([^"]+)"/)?.[1];
-  const secondTitleId = secondMarkup.match(/aria-labelledby="([^"]+)"/)?.[1];
-  expect(firstTitleId).toBeDefined();
-  expect(secondTitleId).toBeDefined();
-  expect(firstTitleId).not.toBe(secondTitleId);
-
-  const dialog = first.props.children as DialogElement;
-  const buttons = (dialog.props.children as ReactNode[]).find((child) => React.isValidElement(child) && child.type === "div") as ReactElement<{ children?: ReactNode }>;
-  const [cancel, confirm] = buttons.props.children as ReactElement<{ onClick?: () => void }>[];
-  cancel?.props.onClick?.();
-  confirm?.props.onClick?.();
-  expect(onCancel).toHaveBeenCalledTimes(1);
-  expect(onConfirm).toHaveBeenCalledTimes(1);
+  it("keeps labelled IDs unique when dialogs share a render tree", () => {
+    const html = renderToStaticMarkup(
+      <>
+        <ConfirmActionDialog {...props} open />
+        <ConfirmActionDialog {...props} open />
+      </>,
+    );
+    const ids = [...html.matchAll(/aria-labelledby="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
 });

@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
+import { ApiErrorNotice } from "../components/ApiErrorNotice.js";
+import { ConfirmActionDialog } from "../components/ConfirmActionDialog.js";
 import { useT } from "../i18n/index.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import { useGoalDetail } from "../useGoalDetail.js";
-import { useGoalWorkers } from "../useGoalWorkers.js";
+import { useGoalWorkers, type GoalReadScope } from "../useGoalWorkers.js";
 import { summarizeDashboard } from "../lib/dashboard-data.js";
-import { runGoalControlAction, type GoalControlAction } from "../lib/goal-control.js";
+import { requiresGoalControlConfirmation, runGoalControlAction, type GoalControlAction, type GoalControlRequest } from "../lib/goal-control.js";
 import type { ViewName } from "../views.js";
 import type { DurableEventState } from "../useDurableEvents.js";
 import type { ConcertmasterFinalReport, EncoreCouncilRoundList, MetronomeChallenge } from "@maestro/api-client";
@@ -30,20 +32,23 @@ const CONTROL_ACTIONS: { action: GoalControlAction; label: string }[] = [
 export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate: (view: ViewName) => void; eventState: DurableEventState }) {
   const t = useT();
   const { config } = useConnection();
-  const { goals, selectedGoalId, selectGoal } = useGoals();
+  const { goals, selectedGoalId, selectGoal, refresh: refreshGoals, loadedFor: goalsLoadedFor, loading: goalsLoading, error: goalsError } = useGoals();
   const durableRefreshToken = durableReadRefreshToken(eventState.cursor);
-  const { detail, loading, error, refresh } = useGoalDetail(durableRefreshToken);
-  const { workers, loading: workersLoading, error: workersError } = useGoalWorkers(durableRefreshToken);
-  const { evidenceBundle, error: evidenceError } = useGoalEvidenceBundle(durableRefreshToken);
+  const { detail, loading, error, loadedFor: detailLoadedFor, errorLoadedFor: detailErrorLoadedFor, refresh } = useGoalDetail(durableRefreshToken);
+  const { workers, loading: workersLoading, error: workersError, loadedFor: workersLoadedFor } = useGoalWorkers(durableRefreshToken);
+  const { evidenceBundle, error: evidenceError, loadedFor: evidenceLoadedFor } = useGoalEvidenceBundle(durableRefreshToken);
   const projectionState = useGoalProjection(config === undefined ? undefined : window.maestro.api, config?.projectId, selectedGoalId, eventState.cursor);
   const [metronomeChallenges, setMetronomeChallenges] = useState<readonly MetronomeChallenge[] | undefined>(undefined);
   const [encoreRounds, setEncoreRounds] = useState<EncoreCouncilRoundList["rounds"] | undefined>(undefined);
   const [report, setReport] = useState<ConcertmasterFinalReport | undefined>(undefined);
+  const [auxiliaryScope, setAuxiliaryScope] = useState<GoalReadScope | undefined>(undefined);
   useEffect(() => {
     setMetronomeChallenges(undefined);
     setEncoreRounds(undefined);
     setReport(undefined);
+    setAuxiliaryScope(undefined);
     if (config === undefined || selectedGoalId === undefined) return;
+    const scope = { projectId: config.projectId, goalId: selectedGoalId, refreshKey: durableRefreshToken };
     let cancelled = false;
     void Promise.allSettled([
       window.maestro.api.listMetronomeChallenges(selectedGoalId, { projectId: config.projectId }),
@@ -54,32 +59,81 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
       setMetronomeChallenges(metronome.status === "fulfilled" ? metronome.value.challenges : undefined);
       setEncoreRounds(encore.status === "fulfilled" ? encore.value.rounds : undefined);
       setReport(finalReport.status === "fulfilled" ? finalReport.value : undefined);
+      setAuxiliaryScope(scope);
     });
     return () => { cancelled = true; };
   }, [config, selectedGoalId, durableRefreshToken]);
-  const summary = summarizeDashboard(goals, detail);
-  const [controlError, setControlError] = useState<string | undefined>(undefined);
+  const goalsReady = goals !== undefined
+    && !goalsLoading
+    && goalsError === undefined
+    && config !== undefined
+    && goalsLoadedFor?.projectId === config.projectId
+    && goalsLoadedFor.refreshKey === durableRefreshToken;
+  const currentGoals = goalsReady ? goals : undefined;
+  const detailForSelection = goalsReady
+    && detail !== undefined
+    && detailLoadedFor?.refreshKey === durableRefreshToken
+    && config !== undefined
+    && selectedGoalId !== undefined
+    && goals.some((goal) => goal.goalId === selectedGoalId)
+    && selectedGoalId === detail.goal.goalId
+    && config.projectId === detail.goal.projectId
+    ? detail
+    : undefined;
+  const scopeMatchesSelection = (scope: GoalReadScope | undefined): boolean =>
+    goalsReady
+      && scope !== undefined
+      && config !== undefined
+      && selectedGoalId !== undefined
+      && goals.some((goal) => goal.goalId === selectedGoalId)
+      && scope.projectId === config.projectId
+      && scope.goalId === selectedGoalId
+      && scope.refreshKey === durableRefreshToken;
+  const currentWorkers = scopeMatchesSelection(workersLoadedFor) ? workers : undefined;
+  const currentWorkersError = scopeMatchesSelection(workersLoadedFor) ? workersError : undefined;
+  const currentEvidenceBundle = scopeMatchesSelection(evidenceLoadedFor) ? evidenceBundle : undefined;
+  const currentEvidenceError = scopeMatchesSelection(evidenceLoadedFor) ? evidenceError : undefined;
+  const currentProjection = scopeMatchesSelection(projectionState.loadedFor) ? projectionState.projection : undefined;
+  const currentAuxiliary = scopeMatchesSelection(auxiliaryScope);
+  const currentDetailError = scopeMatchesSelection(detailErrorLoadedFor) ? error : undefined;
+  const summary = summarizeDashboard(currentGoals, detailForSelection);
+  const [controlError, setControlError] = useState<unknown>(undefined);
+  const [failedRequest, setFailedRequest] = useState<GoalControlRequest | undefined>(undefined);
   const [pendingAction, setPendingAction] = useState<GoalControlAction | undefined>(undefined);
+  const [confirmationRequest, setConfirmationRequest] = useState<GoalControlRequest | undefined>(undefined);
 
   if (config === undefined) return <EmptyState />;
 
-  const runControl = async (action: GoalControlAction) => {
-    if (summary.selectedGoal === undefined) return;
+  const runControl = async (request: GoalControlRequest): Promise<void> => {
     setControlError(undefined);
-    setPendingAction(action);
+    setFailedRequest(undefined);
+    setPendingAction(request.action);
     try {
-      await runGoalControlAction(window.maestro.api, {
-        goalId: summary.selectedGoal.goalId,
-        projectId: config.projectId,
-        action,
-        expectedVersion: summary.selectedGoal.version,
-      });
-      refresh();
+      await runGoalControlAction(window.maestro.api, request);
     } catch (cause) {
-      setControlError(cause instanceof Error ? cause.message : "Could not run that Goal control");
-    } finally {
+      setControlError(cause);
+      setFailedRequest(request);
       setPendingAction(undefined);
+      return;
     }
+    setPendingAction(undefined);
+    refresh();
+    void refreshGoals();
+  };
+
+  const requestControl = (request: GoalControlRequest): void => {
+    if (requiresGoalControlConfirmation(request.action)) setConfirmationRequest(request);
+    else void runControl(request);
+  };
+
+  const requestSelectedControl = (action: GoalControlAction): void => {
+    if (summary.selectedGoal === undefined) return;
+    requestControl({
+      goalId: summary.selectedGoal.goalId,
+      projectId: config.projectId,
+      action,
+      expectedVersion: summary.selectedGoal.version,
+    });
   };
 
   return (
@@ -93,17 +147,19 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
       </header>
       <div className="dash-sub" role="status">
         {loading && t.common.loading}
-        {!loading && error === undefined && summary.selectedGoal !== undefined && `Durable version ${summary.selectedGoal.version}`}
+        {!loading && currentDetailError === undefined && summary.selectedGoal !== undefined && `Durable version ${summary.selectedGoal.version}`}
       </div>
-      {error !== undefined && (
+      {currentDetailError !== undefined && (
         <div className="dash-inline-alert alert alert-warning" role="alert">
           <div>
             <strong>Goal state is unavailable</strong>
-            <span>{error}</span>
+            <span>{currentDetailError}</span>
           </div>
           <button type="button" className="btn btn-sm" onClick={() => refresh()}>Retry</button>
         </div>
       )}
+
+      {goalsError !== undefined && <ApiErrorNotice error={goalsError} onRetry={() => void refreshGoals()} />}
 
       <section className="dash-stats" aria-label="Goal summary">
         <div className="stat-card stat-terracotta"><p className="stat-label">Goals in this project</p><p className="stat-value">{summary.totalGoals}</p></div>
@@ -120,7 +176,12 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
               <p className="dash-section-hint">Actions apply to durable version {summary.selectedGoal.version}. Stale changes are rejected safely.</p>
             </div>
           </div>
-          {controlError !== undefined && <div className="alert alert-warning" role="alert">{controlError}</div>}
+          {controlError !== undefined && (
+            <ApiErrorNotice
+              error={controlError}
+              {...(failedRequest === undefined ? {} : { onRetry: () => requestControl(failedRequest) })}
+            />
+          )}
           <div className="dash-control-group" role="group" aria-label="Goal lifecycle controls">
             {CONTROL_ACTIONS.map(({ action, label }) => (
               <button
@@ -128,21 +189,35 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
                 type="button"
                 className={`btn dash-control${action === "emergency-stop" ? " dash-control-danger" : ""}`}
                 disabled={pendingAction !== undefined}
-                onClick={() => void runControl(action)}
+                onClick={() => requestSelectedControl(action)}
               >
                 {pendingAction === action ? t.common.loading : label}
               </button>
             ))}
           </div>
+          <ConfirmActionDialog
+            open={confirmationRequest !== undefined}
+            title={confirmationRequest?.action === "emergency-stop" ? "Emergency-stop this Goal?" : "Stop this Goal?"}
+            effectSummary={confirmationRequest === undefined ? "" : `This sends a durable ${confirmationRequest.action === "emergency-stop" ? "emergency-stop" : "stop"} command for ${confirmationRequest.goalId} at version ${confirmationRequest.expectedVersion}.`}
+            confirmLabel={confirmationRequest?.action === "emergency-stop" ? "Emergency stop" : "Stop Goal"}
+            danger
+            onCancel={() => setConfirmationRequest(undefined)}
+            onConfirm={() => {
+              const request = confirmationRequest;
+              setConfirmationRequest(undefined);
+              if (request !== undefined) void runControl(request);
+            }}
+          />
         </section>
       )}
 
       <h2 className="dash-section-title">Goals</h2>
+      {goalsLoading && <p className="dash-loading" role="status">Loading Goals…</p>}
       <div className="dept-grid" aria-label="Goals in this project">
-        {(goals ?? []).length === 0 ? (
+        {(currentGoals ?? []).length === 0 ? (
           <p className="dash-empty">No durable Goals exist for this project yet.</p>
         ) : (
-          (goals ?? []).map((goal) => (
+          (currentGoals ?? []).map((goal) => (
             <button
               key={goal.goalId}
               type="button"
@@ -159,14 +234,14 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
 
       <h2 className="dash-section-title">Pipeline</h2>
       {workersLoading && <p className="dash-loading" role="status">Loading workers…</p>}
-      {workersError !== undefined && <div className="alert alert-warning" role="alert">{workersError}</div>}
-      {!workersLoading && workersError === undefined && workers !== undefined && workers.length === 0 && (
+      {currentWorkersError !== undefined && <div className="alert alert-warning" role="alert">{currentWorkersError}</div>}
+      {!workersLoading && currentWorkersError === undefined && currentWorkers !== undefined && currentWorkers.length === 0 && (
         <EmptyState title="No workers yet" hint="No worker has been spawned for this Goal yet." />
       )}
-      {workers !== undefined && workers.length > 0 && (
+      {currentWorkers !== undefined && currentWorkers.length > 0 && (
         <div className="kanban">
           {(["spawned", "running", "succeeded", "failed", "cancelled", "unknown"] as const).map((status) => {
-            const columnWorkers = workers.filter((worker) => worker.status === status);
+            const columnWorkers = currentWorkers.filter((worker) => worker.status === status);
             if (columnWorkers.length === 0) return null;
             return (
               <div key={status}>
@@ -189,26 +264,26 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
       )}
       <h2 className="dash-section-title dash-section-title-office">Goal office detail</h2>
       {projectionState.loading && <p className="dash-loading" role="status">Loading Goal office…</p>}
-      {projectionState.error !== undefined && (
+      {scopeMatchesSelection(projectionState.loadedFor) && projectionState.error !== undefined && (
         <div className="dash-detail-alert alert alert-warning" role="alert">
           <div><strong>Goal office detail is unavailable</strong><span>{projectionState.error}</span></div>
         </div>
       )}
-      {evidenceError !== undefined && (
+      {currentEvidenceError !== undefined && (
         <div className="dash-detail-alert alert alert-warning" role="alert">
-          <div><strong>Evidence is unavailable</strong><span>{evidenceError}</span></div>
+          <div><strong>Evidence is unavailable</strong><span>{currentEvidenceError}</span></div>
         </div>
       )}
-      {projectionState.projection !== undefined && (
+      {currentProjection !== undefined && (
         <GoalDepartmentPanels
-          projection={projectionState.projection}
+          projection={currentProjection}
           events={eventState.events}
-          budget={detail?.budget}
-          certifications={detail?.certifications ?? []}
-          evidenceBundle={evidenceBundle}
-          metronomeChallenges={metronomeChallenges}
-          encoreRounds={encoreRounds}
-          report={report}
+          budget={detailForSelection?.budget}
+          certifications={detailForSelection?.certifications ?? []}
+          evidenceBundle={currentEvidenceBundle}
+          metronomeChallenges={currentAuxiliary ? metronomeChallenges : undefined}
+          encoreRounds={currentAuxiliary ? encoreRounds : undefined}
+          report={currentAuxiliary ? report : undefined}
           goalId={selectedGoalId}
         />
       )}

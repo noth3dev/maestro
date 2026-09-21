@@ -2,7 +2,7 @@ import React, { type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { Dashboard } from "./Dashboard.js";
 
-const mocks = vi.hoisted(() => ({ refresh: vi.fn(), selectGoal: vi.fn(), hasDetail: false }));
+const mocks = vi.hoisted(() => ({ refresh: vi.fn(), selectGoal: vi.fn(), hasDetail: false, goalsLoading: false, goalsError: undefined as string | undefined, detailError: "gateway unavailable" as string | undefined, goals: [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }], selectedGoalId: "22222222-2222-4222-8222-222222222222" as string | undefined, goalsLoadedFor: { projectId: "11111111-1111-4111-8111-111111111111", refreshKey: "0" } as { projectId: string; refreshKey: string | undefined } | undefined, detailLoadedFor: { projectId: "11111111-1111-4111-8111-111111111111", goalId: "22222222-2222-4222-8222-222222222222", refreshKey: "0" } as { projectId: string; goalId: string; refreshKey: string } | undefined }));
 
 vi.mock("react", async () => {
   const actual = await vi.importActual<typeof import("react")>("react");
@@ -15,25 +15,34 @@ vi.mock("react", async () => {
 vi.mock("../icons.js", () => ({ Icon: () => null }));
 vi.mock("../components/EmptyState.js", () => ({ EmptyState: () => <div>empty</div> }));
 vi.mock("../i18n/index.js", () => ({ useT: () => ({ common: { loading: "loading" } }) }));
+vi.mock("../components/ApiErrorNotice.js", () => ({
+  ApiErrorNotice: ({ onRetry }: { onRetry?: () => void }) => <button type="button" onClick={onRetry}>Retry</button>,
+}));
 vi.mock("../connection.js", () => ({
   useConnection: () => ({ config: { projectId: "11111111-1111-4111-8111-111111111111" } }),
 }));
 vi.mock("../goals.js", () => ({
   useGoals: () => ({
-    goals: [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }],
-    selectedGoalId: "22222222-2222-4222-8222-222222222222",
+    goals: mocks.goals,
+    selectedGoalId: mocks.selectedGoalId,
     selectGoal: mocks.selectGoal,
+    refresh: mocks.refresh,
+    loadedFor: mocks.goalsLoadedFor,
+    loading: mocks.goalsLoading,
+    error: mocks.goalsError,
   }),
 }));
 vi.mock("../useGoalDetail.js", () => ({
   useGoalDetail: () => ({
     detail: mocks.hasDetail ? {
-      goal: { goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 },
+      goal: { goalId: "22222222-2222-4222-8222-222222222222", projectId: "11111111-1111-4111-8111-111111111111", state: "active", version: 1 },
       budget: { budgetCents: 1000, reservedCents: 250, costCents: 100 },
       certifications: [],
     } : undefined,
+    loadedFor: mocks.detailLoadedFor,
+    errorLoadedFor: mocks.detailLoadedFor,
     loading: false,
-    error: mocks.hasDetail ? undefined : "gateway unavailable",
+    error: mocks.hasDetail ? undefined : mocks.detailError,
     refresh: mocks.refresh,
   }),
 }));
@@ -81,6 +90,10 @@ function findRetryButton(node: ReactNode): ReactElement<{ type?: string; onClick
   if (!("type" in node) || !("props" in node)) return undefined;
   const element = node as ReactElement<{ children?: ReactNode; type?: string; onClick?: () => void }>;
   if (element.type === "button" && element.props.children === "Retry") return element;
+  if (typeof element.type === "function") {
+    const renderFunction = element.type as unknown as (props: unknown) => ReactNode;
+    return findRetryButton(renderFunction(element.props));
+  }
   return findRetryButton(element.props.children);
 }
 
@@ -106,6 +119,7 @@ describe("Dashboard Goal-read recovery", () => {
       onNavigate: vi.fn(),
       eventState: { cursor: "0", events: [], stale: false, transport: "polling", error: undefined },
     });
+    mocks.hasDetail = false;
     const root = view as ReactElement<{ children?: ReactNode; className?: string; role?: string }>;
     expect(root.type).toBe("main");
     expect(root.props.className).toBe("dash-main");
@@ -124,10 +138,78 @@ describe("Dashboard Goal-read recovery", () => {
     expect(controls).toHaveLength(4);
     expect(controls.every((button) => button.props.type === "button")).toBe(true);
     expect(controls.find((button) => button.props.className?.includes("dash-control-danger"))).toBeDefined();
+  });
+
+  it("does not render a prior Goal before the refreshed list commits", () => {
+    mocks.goals = [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }];
+    mocks.selectedGoalId = "22222222-2222-4222-8222-222222222222";
+    mocks.goalsLoading = false;
+    mocks.goalsError = undefined;
+    mocks.goalsLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", refreshKey: "0" };
+    const view = Dashboard({
+      onNavigate: vi.fn(),
+      eventState: { cursor: "1", events: [], stale: false, transport: "sse", error: undefined },
+    });
+
+    expect(findGoalCard(view)).toBeUndefined();
+    mocks.goalsLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", refreshKey: "0" };
+  });
+
+  it("does not render stale Goal adjuncts after the list refreshes", () => {
+    mocks.goals = [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }];
+    mocks.selectedGoalId = "22222222-2222-4222-8222-222222222222";
+    mocks.goalsLoading = false;
+    mocks.goalsError = undefined;
+    mocks.goalsLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", refreshKey: "1" };
+    mocks.hasDetail = true;
+    mocks.detailLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", goalId: "22222222-2222-4222-8222-222222222222", refreshKey: "0" };
+    const view = Dashboard({
+      onNavigate: vi.fn(),
+      eventState: { cursor: "1", events: [], stale: false, transport: "sse", error: undefined },
+    });
+
+    expect(JSON.stringify(view)).not.toContain("Durable version 1");
     mocks.hasDetail = false;
+    mocks.detailLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", goalId: "22222222-2222-4222-8222-222222222222", refreshKey: "0" };
+  });
+
+  it("does not render a stale detail error after the Goal scope changes", () => {
+    mocks.goals = [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }];
+    mocks.selectedGoalId = "22222222-2222-4222-8222-222222222222";
+    mocks.goalsLoading = false;
+    mocks.goalsError = undefined;
+    mocks.goalsLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", refreshKey: "1" };
+    mocks.hasDetail = false;
+    mocks.detailError = "stale detail failure";
+    mocks.detailLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", goalId: "22222222-2222-4222-8222-222222222222", refreshKey: "0" };
+    const view = Dashboard({
+      onNavigate: vi.fn(),
+      eventState: { cursor: "1", events: [], stale: false, transport: "sse", error: undefined },
+    });
+
+    expect(JSON.stringify(view)).not.toContain("stale detail failure");
+    mocks.detailError = "gateway unavailable";
+  });
+
+  it("does not render a prior Goal while the durable list refresh is unresolved", () => {
+    mocks.goals = [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }];
+    mocks.selectedGoalId = "22222222-2222-4222-8222-222222222222";
+    mocks.goalsLoading = true;
+    mocks.goalsError = undefined;
+    const view = Dashboard({
+      onNavigate: vi.fn(),
+      eventState: { cursor: "1", events: [], stale: false, transport: "sse", error: undefined },
+    });
+
+    expect(findGoalCard(view)).toBeUndefined();
+    mocks.goalsLoading = false;
   });
 
   it("offers a Retry button for a selected Goal read error and refreshes on click", () => {
+    mocks.goalsLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", refreshKey: "0" };
+    mocks.detailLoadedFor = { projectId: "11111111-1111-4111-8111-111111111111", goalId: "22222222-2222-4222-8222-222222222222", refreshKey: "0" };
+    mocks.detailError = "gateway unavailable";
+    mocks.goalsError = undefined;
     mocks.refresh.mockClear();
     const view = Dashboard({
       onNavigate: vi.fn(),
@@ -139,5 +221,26 @@ describe("Dashboard Goal-read recovery", () => {
     expect(retry?.props.type).toBe("button");
     retry?.props.onClick?.();
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Goal-list recovery visible before a Goal is selected", () => {
+    mocks.refresh.mockClear();
+    mocks.hasDetail = false;
+    mocks.detailError = undefined;
+    mocks.goalsError = "Goal list unavailable";
+    mocks.goals = [];
+    mocks.selectedGoalId = undefined;
+    const view = Dashboard({
+      onNavigate: vi.fn(),
+      eventState: { cursor: "0", events: [], stale: false, transport: "polling", error: undefined },
+    });
+    const retry = findRetryButton(view);
+    expect(retry).toBeDefined();
+    retry?.props.onClick?.();
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    mocks.goalsError = undefined;
+    mocks.detailError = "gateway unavailable";
+    mocks.goals = [{ goalId: "22222222-2222-4222-8222-222222222222", state: "active", version: 1 }];
+    mocks.selectedGoalId = "22222222-2222-4222-8222-222222222222";
   });
 });

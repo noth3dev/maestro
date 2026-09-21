@@ -3,25 +3,49 @@ import type { WorkerList } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
-export function useGoalWorkers(refreshCursor = "0"): { workers: WorkerList["workers"] | undefined; loading: boolean; error: string | undefined } {
+export interface GoalReadScope {
+  projectId: string;
+  goalId: string;
+  refreshKey: string;
+}
+
+export function useGoalWorkers(refreshCursor = "0"): {
+  workers: WorkerList["workers"] | undefined;
+  loading: boolean;
+  error: string | undefined;
+  loadedFor: GoalReadScope | undefined;
+} {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
   const [workers, setWorkers] = useState<WorkerList["workers"] | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [loadedFor, setLoadedFor] = useState<GoalReadScope | undefined>(undefined);
 
   useEffect(() => {
-    if (config === undefined || selectedGoalId === undefined) return;
+    setWorkers(undefined);
+    setLoadedFor(undefined);
+    setError(undefined);
+    if (config === undefined || selectedGoalId === undefined) {
+      setLoading(false);
+      return;
+    }
+    const scope = { projectId: config.projectId, goalId: selectedGoalId, refreshKey: refreshCursor };
     let cancelled = false;
     setLoading(true);
-    setError(undefined);
     window.maestro.api
       .listWorkersForGoal(selectedGoalId, { projectId: config.projectId })
       .then((result) => {
-        if (!cancelled) setWorkers(result.workers);
+        if (!cancelled) {
+          setWorkers(result.workers);
+          setLoadedFor(scope);
+        }
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load workers for this Goal");
+        if (!cancelled) {
+          setLoadedFor(scope);
+          setError(cause instanceof Error ? cause.message : "Could not load workers for this Goal");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -31,5 +55,5 @@ export function useGoalWorkers(refreshCursor = "0"): { workers: WorkerList["work
     };
   }, [config, selectedGoalId, refreshCursor]);
 
-  return { workers, loading, error };
+  return { workers, loading, error, loadedFor };
 }

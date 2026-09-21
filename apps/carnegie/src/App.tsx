@@ -77,7 +77,7 @@ function ConnectedWorkspace({ projectId }: { projectId: string }) {
   }), []);
   const eventState = useDurableEvents(durableEventsApi, projectId);
   return (
-    <GoalsProvider>
+    <GoalsProvider refreshKey={eventState.cursor}>
       <Shell eventState={eventState} />
     </GoalsProvider>
   );
