@@ -6,6 +6,18 @@ import type { Pool, PoolClient } from "pg";
 
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 
+export interface MigrationFile {
+  readonly filename: string;
+  readonly sql: string;
+}
+
+export function readMigrationFiles(): readonly MigrationFile[] {
+  return readdirSync(migrationsDirectory)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .map((filename) => ({ filename, sql: readFileSync(join(migrationsDirectory, filename), "utf8") }));
+}
+
 /**
  * A fixed, arbitrary 64-bit advisory-lock key reserved for this migration
  * runner only. Any two processes calling pg_advisory_lock with this exact
@@ -17,6 +29,13 @@ export class MigrationChecksumMismatchError extends Error {
   constructor(readonly filename: string) {
     super(`Migration file has changed since it was applied and recorded: ${filename}`);
     this.name = "MigrationChecksumMismatchError";
+  }
+}
+
+export class MigrationSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MigrationSourceError";
   }
 }
 
@@ -54,25 +73,30 @@ export async function ensureMigrationLedgerTable(client: PoolClient): Promise<vo
  * so migrations are never applied twice concurrently; the lock is always
  * released, even on error.
  */
-export async function runMigrations(pool: Pool): Promise<MigrationResult> {
+export async function runMigrations(pool: Pool, migrations: readonly MigrationFile[] = readMigrationFiles()): Promise<MigrationResult> {
+  const orderedMigrations = [...migrations].sort((left, right) => left.filename < right.filename ? -1 : left.filename > right.filename ? 1 : 0);
+  const migrationNames = new Set<string>();
+  for (const migration of orderedMigrations) {
+    if (migrationNames.has(migration.filename)) throw new MigrationSourceError(`Duplicate migration filename: ${migration.filename}`);
+    migrationNames.add(migration.filename);
+  }
+
   const client = await pool.connect();
   try {
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY.toString()]);
     try {
       await ensureMigrationLedgerTable(client);
 
-      const filenames = readdirSync(migrationsDirectory)
-        .filter((name) => name.endsWith(".sql"))
-        .sort();
-
       const recorded = await client.query<{ filename: string; checksum: string }>(
         "SELECT filename, checksum FROM schema_migrations",
       );
       const recordedByFilename = new Map(recorded.rows.map((row) => [row.filename, row.checksum]));
+      for (const filename of recordedByFilename.keys()) {
+        if (!migrationNames.has(filename)) throw new MigrationSourceError(`Migration source omitted an already-applied file: ${filename}`);
+      }
 
       const applied: string[] = [];
-      for (const filename of filenames) {
-        const sql = readFileSync(join(migrationsDirectory, filename), "utf8");
+      for (const { filename, sql } of orderedMigrations) {
         const checksum = computeMigrationChecksum(sql);
         const existingChecksum = recordedByFilename.get(filename);
         if (existingChecksum !== undefined) {
