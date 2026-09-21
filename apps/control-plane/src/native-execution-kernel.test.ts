@@ -88,6 +88,7 @@ describe("native Control Plane execution kernel", () => {
       dataPolicyHash: "policy-test",
     }));
     expect(await kernel.getModelIdentity(spawned.execution)).toEqual({ provider: "test", id: "model-a" });
+    await expect(kernel.getExecutionBinding!(spawned.execution)).resolves.toMatchObject({ model: binding.provider });
 
     await kernel.prompt(spawned.execution, "hello");
     expect(await kernel.getInvocationStatus(spawned.invocation)).toBe<InvocationStatus>("succeeded");
@@ -176,6 +177,7 @@ describe("native Control Plane execution kernel", () => {
     await kernel.release!(spawned.invocation);
 
     await expect(kernel.getModelIdentity(spawned.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(spawned.execution)).rejects.toThrow("operation unavailable");
     await expect(kernel.prompt(spawned.execution, "must not route")).rejects.toThrow("operation unavailable");
     await expect(kernel.observe(spawned.execution)).resolves.toEqual([]);
     await expect(kernel.release!(spawned.invocation)).resolves.toBeUndefined();
@@ -209,7 +211,8 @@ describe("native Control Plane execution kernel", () => {
 
     expect(await kernel.getInvocationStatus(root.invocation)).toBe("unknown");
     expect(await kernel.getInvocationStatus(child.invocation)).toBe("succeeded");
-    expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(root.execution)).rejects.toThrow("operation unavailable");
     expect((await kernel.observe(root.execution)).some((item) => item.invocation === child.invocation)).toBe(true);
     await kernel.sendMessage(root.execution, child.invocation, "continue child");
     expect(await kernel.getInvocationStatus(child.invocation)).toBe("succeeded");
@@ -244,10 +247,12 @@ describe("native Control Plane execution kernel", () => {
     await kernel.release!(child.invocation);
 
     expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
+    await expect(kernel.getExecutionBinding!(root.execution)).resolves.toMatchObject({ model: binding.provider });
     await kernel.prompt(root.execution, "root remains routable");
     expect((await kernel.observe(root.execution)).some((item) => item.invocation === root.invocation)).toBe(true);
     await kernel.release!(root.invocation);
     await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(root.execution)).rejects.toThrow("operation unavailable");
     expect(gateway.close).not.toHaveBeenCalled();
   });
 

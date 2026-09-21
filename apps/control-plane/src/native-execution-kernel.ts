@@ -91,6 +91,8 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
   const executions = new Map<ExecutionRef, RuntimeRecord>();
   const invocations = new Map<InvocationRef, RuntimeRecord>();
   const invocationExecutions = new Map<InvocationRef, ExecutionRef>();
+  const rootInvocations = new Map<ExecutionRef, InvocationRef>();
+  const releasedRootExecutions = new Set<ExecutionRef>();
   const executionInvocations = new Map<ExecutionRef, Set<InvocationRef>>();
   const pendingChildSpawns = new Map<ExecutionRef, number>();
   let closed = false;
@@ -133,6 +135,8 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     const record = executions.get(execution);
     executionInvocations.delete(execution);
     pendingChildSpawns.delete(execution);
+    rootInvocations.delete(execution);
+    releasedRootExecutions.delete(execution);
     if (record === undefined) return;
     executions.delete(execution);
     await record.runtime.close?.().catch(() => undefined);
@@ -167,6 +171,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       try {
         const spawned = await record.runtime.spawn(request);
         executions.set(spawned.execution, record);
+        rootInvocations.set(spawned.execution, spawned.invocation);
         executionInvocations.set(spawned.execution, new Set([spawned.invocation]));
         invocations.set(spawned.invocation, record);
         invocationExecutions.set(spawned.invocation, spawned.execution);
@@ -201,13 +206,13 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
 
     async getModelIdentity(execution) {
       const record = executions.get(execution);
-      if (record === undefined) throw new ExecutionKernelUnavailableError("getModelIdentity");
+      if (record === undefined || releasedRootExecutions.has(execution)) throw new ExecutionKernelUnavailableError("getModelIdentity");
       return record.binding.provider;
     },
 
     async getExecutionBinding(execution): Promise<ExecutionBindingEvidence> {
       const record = executions.get(execution);
-      if (record === undefined) throw new ExecutionKernelUnavailableError("getModelIdentity");
+      if (record === undefined || releasedRootExecutions.has(execution)) throw new ExecutionKernelUnavailableError("getModelIdentity");
       return {
         model: record.binding.provider,
         accountRef: record.binding.account.accountRef,
@@ -245,9 +250,10 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     async release(invocation) {
       const record = runtimeForInvocation(invocation);
       if (record === undefined) return;
+      const execution = invocationExecutions.get(invocation);
+      if (execution !== undefined && rootInvocations.get(execution) === invocation) releasedRootExecutions.add(execution);
       await record.runtime.release?.(invocation);
       invocations.delete(invocation);
-      const execution = invocationExecutions.get(invocation);
       invocationExecutions.delete(invocation);
       if (execution === undefined) return;
       executionInvocations.get(execution)?.delete(invocation);
@@ -264,6 +270,8 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       pendingChildSpawns.clear();
       invocations.clear();
       invocationExecutions.clear();
+      rootInvocations.clear();
+      releasedRootExecutions.clear();
       await options.gateway.close();
     },
   };

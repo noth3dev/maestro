@@ -131,6 +131,8 @@ describe("native execution kernel child registration race", () => {
 
     await childEntered.promise;
     await kernel.release!(root.invocation);
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(root.execution)).rejects.toThrow("operation unavailable");
     childGate.resolve(undefined);
     const child = await pendingChild;
 
