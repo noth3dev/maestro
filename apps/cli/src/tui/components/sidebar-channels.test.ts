@@ -286,12 +286,14 @@ describe("activateSidebarChannel", () => {
     activateSidebarChannel(h, CHANNEL_REFRESH_ROW_ID);
     expect(h.refreshSidebarChannels).toHaveBeenCalledOnce();
     expect(h.submitter.submit).not.toHaveBeenCalled();
+    expect(h.submitter.openReadView).not.toHaveBeenCalled();
   });
 
   it("ignores ids outside the cache", () => {
     const h = host(reads);
     activateSidebarChannel(h, "channel:department:security");
     expect(h.submitter.submit).not.toHaveBeenCalled();
+    expect(h.submitter.openReadView).not.toHaveBeenCalled();
     expect(h.refreshSidebarChannels).not.toHaveBeenCalled();
   });
 });
