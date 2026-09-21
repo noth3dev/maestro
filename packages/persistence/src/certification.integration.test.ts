@@ -261,7 +261,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
 
     await expect(
       certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [captured.sha256] }, "quality", proof, headContext("quality"), store),
-    ).rejects.toBeInstanceOf(CertificationError);
+    ).rejects.toThrow("Ambiguous evidence citation");
     expect((await listQualityCertifications(pool, goalId)).length).toBe(0);
   });
 

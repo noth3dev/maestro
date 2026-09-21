@@ -303,6 +303,10 @@ async function createCertification(
           rowsByCitation.set(citation, matches);
         }
       }
+      for (const [citation, rows] of rowsByCitation) {
+        const metadata = new Set(rows.map((row) => `${row.sha256.trim()}:${row.byte_length}`));
+        if (metadata.size > 1) throw new CertificationError(`Ambiguous evidence citation: ${citation}`);
+      }
       for (const evidenceId of substance.testEvidenceIds) {
         const rows = rowsByCitation.get(evidenceId.trim()) ?? [];
         for (const row of rows) {
