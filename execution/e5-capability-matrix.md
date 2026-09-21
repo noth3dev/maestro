@@ -34,6 +34,8 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 ## Home / Task Contract intake (Task 3)
 
 **Status: Partial.** `views/Home.tsx` + `lib/task-contract-authoring.ts` implement create-conversation → send-turn → parse-draft → edit → confirm(exact version+hash) → launch, as two explicit separate actions, matching the plan's core safety requirement.
+
+Task 3 Step 1 RED coverage has been added in `lib/conversation-data.test.ts` and `views/Home.test.tsx`; durable conversation reload and visible conversation/turn/continuation state remain unimplemented.
 **Missing:** `getConversation`, `cancelConversation`, `listConversationEvents` are not called anywhere in `Home.tsx` even though the bridge now exposes them — "reload a conversation from durable events" and an explicit cancel path (Task 3 Steps 1 and 6) are not implemented. No live Electron conversation has been run (Task 3 Step 8) — this sandbox has no provider/Control Plane.
 
 ## Dashboard / Goal lifecycle (Task 4)
