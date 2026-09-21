@@ -164,6 +164,7 @@ describe("persistence surface", () => {
         "bootstrapAuthorityRecord",
         "bootstrapLocalOperator",
         "bootstrapPermanentOrganization",
+        "buildEmbeddedDatabaseChildEnvironment",
         "cancelConversationTurn",
         "cancelUnboundWorkerAfterBindingFailure",
         "cancelWorker",

@@ -12,6 +12,7 @@ describe("local-backend surface", () => {
         "LOCAL_POSTGRES_CONTAINER",
         "buildLocalControlPlaneEnvironment",
         "buildLocalModelGatewayEnvironment",
+        "configuredEmbeddedDatabasePort",
         "ensureLocalControlPlane",
         "resolveConnection",
         "resolveInstalledControlPlaneEntry",
