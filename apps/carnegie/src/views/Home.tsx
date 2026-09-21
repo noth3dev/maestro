@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { TaskContract } from "@maestro/contracts";
 import { Icon } from "../icons.js";
 import { useConnection } from "../connection.js";
@@ -6,12 +6,16 @@ import { useGoals } from "../goals.js";
 import type { ViewName } from "../views.js";
 import type { HomeMode } from "../homeMode.js";
 import {
+  canEditTaskContract,
+  ConversationTurnError,
   confirmTaskContractDraft,
   formatTaskContractReview,
+  getTaskContractPhase,
   launchTaskContractDraft,
   submitHomeBrief,
   updateTaskContractDraft,
 } from "../lib/task-contract-authoring.js";
+import { loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
 
 const homeTitles = [
   "what should the floor work on",
@@ -63,27 +67,73 @@ export function Home({
   const [draft, setDraft] = useState<TaskContract | undefined>(undefined);
   const [draftOrigin, setDraftOrigin] = useState<"goal-less" | "goal-attached" | undefined>(undefined);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
+  const [conversationProjectId, setConversationProjectId] = useState<string | undefined>(undefined);
+  const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+  const [turnStatus, setTurnStatus] = useState<"idle" | "loading" | "completed" | "failed" | "cancelled" | "unknown">("idle");
   const [intakeMessage, setIntakeMessage] = useState<string | undefined>(undefined);
   const [draftForm, setDraftForm] = useState<DraftForm | undefined>(undefined);
   const [confirmed, setConfirmed] = useState(false);
+  const [draftRejected, setDraftRejected] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const isFlashmob = mode === "flashmob";
   const dirty = draft !== undefined && draftForm !== undefined && JSON.stringify(draftForm) !== JSON.stringify(formFromContract(draft));
+  const draftPhase = draft === undefined ? undefined : getTaskContractPhase(draft, confirmed, draftRejected);
+  const projectId = config?.projectId;
+
+  useEffect(() => {
+    if (projectId === undefined) return;
+    setConversationId(undefined);
+    setConversationProjectId(projectId);
+    setConversationMessages([]);
+    setTurnStatus("idle");
+    setDraft(undefined);
+    setDraftForm(undefined);
+    setDraftOrigin(undefined);
+    setConfirmed(false);
+    setDraftRejected(false);
+    setError(undefined);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId === undefined || conversationId === undefined || conversationProjectId !== projectId) return;
+    let current = true;
+    void loadConversation(window.maestro.api, { conversationId, projectId })
+      .then((messages) => { if (current) setConversationMessages(messages); })
+      .catch((cause) => { if (current) setError(cause instanceof Error ? cause.message : String(cause)); });
+    return () => { current = false; };
+  }, [conversationId, conversationProjectId, projectId]);
 
   const submitBrief = async (event: React.FormEvent) => {
     event.preventDefault();
     if (config === undefined) return;
+    const submittedText = text.trim();
     setBusy(true);
+    setTurnStatus("loading");
     setError(undefined);
     try {
       const intake = await submitHomeBrief(window.maestro.api, {
         projectId: config.projectId,
-        text,
+        text: submittedText,
         selectedGoalId,
         ...(conversationId === undefined ? {} : { conversationId }),
       });
-      if ("conversationId" in intake && intake.conversationId !== undefined) setConversationId(intake.conversationId);
+      let completedTurn = false;
+      if ("conversationId" in intake && intake.conversationId !== undefined) {
+        setConversationId(intake.conversationId);
+        setConversationProjectId(config.projectId);
+        const createdAt = new Date().toISOString();
+        setConversationMessages((messages) => [
+          ...messages,
+          { id: `operator-${intake.conversationId}-${createdAt}`, role: "operator", content: submittedText, createdAt },
+          { id: `assistant-${intake.conversationId}-${createdAt}`, role: "concertmaster", content: intake.response, createdAt },
+        ]);
+        completedTurn = intake.turnStatus === "completed";
+        setTurnStatus(completedTurn ? "completed" : intake.turnStatus === "accepted" ? "loading" : intake.turnStatus);
+      } else {
+        setTurnStatus("idle");
+      }
       if ("message" in intake) setIntakeMessage(intake.message);
       else setIntakeMessage(undefined);
       if (intake.draft !== undefined) {
@@ -91,18 +141,44 @@ export function Home({
         setDraftOrigin(selectedGoalId === undefined ? "goal-less" : "goal-attached");
         setDraftForm(formFromContract(intake.draft));
         setConfirmed(false);
+        setDraftRejected(false);
       }
-      setText("");
+      setText("conversationId" in intake && !completedTurn ? submittedText : "");
     } catch (cause) {
+      if (cause instanceof ConversationTurnError) {
+        setConversationId(cause.conversationId);
+        setConversationProjectId(config.projectId);
+      }
+      setTurnStatus("failed");
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
     }
   };
 
+  const retryBrief = () => {
+    if (!(turnStatus === "failed" || turnStatus === "cancelled" || turnStatus === "unknown") || text.trim() === "") return;
+    void submitBrief({ preventDefault: () => undefined } as React.FormEvent);
+  };
+
+  const cancelTurn = async () => {
+    if (config === undefined || conversationId === undefined || conversationProjectId !== config.projectId || turnStatus !== "loading") return;
+    setCancelBusy(true);
+    setError(undefined);
+    try {
+      await window.maestro.api.cancelConversation(conversationId, { projectId: config.projectId });
+      setTurnStatus("cancelled");
+    } catch (cause) {
+      setTurnStatus("failed");
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCancelBusy(false);
+    }
+  };
+
   const saveDraft = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (draft === undefined || draftForm === undefined || confirmed) return;
+    if (draft === undefined || draftForm === undefined || draftPhase === undefined || !canEditTaskContract(draftPhase)) return;
     setBusy(true);
     setError(undefined);
     try {
@@ -117,7 +193,9 @@ export function Home({
       });
       setDraft(updated);
       setDraftForm(formFromContract(updated));
+      setDraftRejected(false);
     } catch (cause) {
+      setDraftRejected(true);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
@@ -131,7 +209,9 @@ export function Home({
     try {
       await confirmTaskContractDraft(window.maestro.api, draft);
       setConfirmed(true);
+      setDraftRejected(false);
     } catch (cause) {
+      setDraftRejected(true);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
@@ -144,7 +224,9 @@ export function Home({
     setError(undefined);
     try {
       setDraft(await launchTaskContractDraft(window.maestro.api, draft));
+      setDraftRejected(false);
     } catch (cause) {
+      setDraftRejected(true);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBusy(false);
@@ -154,6 +236,22 @@ export function Home({
   return (
     <div className="home-main">
       <div className="home-title">{title}</div>
+      <section className="home-conversation" aria-label="Concertmaster conversation">
+        <div>conversation {conversationId ?? "not started"}</div>
+        <div>turn {turnStatus}</div>
+        {conversationMessages.map((message) => (
+          <p key={message.id} data-role={message.role}>{message.content}</p>
+        ))}
+        <button type="button" className="btn btn-ghost btn-sm" disabled={conversationId === undefined} onClick={() => document.getElementById("home-brief")?.focus()}>
+          continue conversation
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={!(["failed", "cancelled", "unknown"] as const).includes(turnStatus as "failed" | "cancelled" | "unknown") || busy || text.trim() === ""} onClick={retryBrief}>
+          retry turn
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={conversationId === undefined || turnStatus !== "loading" || cancelBusy} onClick={() => void cancelTurn()}>
+          {cancelBusy ? "cancelling…" : "cancel turn"}
+        </button>
+      </section>
       <form className={`home-composer${isFlashmob ? " mode-flashmob" : ""}`} onSubmit={(event) => void submitBrief(event)}>
         <label className="sr-only" htmlFor="home-brief">
           Brief the Concertmaster
@@ -200,12 +298,15 @@ export function Home({
                 {confirmed ? " · confirmation accepted" : ""}
               </p>
             </div>
-            {draft.launchState === "awaiting_confirmation" && <span className="badge badge-ochre">draft</span>}
-            {draft.launchState === "launched" && <span className="badge badge-olive">launched</span>}
+            {draftPhase === "draft" && <span className="badge badge-ochre">draft</span>}
+            {draftPhase === "confirmed" && <span className="badge badge-slate">confirmed</span>}
+            {draftPhase === "launched" && <span className="badge badge-olive">launched</span>}
+            {draftPhase === "rejected" && <span className="badge badge-rust">rejected</span>}
             {draftOrigin === "goal-less" && draft.launchState === "awaiting_confirmation" && (
               <span className="badge badge-slate">Single Launch Confirmation required</span>
             )}
           </div>
+          <p className="form-hint" data-contract-phase={draftPhase}>phase: {draftPhase}</p>
           <details className="home-draft-review" open>
             <summary>Full Task Contract review</summary>
             <pre aria-label="Full Task Contract draft">{formatTaskContractReview(draft)}</pre>

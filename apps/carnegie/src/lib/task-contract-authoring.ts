@@ -1,5 +1,5 @@
 import type { ApiClient } from "@maestro/api-client";
-import { TaskContractSchema, type TaskContract, type TaskContractSubstance } from "@maestro/contracts";
+import { TaskContractSchema, type ConversationTurn, type TaskContract, type TaskContractSubstance } from "@maestro/contracts";
 
 export type TaskContractAuthoringApi = Pick<
   ApiClient,
@@ -13,7 +13,20 @@ export type GoalLessIntakeResult = {
   response: string;
   draft: TaskContract | undefined;
   message: string | undefined;
+  turnStatus: ConversationTurn["status"];
 };
+
+export class ConversationTurnError extends Error {
+  readonly conversationId: string;
+  readonly cause: unknown;
+
+  constructor(conversationId: string, cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "ConversationTurnError";
+    this.conversationId = conversationId;
+    this.cause = cause;
+  }
+}
 
 type EditableTaskContractFields = Partial<Omit<TaskContractSubstance, "project" | "budget">> & {
   project?: Partial<TaskContractSubstance["project"]>;
@@ -69,17 +82,23 @@ export async function submitGoalLessBrief(
     conversationId = conversation.conversationId;
   }
 
-  const result = await api.sendConversationTurn(
-    conversationId,
-    { projectId: input.projectId, text },
-    { idempotencyKey: globalThis.crypto.randomUUID() },
-  );
+  let result: Awaited<ReturnType<GoalLessIntakeApi["sendConversationTurn"]>>;
+  try {
+    result = await api.sendConversationTurn(
+      conversationId,
+      { projectId: input.projectId, text },
+      { idempotencyKey: globalThis.crypto.randomUUID() },
+    );
+  } catch (cause) {
+    throw new ConversationTurnError(conversationId, cause);
+  }
   const draft = result.turn.status === "completed" ? parseContractDraft(result.turn.content, input.projectId) : undefined;
   return {
     conversationId,
     response: result.turn.content,
     draft,
     ...(draft === undefined ? { message: result.turn.content } : { message: undefined }),
+    turnStatus: result.turn.status,
   };
 }
 
@@ -141,6 +160,23 @@ export async function submitHomeBrief(
   return { draft: await createTaskContractDraft(api, { projectId: input.projectId, substance }) };
 }
 
+function assertNotLaunched(contract: TaskContract): void {
+  if (contract.launchState === "launched") throw new Error("Task Contract is already launched");
+}
+
+export type TaskContractPhase = "draft" | "confirmed" | "launched" | "rejected";
+
+export function getTaskContractPhase(contract: TaskContract, confirmed: boolean, rejected: boolean): TaskContractPhase {
+  if (rejected) return "rejected";
+  if (contract.launchState === "launched") return "launched";
+  if (confirmed) return "confirmed";
+  return "draft";
+}
+
+export function canEditTaskContract(phase: TaskContractPhase): boolean {
+  return phase === "draft" || phase === "rejected";
+}
+
 function substanceOf(contract: TaskContract): TaskContractSubstance {
   const {
     contractId: _contractId,
@@ -160,6 +196,7 @@ export async function updateTaskContractDraft(
   edits: EditableTaskContractFields,
   commandId = newId(),
 ): Promise<TaskContract> {
+  assertNotLaunched(contract);
   const current = substanceOf(contract);
   const next: TaskContractSubstance = {
     ...current,
@@ -179,6 +216,7 @@ export async function updateTaskContractDraft(
 }
 
 export async function confirmTaskContractDraft(api: TaskContractAuthoringApi, contract: TaskContract, commandId = newId()): Promise<void> {
+  assertNotLaunched(contract);
   await api.confirmTaskContract(
     contract.contractId,
     {
@@ -196,5 +234,6 @@ export async function launchTaskContractDraft(
   contract: TaskContract,
   commandId = newId(),
 ): Promise<TaskContract> {
+  assertNotLaunched(contract);
   return api.launchTaskContract(contract.contractId, contract.project.projectId, commandId);
 }

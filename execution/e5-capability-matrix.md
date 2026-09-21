@@ -20,6 +20,12 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 **Known risk:** the allow-list is still hand-duplicated across two module systems (ESM `apiBridge.ts` / CJS `preload.cts`) with no single source of truth — see plan-E5 review notes below.
 **Not done:** no test asserts the bridge withholds the plaintext connection token (Task 1's prose claims this; no RED test in the plan or in this codebase currently checks it). `global.d.ts`'s `MaestroBridge.config` methods return `PublicConnectionConfig`/`void`, never `token` — that's where the real guarantee lives, structurally, not in the method allow-list.
 
+## Zero-config local bootstrap (Task 1.5, new 2026-09-21)
+
+**Status: Not started — but the hard part already exists and is untouched.** `packages/local-backend/src/local-bootstrap.ts` (955 lines) implements a complete, unit-tested local-stack launcher (`resolveLocalConnection`, `ensureLocalControlPlane`, embedded/Docker Postgres paths, migrations, Control Plane + Model Gateway process launch, `LocalSecretStore`) with a defined five-step sequence (`docker-check` → `postgres-ready` → `migrations` → `control-plane-up` → `model-gateway-up`). **`apps/carnegie/electron/main.ts` never calls it.** `store.ts` only pulls `createLocalSecretStore` for token storage; `maestro:config:get` only reads a previously *manually saved* config and falls straight to `<Setup />` otherwise. This is why the operator currently has to configure a Control Plane URL/token/project by hand before Carnegie does anything.
+**Operator instruction (2026-09-21):** opening Carnegie must be enough by itself — no separate manual connection step. See `plan-E5-gui-implementation.md`'s new **Task 1.5** for the full design constraints (stream real bootstrap-step progress instead of a blank window during first-run cold start; `Setup.tsx` becomes the genuine-failure fallback showing the real `setup-required` reason, not the default first screen; never override an operator's explicit remote Control Plane config; never start a second competing local stack if one is already reachable).
+**Why this matters beyond convenience:** most of this session's `PENDING_LIVE_CHECKS.md` plan-E5 entries are blocked on "no Control Plane/provider listener" — a manual-setup gap, not a missing-capability gap. Closing Task 1.5 is very likely a prerequisite for most remaining live-check items to become attemptable at all, in any environment that has Docker or a packaged Control Plane binary (this specific sandbox may still lack both even after Task 1.5 lands — verify before assuming it alone unblocks every live check here).
+
 ## Shared primitives (Task 2)
 
 - `lib/command-id.ts` — **Live (code-level).** `newCommandId()` and `classifyApiError()` preserve stable status/code fields from clone-safe IPC errors, redact credential-shaped message/detail text, and classify every `StableApiErrorCode` with a stable title plus retry policy; focused classification tests pass 10/10.
@@ -35,8 +41,8 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 
 **Status: Partial.** `views/Home.tsx` + `lib/task-contract-authoring.ts` implement create-conversation → send-turn → parse-draft → edit → confirm(exact version+hash) → launch, as two explicit separate actions, matching the plan's core safety requirement.
 
-Task 3 Step 1 RED coverage has been added in `lib/conversation-data.test.ts` and `views/Home.test.tsx`; durable conversation reload and visible conversation/turn/continuation state remain unimplemented.
-**Missing:** `getConversation`, `cancelConversation`, `listConversationEvents` are not called anywhere in `Home.tsx` even though the bridge now exposes them — "reload a conversation from durable events" and an explicit cancel path (Task 3 Steps 1 and 6) are not implemented. No live Electron conversation has been run (Task 3 Step 8) — this sandbox has no provider/Control Plane.
+Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-event durable API, validates conversation/project boundaries, and reconstructs operator/Concertmaster/system messages. `Home.tsx` preserves real turn status and retry identity, resets on project changes, exposes continue/retry/cancel controls, and renders explicit draft/confirmed/launched/rejected phases. Focused conversation/task-authoring/Home tests pass 19/19; final live Electron acceptance remains pending.
+**Missing:** Home still has no explicit cancel-turn action, and the first live Electron conversation could not complete: the bounded launch reached CDP but failed with `Control plane request failed` because no usable Control Plane/database/provider is configured. Durable reload is implemented and covered by `lib/conversation-data.test.ts`; no live claim is made.
 
 ## Dashboard / Goal lifecycle (Task 4)
 
@@ -93,10 +99,11 @@ Task 3 Step 1 RED coverage has been added in `lib/conversation-data.test.ts` and
 
 ## Immediate next steps for whoever picks this up
 
-1. Wire `getConversation`/`cancelConversation`/`listConversationEvents` into `Home.tsx` (Task 3 gap).
-2. Verify the resolved Task 5 direction against the actual route code, then build the read-only Department Plan / Mission Bundle panel (see above) — this unblocks Task 6, since `spawnWorker` needs the real `councilId`/`departmentId`/`itemId` a resolved Mission Bundle carries.
-3. `views/Workers.tsx` (Task 6) is the single highest-value missing screen for an end-to-end run, once Task 5's question is resolved.
-4. Read `lib/inbox-data.ts` in full to confirm/correct the Task 8 approval-routing note above before building a separate `Approvals.tsx`.
+1. **Build Task 1.5 (zero-config local bootstrap)** — highest priority as of 2026-09-21, operator-requested. Wire `resolveLocalConnection` into `apps/carnegie/electron/main.ts` so opening Carnegie needs no manual Setup step. See `plan-E5-gui-implementation.md`'s Task 1.5 and this matrix's own section above. This is very likely a prerequisite for most `PENDING_LIVE_CHECKS.md` plan-E5 entries to become attemptable.
+2. ~~Wire `getConversation`/`cancelConversation`/`listConversationEvents` into `Home.tsx`~~ — **done**, per `roadmap/act-1-foundation/active/operations/progress.md`'s Task 3 checkpoints (`conversation-data.ts` added, Home reloads durable conversation events, draft/confirmed/launched/rejected phase labels derive from real server state). Re-verify current HEAD before assuming Task 3 is fully closed — a live Electron attempt on 2026-09-21 reached CDP but failed on `Control plane request failed` for lack of a reachable Control Plane (see Task 1.5's rationale).
+3. Verify the resolved Task 5 direction against the actual route code, then build the read-only Department Plan / Mission Bundle panel (see above) — this unblocks Task 6, since `spawnWorker` needs the real `councilId`/`departmentId`/`itemId` a resolved Mission Bundle carries.
+4. `views/Workers.tsx` (Task 6) is the single highest-value missing screen for an end-to-end run, once Task 5's question is resolved.
+5. Read `lib/inbox-data.ts` in full to confirm/correct the Task 8 approval-routing note above before building a separate `Approvals.tsx`.
 
 ## Bridge duplication risk (flagged during this session's plan review, still unresolved)
 

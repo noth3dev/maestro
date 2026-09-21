@@ -8,6 +8,9 @@ import {
   updateTaskContractDraft,
   submitHomeBrief,
   formatTaskContractReview,
+  canEditTaskContract,
+  ConversationTurnError,
+  getTaskContractPhase,
   type TaskContractAuthoringApi,
 } from "./task-contract-authoring.js";
 
@@ -145,6 +148,52 @@ describe("task contract authoring", () => {
     expect(result.draft).toEqual(contract);
   });
 
+  it("keeps the created conversation identity when a real turn fails", async () => {
+    const conversationId = "44444444-4444-4444-8444-444444444444";
+    const api = {
+      listModels: vi.fn(async () => [{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } }]),
+      createConversation: vi.fn(async () => ({ conversationId, projectId, goalId: null, model: "openai/gpt-5", status: "active" as const, version: 1 })),
+      sendConversationTurn: vi.fn(async () => { throw new Error("provider unavailable"); }),
+    };
+
+    const failure = await submitHomeBrief(api, { projectId, text: "retry this safely", selectedGoalId: undefined }).catch((cause) => cause);
+    expect(failure).toBeInstanceOf(ConversationTurnError);
+    expect(failure).toMatchObject({ conversationId });
+  });
+
+  it("preserves failed, cancelled, and unknown turn outcomes for Home status", async () => {
+    for (const status of ["failed", "cancelled", "unknown"] as const) {
+      const api = {
+        listModels: vi.fn(async () => [{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } }]),
+        createConversation: vi.fn(async () => ({ conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId: null, model: "openai/gpt-5", status: "active" as const, version: 1 })),
+        sendConversationTurn: vi.fn(async () => ({ conversation: { conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId: null, model: "openai/gpt-5", status, version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId: "44444444-4444-4444-8444-444444444444", role: "assistant" as const, content: `${status} turn`, status, cursor: "1", createdAt: "2026-09-16T00:00:00.000Z" } })),
+      };
+
+      const result = await submitHomeBrief(api, { projectId, text: "bounded request", selectedGoalId: undefined });
+      expect(result.turnStatus).toBe(status);
+    }
+  });
+
+  it("creates one no-Goal conversation and sends later turns with fresh idempotency keys", async () => {
+    const api = {
+      listModels: vi.fn(async () => [{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } }]),
+      createConversation: vi.fn(async () => ({ conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId: null, model: "openai/gpt-5", status: "active" as const, version: 1 })),
+      sendConversationTurn: vi.fn(async () => ({ conversation: { conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId: null, model: "openai/gpt-5", status: "succeeded" as const, version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId: "44444444-4444-4444-8444-444444444444", role: "assistant" as const, content: "first response", status: "completed" as const, cursor: "1", createdAt: "2026-09-16T00:00:00.000Z" } })),
+    };
+
+    const first = await submitHomeBrief(api, { projectId, text: "first turn", selectedGoalId: undefined });
+    const second = await submitHomeBrief(api, { projectId, text: "follow-up turn", selectedGoalId: undefined, conversationId: first.conversationId });
+
+    expect(api.createConversation).toHaveBeenCalledTimes(1);
+    expect(api.sendConversationTurn).toHaveBeenCalledTimes(2);
+    const firstKey = vi.mocked(api.sendConversationTurn).mock.calls[0]?.[2].idempotencyKey;
+    const secondKey = vi.mocked(api.sendConversationTurn).mock.calls[1]?.[2].idempotencyKey;
+    expect(firstKey).toEqual(expect.any(String));
+    expect(secondKey).toEqual(expect.any(String));
+    expect(secondKey).not.toBe(firstKey);
+    expect(second.response).toBe("first response");
+  });
+
   it("keeps a clarification response reviewable without fabricating a Task Contract", async () => {
     const api = {
       listModels: vi.fn(async () => [
@@ -202,6 +251,41 @@ describe("task contract authoring", () => {
     expect(api.createTaskContract).toHaveBeenCalledOnce();
     expect(api.createConversation).not.toHaveBeenCalled();
     expect(result.draft).toEqual(contract);
+  });
+
+
+
+  it("exposes the explicit draft safety phases", () => {
+    expect(getTaskContractPhase(contract, false, false)).toBe("draft");
+    expect(getTaskContractPhase(contract, true, false)).toBe("confirmed");
+    expect(canEditTaskContract(getTaskContractPhase(contract, true, false))).toBe(false);
+    expect(getTaskContractPhase({ ...contract, launchState: "launched" }, true, false)).toBe("launched");
+    expect(canEditTaskContract(getTaskContractPhase({ ...contract, launchState: "launched" }, true, false))).toBe(false);
+    expect(getTaskContractPhase(contract, false, true)).toBe("rejected");
+    expect(canEditTaskContract(getTaskContractPhase(contract, false, true))).toBe(true);
+  });
+
+  it("rejects editing, confirming, or launching a contract that is already launched", async () => {
+    const api = fakeApi();
+    const launched = { ...contract, launchState: "launched" as const };
+
+    await expect(updateTaskContractDraft(api, launched, { desiredOutcome: "too late" })).rejects.toThrow("already launched");
+    await expect(confirmTaskContractDraft(api, launched)).rejects.toThrow("already launched");
+    await expect(launchTaskContractDraft(api, launched)).rejects.toThrow("already launched");
+    expect(api.updateTaskContract).not.toHaveBeenCalled();
+    expect(api.confirmTaskContract).not.toHaveBeenCalled();
+    expect(api.launchTaskContract).not.toHaveBeenCalled();
+  });
+
+  it("preserves stale-version and launch failures without inventing success", async () => {
+    const api = fakeApi();
+    const stale = new Error("version conflict");
+    vi.mocked(api.updateTaskContract).mockRejectedValueOnce(stale);
+    await expect(updateTaskContractDraft(api, contract, { desiredOutcome: "stale edit" })).rejects.toBe(stale);
+
+    const launchFailure = new Error("launch rejected");
+    vi.mocked(api.launchTaskContract).mockRejectedValueOnce(launchFailure);
+    await expect(launchTaskContractDraft(api, contract)).rejects.toBe(launchFailure);
   });
 
   it("lets the server's rejection reason reach the caller unchanged", async () => {

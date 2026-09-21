@@ -13,6 +13,8 @@ describe("Home Concertmaster conversation", () => {
     const html = renderToStaticMarkup(<Home onNavigate={vi.fn()} mode="maestro" onModeChange={vi.fn()} />);
     expect(html).toContain("conversation");
     expect(html).toContain("continue conversation");
+    expect(html).toContain("retry turn");
+    expect(html).toContain("cancel turn");
     expect(html).toContain("turn");
   });
 });

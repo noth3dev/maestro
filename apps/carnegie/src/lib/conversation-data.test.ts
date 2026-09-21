@@ -31,4 +31,42 @@ describe("conversation durable read model", () => {
     expect(client.getConversation).toHaveBeenCalledWith(conversationId, { projectId });
     expect(client.listConversationEvents).toHaveBeenCalledWith(conversationId, { projectId, after: "0" });
   });
+
+  it("continues loading durable event pages after the 256-event boundary", async () => {
+    const client = api();
+    const pageOne = Array.from({ length: 256 }, (_, index) => ({
+      cursor: String(index + 1),
+      eventId: `44444444-4444-4444-8444-${(index + 1).toString(16).padStart(12, "0")}`,
+      conversationId,
+      projectId,
+      eventType: "turn_started" as const,
+      payload: { turnId, text: `turn ${index + 1}` },
+      occurredAt: "2026-09-21T00:00:00.000Z",
+    }));
+    const pageTwo = [{
+      cursor: "257",
+      eventId: "55555555-5555-4555-8555-555555555555",
+      conversationId,
+      projectId,
+      eventType: "turn_completed" as const,
+      payload: { turnId, status: "succeeded", content: "latest" },
+      occurredAt: "2026-09-21T00:00:01.000Z",
+    }];
+    vi.mocked(client.listConversationEvents).mockResolvedValueOnce(pageOne).mockResolvedValueOnce(pageTwo);
+
+    await loadConversation(client, { conversationId, projectId });
+
+    expect(client.listConversationEvents).toHaveBeenNthCalledWith(1, conversationId, { projectId, after: "0" });
+    expect(client.listConversationEvents).toHaveBeenNthCalledWith(2, conversationId, { projectId, after: "256" });
+  });
+
+  it("fails closed when the conversation or an event crosses the project boundary", async () => {
+    const client = api();
+    vi.mocked(client.getConversation).mockResolvedValueOnce({ conversationId: "99999999-9999-4999-8999-999999999999", projectId, goalId: null, model: "openai/gpt-5", status: "succeeded", version: 2 });
+    await expect(loadConversation(client, { conversationId, projectId })).rejects.toThrow("conversation boundary mismatch");
+
+    const eventClient = api();
+    vi.mocked(eventClient.listConversationEvents).mockResolvedValueOnce([{ ...((await eventClient.listConversationEvents(conversationId, { projectId, after: "0" }))[0]!), conversationId: "99999999-9999-4999-8999-999999999999" }]);
+    await expect(loadConversation(eventClient, { conversationId, projectId })).rejects.toThrow("event boundary mismatch");
+  });
 });
