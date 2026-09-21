@@ -1450,3 +1450,14 @@ Order:
 5. Push verified `main` to `origin/main` and update the next-step pointer.
 
 Remote push is authorized for this closeout pass. External provider, Discord, release, and other user-owned gates remain unclaimed unless their real prerequisites are available.
+
+
+### Phase 1 closeout result (2026-09-21)
+
+- [x] Goal lease-proof retention and per-Goal serialization reviewed and merged.
+- [x] SHA-only certification evidence verification, duplicate-row ambiguity rejection, and regression coverage reviewed and merged.
+- [x] Migration additive-discovery seam, deterministic ordering, idempotence, checksum evidence, and omission guard reviewed and merged.
+- [x] Build, lint, focused regression suites, PostgreSQL integration suites, and diff check verified.
+- [x] E4 live evidence captured where authentication and durable store access permitted; unavailable external/auth state recorded without claiming success.
+- [x] Disposable worktrees, branches, PostgreSQL container, orphaned embedded server, and internal heartbeat removed.
+- [ ] Push verified `main` to `origin/main`.

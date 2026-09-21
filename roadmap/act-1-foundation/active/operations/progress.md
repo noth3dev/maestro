@@ -4766,3 +4766,15 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Post-merge `main` revalidation (2026-09-21): merge commit `735ff34a merge: integrate native execution retention hardening` was followed by `npm run build` (passed) and `npm test` (434.39s). The result was **295 passed / 82 skipped / 11 failed files** and **2025 passed / 534 skipped / 2559 tests**. The same 11 PostgreSQL integration files failed closed with `TypeError: Invalid URL` because `MAESTRO_TEST_DATABASE_URL` was unset; no native retention, gateway, runtime, race, or unit test failed. The feature worktree and branch were then removed; preserved E4 worktree `.worktrees/e4-channel-row-page` was not touched.
 
 - Closeout pass started 2026-09-21 by explicit user instruction: finish current repository-local work, reconcile open review findings, run the strongest available verification, clean redundant worktrees/containers/heartbeats, and push `main`. The dirty `e4-channel-row-page` worktree is based on an older commit; its behavior change is already merged as `a57f5c54`, with two extra negative assertions still to reconcile before cleanup.
+
+
+## 2026-09-21 — Phase 1 closeout verification and cleanup
+
+**Status:** verified locally; ready for remote push
+
+- Merged the reviewed Phase 1 fixes into `main`: Goal lease-proof serialization and terminal eviction (`9062d52f`, `bf9bd27f`, `7fd86b49`), SHA-only evidence verification (`3dea4b57`, `a4ef40a3`, `bebcba8c`, `6b05ac91`, `515d690b`), and migration-source safety/idempotence (`a9cde0fa`, `520d7b20`). Fresh final reviews returned **REVIEW: PASS** for Goal proof, migration safety, and duplicate evidence handling.
+- Final focused verification passed: build, lint, diff check; Goal/TUI suites **52/52**; certification, migration, and embedded PostgreSQL suites **29/29**; persistence export surface **1/1**.
+- The authoritative PostgreSQL full run exited 1 after **386 passed files / 2 failed files** and **2587 passed tests / 2 failed tests**. The two failures were repaired: the persistence export snapshot now includes `MigrationSourceError` and `readMigrationFiles`, and the fixed-port embedded server left by the failed reuse case was stopped. The embedded suite then passed **5/5** in isolation and again in the final focused run.
+- Live TUI evidence was captured while connected: home (`maestro-e4-34727-120x40-94040292-5c51-4acd-9c2c-834a782e22e8`), channel-row activation (`maestro-e4-36946-120x40-d26a652e-a756-4b32-b6cb-3a1fd8aaa0e8`, `#encore-council`), and direct organization `#general` read (`maestro-e4-50677-120x40-eb4d4aa6-55a6-4821-8619-28c952daf319`). A separate `#head-council` attempt showed a transient authentication-unavailable banner; selector-specific `#general`/`#head-council` success is not claimed.
+- Removed Phase 1 temporary worktrees and branches, stopped `maestro-phase1-cert-pg`, removed the orphaned embedded test server on `55433`, and deleted the final-postgres-suite heartbeat. Only the main worktree remains and it is clean.
+- Remote push is the next and final closeout action.
