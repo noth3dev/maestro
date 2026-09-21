@@ -39,9 +39,15 @@ export function Settings() {
   };
 
   const navItem = (id: Panel, icon: string, label: string) => (
-    <div key={id} className={`settings-nav-item${panel === id ? " on" : ""}`} onClick={() => setPanel(id)}>
+    <button
+      key={id}
+      type="button"
+      className={`settings-nav-item${panel === id ? " on" : ""}`}
+      aria-current={panel === id ? "page" : undefined}
+      onClick={() => setPanel(id)}
+    >
       <Icon name={icon} /> {label}
-    </div>
+    </button>
   );
 
   return (

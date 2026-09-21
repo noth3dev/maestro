@@ -46,7 +46,12 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
       <div className="sb-logo">
         <div className="sb-logo-mark" />
         <div className="sb-logo-text">maestro</div>
-        <button type="button" className="sb-collapse-btn" onClick={() => setCollapsed((current) => !current)}>
+        <button
+          type="button"
+          className="sb-collapse-btn"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setCollapsed((current) => !current)}
+        >
           <Icon name={collapsed ? "panel-left-open" : "panel-left-close"} />
         </button>
       </div>
@@ -90,10 +95,15 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
         <div className="avatar avatar-sm av-slate">U</div>
         <span>operator</span>
         <div className="sb-bottom-icons">
-          <button type="button" className="btn-icon" onClick={() => setTheme(isDark ? "light" : "dark")}>
+          <button
+            type="button"
+            className="btn-icon"
+            aria-label={isDark ? "Use light theme" : "Use dark theme"}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+          >
             <Icon name={isDark ? "sun" : "moon"} />
           </button>
-          <button type="button" className="btn-icon" onClick={() => onNavigate("settings")}>
+          <button type="button" className="btn-icon" aria-label="Open settings" onClick={() => onNavigate("settings")}>
             <Icon name="settings" />
           </button>
         </div>

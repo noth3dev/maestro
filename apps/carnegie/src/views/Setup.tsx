@@ -26,23 +26,23 @@ export function Setup() {
 
   return (
     <div className="home-main">
-      <div className="home-title">{t.setup.title}</div>
-      <form className="home-composer" style={{ maxWidth: 380, width: "100%" }} onSubmit={(event) => void submit(event)}>
-        <p className="form-hint" style={{ marginBottom: 12 }}>{t.setup.hint}</p>
-        <div className="form-field" style={{ marginBottom: 12 }}>
+      <div className="home-title setup-title">{t.setup.title}</div>
+      <form className="home-composer setup-card" onSubmit={(event) => void submit(event)}>
+        <p className="form-hint setup-hint">{t.setup.hint}</p>
+        <div className="form-field">
           <label className="form-label" htmlFor="setup-api-url">{t.setup.apiUrl}</label>
           <input id="setup-api-url" className="input" value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} required />
         </div>
-        <div className="form-field" style={{ marginBottom: 12 }}>
+        <div className="form-field">
           <label className="form-label" htmlFor="setup-token">{t.setup.token}</label>
           <input id="setup-token" className="input" type="password" value={token} onChange={(event) => setToken(event.target.value)} required />
         </div>
-        <div className="form-field" style={{ marginBottom: 12 }}>
+        <div className="form-field">
           <label className="form-label" htmlFor="setup-project-id">{t.setup.projectId}</label>
           <input id="setup-project-id" className="input" value={projectId} onChange={(event) => setProjectId(event.target.value)} required />
         </div>
-        {error !== undefined && <div className="alert alert-warning" style={{ marginBottom: 12 }}>{error}</div>}
-        <button className="btn btn-primary" type="submit" disabled={connecting} style={{ width: "100%", justifyContent: "center" }}>
+        {error !== undefined && <div className="alert alert-warning setup-error">{error}</div>}
+        <button className="btn btn-primary setup-submit" type="submit" disabled={connecting}>
           {connecting ? t.setup.connecting : t.setup.connect}
         </button>
       </form>

@@ -83,71 +83,83 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
   };
 
   return (
-    <div className="dash-main">
-      <div className="dash-head">
-        <div className="dash-title">{summary.selectedGoal === undefined ? "no Goal selected" : summary.selectedGoal.goalId}</div>
+    <main className="dash-main">
+      <header className="dash-head">
+        <div>
+          <div className="dash-kicker">Goal overview</div>
+          <h1 className="dash-title">{summary.selectedGoal === undefined ? "No Goal selected" : summary.selectedGoal.goalId}</h1>
+        </div>
         {summary.selectedGoal !== undefined && <span className="dash-status">{summary.selectedGoal.state}</span>}
-      </div>
-      <div className="dash-sub">
+      </header>
+      <div className="dash-sub" role="status">
         {loading && t.common.loading}
-        {error !== undefined && (
-          <span role="alert">
-            Could not load Goal state: {error}
-            <button type="button" className="btn" onClick={() => refresh()}>Retry</button>
-          </span>
-        )}
-        {!loading && error === undefined && summary.selectedGoal !== undefined && `durable version ${summary.selectedGoal.version}`}
+        {!loading && error === undefined && summary.selectedGoal !== undefined && `Durable version ${summary.selectedGoal.version}`}
       </div>
+      {error !== undefined && (
+        <div className="dash-inline-alert alert alert-warning" role="alert">
+          <div>
+            <strong>Goal state is unavailable</strong>
+            <span>{error}</span>
+          </div>
+          <button type="button" className="btn btn-sm" onClick={() => refresh()}>Retry</button>
+        </div>
+      )}
 
-      <div className="dash-stats">
+      <section className="dash-stats" aria-label="Goal summary">
         <div className="stat-card stat-terracotta"><p className="stat-label">Goals in this project</p><p className="stat-value">{summary.totalGoals}</p></div>
-        <div className="stat-card stat-olive"><p className="stat-label">certified (selected Goal)</p><p className="stat-value">{summary.selectedGoal?.certifiedCount ?? "—"}</p></div>
-        <div className="stat-card stat-ochre"><p className="stat-label">reserved / budget</p><p className="stat-value">{summary.selectedGoal === undefined ? "—" : `${formatCents(summary.selectedGoal.reservedCents)} / ${formatCents(summary.selectedGoal.budgetCents)}`}</p></div>
-        <div className="stat-card stat-rust"><p className="stat-label">actual spend</p><p className="stat-value">{summary.selectedGoal === undefined ? "—" : formatCents(summary.selectedGoal.costCents)}</p></div>
-      </div>
+        <div className="stat-card stat-olive"><p className="stat-label">Certified</p><p className="stat-value">{summary.selectedGoal?.certifiedCount ?? "—"}</p></div>
+        <div className="stat-card stat-ochre"><p className="stat-label">Reserved / budget</p><p className="stat-value">{summary.selectedGoal === undefined ? "—" : `${formatCents(summary.selectedGoal.reservedCents)} / ${formatCents(summary.selectedGoal.budgetCents)}`}</p></div>
+        <div className="stat-card stat-rust"><p className="stat-label">Actual spend</p><p className="stat-value">{summary.selectedGoal === undefined ? "—" : formatCents(summary.selectedGoal.costCents)}</p></div>
+      </section>
 
       {summary.selectedGoal !== undefined && (
-        <>
-          <div className="dash-section-title">lifecycle controls</div>
-          <p>Every control submits the exact durable version this screen loaded ({summary.selectedGoal.version}); the control plane rejects a stale submission rather than this screen silently overwriting a concurrent change.</p>
-          {controlError !== undefined && <div className="alert alert-warning">{controlError}</div>}
-          <div role="group" aria-label="Goal lifecycle controls" style={{ display: "flex", gap: 8 }}>
+        <section className="dash-controls" aria-labelledby="lifecycle-title">
+          <div className="dash-section-heading">
+            <div>
+              <h2 id="lifecycle-title" className="dash-section-title">Lifecycle controls</h2>
+              <p className="dash-section-hint">Actions apply to durable version {summary.selectedGoal.version}. Stale changes are rejected safely.</p>
+            </div>
+          </div>
+          {controlError !== undefined && <div className="alert alert-warning" role="alert">{controlError}</div>}
+          <div className="dash-control-group" role="group" aria-label="Goal lifecycle controls">
             {CONTROL_ACTIONS.map(({ action, label }) => (
-              <button key={action} className="btn" disabled={pendingAction !== undefined} onClick={() => void runControl(action)}>
+              <button
+                key={action}
+                type="button"
+                className={`btn dash-control${action === "emergency-stop" ? " dash-control-danger" : ""}`}
+                disabled={pendingAction !== undefined}
+                onClick={() => void runControl(action)}
+              >
                 {pendingAction === action ? t.common.loading : label}
               </button>
             ))}
           </div>
-        </>
+        </section>
       )}
 
-      <div className="dash-section-title">goals</div>
-      <div className="dept-grid">
+      <h2 className="dash-section-title">Goals</h2>
+      <div className="dept-grid" aria-label="Goals in this project">
         {(goals ?? []).length === 0 ? (
-          <p>No durable Goals exist for this project yet.</p>
+          <p className="dash-empty">No durable Goals exist for this project yet.</p>
         ) : (
           (goals ?? []).map((goal) => (
-            <div
+            <button
               key={goal.goalId}
+              type="button"
               className={`dept-card ${goal.goalId === selectedGoalId ? "awake" : "asleep"}`}
               onClick={() => selectGoal(goal.goalId)}
-              onKeyDown={(event) => {
-                if (event.key === " ") event.preventDefault();
-                if (event.key === "Enter" || event.key === " ") selectGoal(goal.goalId);
-              }}
-              role="button"
-              tabIndex={0}
+              aria-pressed={goal.goalId === selectedGoalId}
             >
-              <div className="dept-card-head"><Icon name="target" /><span className="dept-card-name">{goal.goalId}</span></div>
-              <div className={`dept-card-state${goal.goalId === selectedGoalId ? " on" : ""}`}>{goal.state} · v{goal.version}</div>
-            </div>
+              <span className="dept-card-head"><Icon name="target" /><span className="dept-card-name">{goal.goalId}</span></span>
+              <span className={`dept-card-state${goal.goalId === selectedGoalId ? " on" : ""}`}>{goal.state} · v{goal.version}</span>
+            </button>
           ))
         )}
       </div>
 
-      <div className="dash-section-title">pipeline</div>
-      {workersLoading && <p>loading…</p>}
-      {workersError !== undefined && <div className="alert alert-warning">{workersError}</div>}
+      <h2 className="dash-section-title">Pipeline</h2>
+      {workersLoading && <p className="dash-loading" role="status">Loading workers…</p>}
+      {workersError !== undefined && <div className="alert alert-warning" role="alert">{workersError}</div>}
       {!workersLoading && workersError === undefined && workers !== undefined && workers.length === 0 && (
         <EmptyState title="No workers yet" hint="No worker has been spawned for this Goal yet." />
       )}
@@ -175,10 +187,18 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
           })}
         </div>
       )}
-      <div className="dash-section-title" style={{ marginTop: 24 }}>Goal office detail</div>
-      {projectionState.loading && <p>loading projection…</p>}
-      {projectionState.error !== undefined && <div className="alert alert-warning">{projectionState.error}</div>}
-      {evidenceError !== undefined && <div className="alert alert-warning">{evidenceError}</div>}
+      <h2 className="dash-section-title dash-section-title-office">Goal office detail</h2>
+      {projectionState.loading && <p className="dash-loading" role="status">Loading Goal office…</p>}
+      {projectionState.error !== undefined && (
+        <div className="dash-detail-alert alert alert-warning" role="alert">
+          <div><strong>Goal office detail is unavailable</strong><span>{projectionState.error}</span></div>
+        </div>
+      )}
+      {evidenceError !== undefined && (
+        <div className="dash-detail-alert alert alert-warning" role="alert">
+          <div><strong>Evidence is unavailable</strong><span>{evidenceError}</span></div>
+        </div>
+      )}
       {projectionState.projection !== undefined && (
         <GoalDepartmentPanels
           projection={projectionState.projection}
@@ -192,6 +212,6 @@ export function Dashboard({ onNavigate: _onNavigate, eventState }: { onNavigate:
           goalId={selectedGoalId}
         />
       )}
-    </div>
+    </main>
   );
 }
