@@ -218,6 +218,14 @@ describeDatabase("Department acceptance and independent Quality certification wi
     // No new certification row was written by the rejected attempt.
     expect((await listQualityCertifications(pool, certified.goalId)).length).toBe(beforeCorruptionCount);
 
+    // A citation may use the durable SHA-256 instead of the evidence ID. The
+    // content reader must still verify that SHA-only citation, rather than
+    // silently skipping it because the lookup key is not evidence_id.
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["b".repeat(64)] }, "quality", proof, headContext("quality"), store),
+    ).rejects.toBeInstanceOf(CertificationError);
+    expect((await listQualityCertifications(pool, certified.goalId)).length).toBe(beforeCorruptionCount);
+
     // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
     // not silently strengthened for callers that do not yet supply one).
     await expect(
