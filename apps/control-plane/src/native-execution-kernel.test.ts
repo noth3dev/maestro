@@ -88,6 +88,7 @@ describe("native Control Plane execution kernel", () => {
       dataPolicyHash: "policy-test",
     }));
     expect(await kernel.getModelIdentity(spawned.execution)).toEqual({ provider: "test", id: "model-a" });
+    await expect(kernel.getExecutionBinding!(spawned.execution)).resolves.toMatchObject({ model: binding.provider });
 
     await kernel.prompt(spawned.execution, "hello");
     expect(await kernel.getInvocationStatus(spawned.invocation)).toBe<InvocationStatus>("succeeded");
@@ -120,6 +121,14 @@ describe("native Control Plane execution kernel", () => {
     gateway.admit.mockResolvedValueOnce({ ...binding, provider: { provider: "test", id: "model-b" } });
     const { kernel } = createKernel(gateway);
     await expect(kernel.spawn(rootRequest())).rejects.toThrow("unexpected model identity");
+    expect(gateway.admit).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a gateway binding whose data policy differs from the host policy", async () => {
+    const gateway = fakeGateway();
+    gateway.admit.mockResolvedValueOnce({ ...binding, dataPolicyHash: "gateway-policy" });
+    const { kernel } = createKernel(gateway);
+    await expect(kernel.spawn(rootRequest())).rejects.toThrow("unexpected data policy");
     expect(gateway.admit).toHaveBeenCalledOnce();
   });
 
@@ -167,6 +176,92 @@ describe("native Control Plane execution kernel", () => {
     expect(gateway.turn).toHaveBeenCalledTimes(2);
     await manager.close();
     await kernel.close();
+  });
+
+  it("evicts a released root execution and keeps duplicate release idempotent", async () => {
+    const { gateway, kernel } = createKernel();
+    const spawned = await kernel.spawn(rootRequest());
+
+    await kernel.release!(spawned.invocation);
+
+    await expect(kernel.getModelIdentity(spawned.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(spawned.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.prompt(spawned.execution, "must not route")).rejects.toThrow("operation unavailable");
+    await expect(kernel.observe(spawned.execution)).resolves.toEqual([]);
+    await expect(kernel.release!(spawned.invocation)).resolves.toBeUndefined();
+    await expect(kernel.release!("unknown-invocation" as never)).resolves.toBeUndefined();
+    expect(gateway.close).not.toHaveBeenCalled();
+  });
+
+  it("retains a shared execution for a child until the child is released", async () => {
+    const { gateway, kernel } = createKernel();
+    const request = rootRequest();
+    const root = await kernel.spawn({
+      ...request,
+      grant: { ...request.grant!, remaining: { ...request.grant!.remaining, childCalls: 1 } },
+    });
+    const child = await kernel.spawn({
+      name: "native-child",
+      parent: root.execution,
+      prompt: "child prompt",
+      context: request.context,
+      grant: {
+        ...request.grant!,
+        grantId: "child-grant",
+        parentGrantId: request.grant!.grantId,
+        remaining: { ...request.grant!.remaining, childCalls: 0 },
+      },
+      modelPolicy: request.modelPolicy,
+      idempotencyKey: "child-command-1",
+    });
+
+    await kernel.release!(root.invocation);
+
+    expect(await kernel.getInvocationStatus(root.invocation)).toBe("unknown");
+    expect(await kernel.getInvocationStatus(child.invocation)).toBe("succeeded");
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(root.execution)).rejects.toThrow("operation unavailable");
+    expect((await kernel.observe(root.execution)).some((item) => item.invocation === child.invocation)).toBe(true);
+    await kernel.sendMessage(root.execution, child.invocation, "continue child");
+    expect(await kernel.getInvocationStatus(child.invocation)).toBe("succeeded");
+
+    await kernel.release!(child.invocation);
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    expect(gateway.close).not.toHaveBeenCalled();
+  });
+
+  it("keeps the root execution after child release until the root is released", async () => {
+    const { gateway, kernel } = createKernel();
+    const request = rootRequest();
+    const root = await kernel.spawn({
+      ...request,
+      grant: { ...request.grant!, remaining: { ...request.grant!.remaining, childCalls: 1 } },
+    });
+    const child = await kernel.spawn({
+      name: "native-child",
+      parent: root.execution,
+      prompt: "child prompt",
+      context: request.context,
+      grant: {
+        ...request.grant!,
+        grantId: "child-grant",
+        parentGrantId: request.grant!.grantId,
+        remaining: { ...request.grant!.remaining, childCalls: 0 },
+      },
+      modelPolicy: request.modelPolicy,
+      idempotencyKey: "child-command-1",
+    });
+
+    await kernel.release!(child.invocation);
+
+    expect(await kernel.getModelIdentity(root.execution)).toEqual(binding.provider);
+    await expect(kernel.getExecutionBinding!(root.execution)).resolves.toMatchObject({ model: binding.provider });
+    await kernel.prompt(root.execution, "root remains routable");
+    expect((await kernel.observe(root.execution)).some((item) => item.invocation === root.invocation)).toBe(true);
+    await kernel.release!(root.invocation);
+    await expect(kernel.getModelIdentity(root.execution)).rejects.toThrow("operation unavailable");
+    await expect(kernel.getExecutionBinding!(root.execution)).rejects.toThrow("operation unavailable");
+    expect(gateway.close).not.toHaveBeenCalled();
   });
 
 });

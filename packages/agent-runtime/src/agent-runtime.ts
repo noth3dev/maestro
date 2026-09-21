@@ -111,6 +111,7 @@ interface RuntimeRecord {
   readonly workerProfile?: WorkerProfileAssignment;
   readonly systemPrompt?: string;
   readonly parent?: InvocationRef;
+  released: boolean;
   readonly sessionId: string;
   readonly messages: ModelMessage[];
   readonly toolEvents: ToolEvent[];
@@ -263,12 +264,25 @@ export function createMaestroAgentRuntime(options: {
 
   function rootForExecution(execution: ExecutionRef): RuntimeRecord | undefined {
     const invocation = byExecution.get(execution);
-    return invocation === undefined ? undefined : records.get(invocation);
+    const record = invocation === undefined ? undefined : records.get(invocation);
+    return record?.released === true ? undefined : record;
+  }
+
+  function maybeForgetExecution(execution: ExecutionRef): void {
+    const rootInvocation = byExecution.get(execution);
+    if (rootInvocation === undefined) return;
+    const root = records.get(rootInvocation);
+    if (root === undefined || !root.released) return;
+    for (const record of records.values()) {
+      if (record.execution === execution && record.invocation !== rootInvocation) return;
+    }
+    records.delete(rootInvocation);
+    byExecution.delete(execution);
   }
 
   function requireRecord(invocation: InvocationRef): RuntimeRecord {
     const record = records.get(invocation);
-    if (record === undefined) throw new Error("unknown invocation");
+    if (record === undefined || record.released) throw new Error("unknown invocation");
     return record;
   }
 
@@ -621,6 +635,7 @@ export function createMaestroAgentRuntime(options: {
           ...(parent.workerProfile === undefined ? {} : { workerProfile: parent.workerProfile }),
           ...(parent.systemPrompt === undefined ? {} : { systemPrompt: parent.systemPrompt }),
           parent: parent.invocation,
+          released: false,
           sessionId: parent.sessionId,
           messages: [],
           toolEvents: [],
@@ -652,6 +667,7 @@ export function createMaestroAgentRuntime(options: {
         idempotencyKey: admission.idempotencyKey,
         ...(options.workerProfile === undefined ? {} : { workerProfile: options.workerProfile }),
         ...(systemPrompt === undefined ? {} : { systemPrompt }),
+        released: false,
         sessionId: `session-${randomUUID()}`,
         messages: boundedMessages(options.initialMessages ?? [], 64_000),
         toolEvents: [],
@@ -677,10 +693,9 @@ export function createMaestroAgentRuntime(options: {
       await executeTurn(record, text);
     },
     async observe(execution): Promise<readonly InvocationObservation[]> {
-      const root = rootForExecution(execution);
-      if (root === undefined) return [];
+      if (!byExecution.has(execution)) return [];
       return [...records.values()]
-        .filter((record) => record.execution === execution)
+        .filter((record) => record.execution === execution && !record.released)
         .map((record) => ({
           invocation: record.invocation,
           name: record.name,
@@ -694,7 +709,7 @@ export function createMaestroAgentRuntime(options: {
     },
     async sendMessage(execution, invocation, message) {
       const record = records.get(invocation);
-      if (record === undefined || record.execution !== execution) throw new Error("unknown invocation");
+      if (record === undefined || record.released || record.execution !== execution) throw new Error("unknown invocation");
       await executeTurn(record, message);
     },
     async cancel(invocation) {
@@ -724,14 +739,16 @@ export function createMaestroAgentRuntime(options: {
     },
     async getToolEvents(invocation): Promise<ToolEvents> {
       const record = records.get(invocation);
-      if (record === undefined) return { state: "unavailable", reason: "snapshot-unavailable" };
+      if (record === undefined || record.released) return { state: "unavailable", reason: "snapshot-unavailable" };
       return record.toolEvents.length === 0 ? { state: "empty", events: [] } : { state: "available", events: record.toolEvents };
     },
     async getUsage(invocation) {
-      return records.get(invocation)?.usage ?? { state: "unavailable", reason: "snapshot-unavailable" };
+      const record = records.get(invocation);
+      return record === undefined || record.released ? { state: "unavailable", reason: "snapshot-unavailable" } : record.usage;
     },
     async getInvocationStatus(invocation) {
-      return records.get(invocation)?.status ?? "unknown";
+      const record = records.get(invocation);
+      return record === undefined || record.released ? "unknown" : record.status;
     },
     async resume() {
       throw new ExecutionKernelUnavailableError("resume");
@@ -740,7 +757,15 @@ export function createMaestroAgentRuntime(options: {
       throw new ExecutionKernelUnavailableError("reconnect");
     },
     async release(invocation) {
+      const record = records.get(invocation);
+      if (record === undefined) return;
+      if (record.parent === undefined) {
+        record.released = true;
+        maybeForgetExecution(record.execution);
+        return;
+      }
       records.delete(invocation);
+      maybeForgetExecution(record.execution);
     },
     async close() {
       closing = true;

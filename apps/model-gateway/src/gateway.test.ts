@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ProviderRegistry } from "@maestro/agent-runtime";
 import type { ModelProviderPort, ProviderPlugin } from "@maestro/agent-runtime";
 import { InMemoryCredentialStore } from "./credential-store.js";
@@ -18,6 +18,13 @@ function fakePlugin(): ProviderPlugin {
     listModels: () => [{ identity, capabilities: new Set(["text"]), authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "none", trainsOnCustomerData: false, regions: ["us"] } }],
     create: async (request) => ({ ...port, accountRef: request.account.accountRef }),
   };
+}
+
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => { resolve = resolvePromise; });
+  return { promise, resolve };
 }
 
 describe("model gateway", () => {
@@ -66,6 +73,35 @@ describe("model gateway", () => {
     registry.register({ ...basePlugin, listModels: () => refreshed ? basePlugin.listModels() : [], refreshModels: async () => { refreshed = true; } });
     const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
     await expect(gateway.admit({ requestId: "admit-1", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: "account-1", dataPolicyHash: "policy-1" })).resolves.toMatchObject({ provider: { provider: "fake", id: "model-a" } });
+  });
+
+  it("closes a provider created after gateway shutdown and rejects the late admission", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const account = await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key" }, "secret");
+    const createEntered = deferred<void>();
+    const createGate = deferred<void>();
+    const providerClose = vi.fn(async () => undefined);
+    const basePlugin = fakePlugin();
+    const registry = new ProviderRegistry();
+    registry.register({
+      ...basePlugin,
+      create: async (request) => {
+        createEntered.resolve();
+        await createGate.promise;
+        const provider = await basePlugin.create(request);
+        return { ...provider, close: providerClose };
+      },
+    });
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+
+    const pendingAdmission = gateway.admit({ requestId: "late-admit", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: account.accountRef, dataPolicyHash: "policy-1" });
+    await createEntered.promise;
+    const closing = gateway.close();
+    createGate.resolve();
+
+    await closing;
+    await expect(pendingAdmission).rejects.toThrow("model gateway is closed");
+    expect(providerClose).toHaveBeenCalledOnce();
   });
 
   it("admits an exact provider/model/account binding and delegates turns", async () => {

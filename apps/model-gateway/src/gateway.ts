@@ -27,6 +27,7 @@ export class ModelGateway implements ModelGatewayPort {
   private readonly loginOperators = new Map<string, string>();
   private readonly loginRequests = new Map<string, import("@maestro/agent-runtime").GatewayAccountLoginStartResult>();
   private readonly loginRequestFlights = new Map<string, Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>>();
+  private readonly admissionFlights = new Set<Promise<GatewayBinding>>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -107,15 +108,32 @@ export class ModelGateway implements ModelGatewayPort {
   }
 
   async admit(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
+    const flight = this.admitInternal(request);
+    this.admissionFlights.add(flight);
+    try {
+      return await flight;
+    } finally {
+      this.admissionFlights.delete(flight);
+    }
+  }
+
+  private async admitInternal(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
+    if (this.closed) throw new Error("model gateway is closed");
     await this.options.registry.refreshModels();
+    if (this.closed) throw new Error("model gateway is closed");
     const plugin = this.options.registry.resolve({ providerId: request.providerId, modelId: request.model.id });
     const identity = this.options.registry.resolveModel({ providerId: request.providerId, modelId: request.model.id });
     if (identity.provider !== request.model.provider || identity.id !== request.model.id) throw new Error("provider returned an unexpected model identity");
     const account = await this.options.credentials.ensure(request.accountRef);
+    if (this.closed) throw new Error("model gateway is closed");
     if (account === undefined || account.operatorId !== request.operatorId || account.providerId !== request.providerId) throw new Error("credential binding is not owned by operator");
     const provider = await plugin.create({ model: identity, account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode }, dataPolicyHash: request.dataPolicyHash });
+    if (this.closed) {
+      await provider.close().catch(() => undefined);
+      throw new Error("model gateway is closed");
+    }
     if (provider.identity.provider !== identity.provider || provider.identity.id !== identity.id || provider.accountRef !== account.accountRef) {
       await provider.close().catch(() => undefined);
       throw new Error("provider identity or account binding mismatch");
@@ -185,6 +203,7 @@ export class ModelGateway implements ModelGatewayPort {
 
   async close(): Promise<void> {
     this.closed = true;
+    await Promise.allSettled([...this.admissionFlights]);
     await Promise.all([...this.bindings.values()].map(({ provider }) => provider.close().catch(() => undefined)));
     this.bindings.clear();
     this.loginOperators.clear();

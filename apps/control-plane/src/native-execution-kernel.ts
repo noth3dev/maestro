@@ -53,12 +53,15 @@ function requireAdmission(request: SpawnRequest): {
   return { modelRef, model, ...(accountRef === undefined ? {} : { accountRef }) };
 }
 
-function assertBindingMatches(binding: GatewayBinding, model: ModelIdentity, accountRef: string): void {
+function assertBindingMatches(binding: GatewayBinding, model: ModelIdentity, accountRef: string, dataPolicyHash: string): void {
   if (binding.provider.provider !== model.provider || binding.provider.id !== model.id) {
     throw new Error("model gateway returned an unexpected model identity");
   }
   if (binding.account.providerId !== model.provider || binding.account.accountRef !== accountRef) {
     throw new Error("model gateway returned an unexpected account binding");
+  }
+  if (binding.dataPolicyHash !== dataPolicyHash) {
+    throw new Error("model gateway returned an unexpected data policy");
   }
 }
 
@@ -90,6 +93,12 @@ export function createUnavailableNativeExecutionKernel(reason = "Model Gateway i
 export function createNativeExecutionKernel(options: NativeExecutionKernelOptions): ExecutionKernelPort & { close(): Promise<void> } {
   const executions = new Map<ExecutionRef, RuntimeRecord>();
   const invocations = new Map<InvocationRef, RuntimeRecord>();
+  const invocationExecutions = new Map<InvocationRef, ExecutionRef>();
+  const rootInvocations = new Map<ExecutionRef, InvocationRef>();
+  const releasedRootExecutions = new Set<ExecutionRef>();
+  const closingExecutions = new Set<ExecutionRef>();
+  const executionInvocations = new Map<ExecutionRef, Set<InvocationRef>>();
+  const pendingChildSpawns = new Map<ExecutionRef, number>();
   let closed = false;
 
   async function admitRoot(request: SpawnRequest): Promise<RuntimeRecord> {
@@ -107,7 +116,7 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
       accountRef,
       dataPolicyHash: options.dataPolicyHash,
     });
-    assertBindingMatches(binding, admission.model, accountRef);
+    assertBindingMatches(binding, admission.model, accountRef, options.dataPolicyHash);
     return {
       binding,
       runtime: createMaestroAgentRuntime({ gateway: options.gateway, binding, tools: options.tools, ...(request.workerProfile === undefined ? {} : { workerProfile: request.workerProfile }), closeGateway: false }),
@@ -124,20 +133,61 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     return invocations.get(invocation);
   }
 
+  async function maybeReleaseExecution(execution: ExecutionRef): Promise<void> {
+    if (closingExecutions.has(execution)) return;
+    const references = executionInvocations.get(execution);
+    if (references === undefined || references.size > 0 || (pendingChildSpawns.get(execution) ?? 0) > 0) return;
+    const record = executions.get(execution);
+    executionInvocations.delete(execution);
+    pendingChildSpawns.delete(execution);
+    rootInvocations.delete(execution);
+    releasedRootExecutions.delete(execution);
+    if (record === undefined) return;
+    executions.delete(execution);
+    if (closed) return;
+    await record.runtime.close?.().catch(() => undefined);
+  }
+
   const kernel: ExecutionKernelPort & { close(): Promise<void> } = {
     async spawn(request): Promise<SpawnedInvocation> {
       if (closed) throw new Error("native execution kernel is closed");
       if (request.parent !== undefined) {
         const parent = runtimeForExecution(request.parent);
-        const spawned = await parent.runtime.spawn(request);
-        invocations.set(spawned.invocation, parent);
-        return spawned;
+        if (releasedRootExecutions.has(request.parent)) throw new ExecutionKernelUnavailableError("prompt");
+        const pending = pendingChildSpawns.get(request.parent) ?? 0;
+        pendingChildSpawns.set(request.parent, pending + 1);
+        try {
+          const spawned = await parent.runtime.spawn(request);
+          if (closed) {
+            await parent.runtime.release?.(spawned.invocation).catch(() => undefined);
+            throw new Error("native execution kernel is closed");
+          }
+          const references = executionInvocations.get(request.parent);
+          if (references === undefined) {
+            await parent.runtime.release?.(spawned.invocation).catch(() => undefined);
+            throw new ExecutionKernelUnavailableError("prompt");
+          }
+          references.add(spawned.invocation);
+          invocations.set(spawned.invocation, parent);
+          invocationExecutions.set(spawned.invocation, request.parent);
+          return spawned;
+        } finally {
+          const remaining = (pendingChildSpawns.get(request.parent) ?? 1) - 1;
+          if (remaining === 0) pendingChildSpawns.delete(request.parent);
+          else pendingChildSpawns.set(request.parent, remaining);
+          await maybeReleaseExecution(request.parent);
+        }
       }
       const record = await admitRoot(request);
       try {
+        if (closed) throw new Error("native execution kernel is closed");
         const spawned = await record.runtime.spawn(request);
+        if (closed) throw new Error("native execution kernel is closed");
         executions.set(spawned.execution, record);
+        rootInvocations.set(spawned.execution, spawned.invocation);
+        executionInvocations.set(spawned.execution, new Set([spawned.invocation]));
         invocations.set(spawned.invocation, record);
+        invocationExecutions.set(spawned.invocation, spawned.execution);
         return spawned;
       } catch (error) {
         await record.runtime.close?.().catch(() => undefined);
@@ -169,13 +219,13 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
 
     async getModelIdentity(execution) {
       const record = executions.get(execution);
-      if (record === undefined) throw new ExecutionKernelUnavailableError("getModelIdentity");
+      if (record === undefined || releasedRootExecutions.has(execution)) throw new ExecutionKernelUnavailableError("getModelIdentity");
       return record.binding.provider;
     },
 
     async getExecutionBinding(execution): Promise<ExecutionBindingEvidence> {
       const record = executions.get(execution);
-      if (record === undefined) throw new ExecutionKernelUnavailableError("getModelIdentity");
+      if (record === undefined || releasedRootExecutions.has(execution)) throw new ExecutionKernelUnavailableError("getModelIdentity");
       return {
         model: record.binding.provider,
         accountRef: record.binding.account.accountRef,
@@ -213,17 +263,30 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
     async release(invocation) {
       const record = runtimeForInvocation(invocation);
       if (record === undefined) return;
+      const execution = invocationExecutions.get(invocation);
+      if (execution !== undefined && rootInvocations.get(execution) === invocation) releasedRootExecutions.add(execution);
       await record.runtime.release?.(invocation);
       invocations.delete(invocation);
+      invocationExecutions.delete(invocation);
+      if (execution === undefined) return;
+      executionInvocations.get(execution)?.delete(invocation);
+      await maybeReleaseExecution(execution);
     },
 
     async close() {
       if (closed) return;
       closed = true;
+      for (const execution of executions.keys()) closingExecutions.add(execution);
       const unique = new Set([...executions.values()]);
       await Promise.all([...unique].map((record) => record.runtime.close?.()));
       executions.clear();
+      executionInvocations.clear();
+      pendingChildSpawns.clear();
       invocations.clear();
+      invocationExecutions.clear();
+      rootInvocations.clear();
+      releasedRootExecutions.clear();
+      closingExecutions.clear();
       await options.gateway.close();
     },
   };
