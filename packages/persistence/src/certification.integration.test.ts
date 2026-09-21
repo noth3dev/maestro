@@ -218,11 +218,51 @@ describeDatabase("Department acceptance and independent Quality certification wi
     // No new certification row was written by the rejected attempt.
     expect((await listQualityCertifications(pool, certified.goalId)).length).toBe(beforeCorruptionCount);
 
+    // A citation may use the durable SHA-256 instead of the evidence ID. The
+    // content reader must still verify that SHA-only citation, rather than
+    // silently skipping it because the lookup key is not evidence_id.
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: ["b".repeat(64)] }, "quality", proof, headContext("quality"), store),
+    ).rejects.toBeInstanceOf(CertificationError);
+    expect((await listQualityCertifications(pool, certified.goalId)).length).toBe(beforeCorruptionCount);
+
     // Without a content reader, existing metadata-only-trust behavior is unchanged (documented,
     // not silently strengthened for callers that do not yet supply one).
     await expect(
       certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [evidenceIds[1]!] }, "quality", proof, headContext("quality")),
     ).resolves.toBeDefined();
+  });
+
+  it("rejects a SHA-only citation when duplicate durable rows disagree about byte length", async () => {
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-cert-duplicate-evidence-")));
+    const captured = await store.capture({
+      context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(), actorId: "test" },
+      bytes: Buffer.from("duplicate evidence artifact"), kind: "test-result", mediaType: "text/plain",
+    });
+
+    // Keep the physically older row wrong and append a valid duplicate. The
+    // SHA-only lookup must verify both rows, not let the later valid row mask
+    // the conflicting metadata on the earlier row.
+    await pool.query("ALTER TABLE evidence_records DISABLE TRIGGER evidence_records_immutable");
+    try {
+      await pool.query("UPDATE evidence_records SET sha256 = $1, byte_length = $2 WHERE evidence_id = $3", [captured.sha256, captured.byteLength + 1, evidenceIds[0]]);
+    } finally {
+      await pool.query("ALTER TABLE evidence_records ENABLE TRIGGER evidence_records_immutable");
+    }
+    const duplicateEvidenceId = randomUUID();
+    await pool.query(
+      `INSERT INTO evidence_records
+        (evidence_id, correlation_id, command_id, project_id, goal_id, actor_id, sha256, byte_length, kind, media_type, retention)
+       SELECT $1, $2, $3, project_id, goal_id, actor_id, $4, $5, kind, media_type, retention
+       FROM evidence_records WHERE evidence_id = $6`,
+      [duplicateEvidenceId, randomUUID(), randomUUID(), captured.sha256, captured.byteLength, evidenceIds[0]],
+    );
+
+    await expect(
+      certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [captured.sha256] }, "quality", proof, headContext("quality"), store),
+    ).rejects.toBeInstanceOf(CertificationError);
+    expect((await listQualityCertifications(pool, goalId)).length).toBe(0);
   });
 
   it("binds the certification to the exact Task Contract identity and integrated commit", async () => {

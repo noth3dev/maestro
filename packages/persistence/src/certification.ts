@@ -295,11 +295,19 @@ async function createCertification(
     // bytes still match its durable sha256/byteLength, catching the case
     // where a metadata row's sha256 was itself corrupted or repointed.
     if (content) {
-      const rowByEvidenceId = new Map(durable.rows.map((row) => [row.evidence_id.trim(), row]));
+      const rowsByCitation = new Map<string, typeof durable.rows>();
+      for (const row of durable.rows) {
+        for (const citation of [row.evidence_id.trim(), row.sha256.trim()]) {
+          const matches = rowsByCitation.get(citation) ?? [];
+          matches.push(row);
+          rowsByCitation.set(citation, matches);
+        }
+      }
       for (const evidenceId of substance.testEvidenceIds) {
-        const row = rowByEvidenceId.get(evidenceId.trim());
-        if (!row) continue; // sha256-only citation already covered by the allow-list check above
-        await verifyEvidenceRecord({ sha256: row.sha256, byteLength: Number(row.byte_length) }, content);
+        const rows = rowsByCitation.get(evidenceId.trim()) ?? [];
+        for (const row of rows) {
+          await verifyEvidenceRecord({ sha256: row.sha256, byteLength: Number(row.byte_length) }, content);
+        }
       }
     }
     const certificationId = context.commandId;
