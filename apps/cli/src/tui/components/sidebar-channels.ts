@@ -158,7 +158,8 @@ export function resolveSidebarChannelClick(
 }
 
 export interface SidebarChannelHost {
-  readonly submitter: { submit(text: string): void };
+  readonly submitter: { openReadView(viewId: string, text: string): void };
+  sidebarSelection: string;
   readonly view: { appendWarning(text: string): void };
   readonly sidebarChannels: readonly ChannelRead[];
   readonly refreshSidebarChannels: () => void;
@@ -176,7 +177,8 @@ export function activateSidebarChannel(host: SidebarChannelHost, id: string): vo
   }
   const read = host.sidebarChannels.find((entry) => channelRowKey(entry) === id);
   if (read === undefined) return;
-  void host.submitter.submit(`/channel read --channel-kind ${read.channel.kind} --channel-id ${read.channel.scopeId}`);
+  host.sidebarSelection = "channel";
+  host.submitter.openReadView("channel", `/channel read --channel-kind ${read.channel.kind} --channel-id ${read.channel.scopeId}`);
 }
 
 export type SidebarChannelSync = "fetch" | "clear" | "none";

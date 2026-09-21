@@ -26,6 +26,7 @@ function stubController() {
     sidebarVisible: false,
     narrowSidebarNavActive: false,
     sidebarFocus: undefined as string | undefined,
+    sidebarSelection: "home",
     pendingConfirmation: undefined as { summary: Record<string, unknown>; resolve: (decision: string) => void } | undefined,
     project: { kind: "unavailable", reason: "stub" },
     state: { pendingDecisions: [] },
@@ -146,7 +147,12 @@ describe("sidebar focus keys", () => {
     c.sidebarFocus = "channel:department:engineering";
     const handler = new LifecycleHandler(c as unknown as TuiController);
     expect(handler.handleInput("\r")).toEqual({ consume: true });
-    expect(c.submitter.submit).toHaveBeenCalledWith("/channel read --channel-kind department --channel-id engineering");
+    expect(c.sidebarSelection).toBe("channel");
+    expect(c.submitter.openReadView).toHaveBeenCalledWith(
+      "channel",
+      "/channel read --channel-kind department --channel-id engineering",
+    );
+    expect(c.submitter.submit).not.toHaveBeenCalled();
   });
 
   it("stops swallowing keys when narrowed while focused", () => {

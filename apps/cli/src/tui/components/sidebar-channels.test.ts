@@ -261,17 +261,23 @@ describe("resolveSidebarChannelClick", () => {
 describe("activateSidebarChannel", () => {
   function host(channels: readonly ChannelRead[]) {
     return {
-      submitter: { submit: vi.fn() },
+      submitter: { submit: vi.fn(), openReadView: vi.fn() },
       view: { appendWarning: vi.fn() },
       sidebarChannels: channels,
+      sidebarSelection: "home",
       refreshSidebarChannels: vi.fn(),
     };
   }
 
-  it("opens the channel view through the read command without a goal flag", () => {
+  it("opens the channel row in the destination page through the read command without a goal flag", () => {
     const h = host(reads);
     activateSidebarChannel(h, "channel:department:engineering");
-    expect(h.submitter.submit).toHaveBeenCalledWith("/channel read --channel-kind department --channel-id engineering");
+    expect(h.sidebarSelection).toBe("channel");
+    expect(h.submitter.openReadView).toHaveBeenCalledWith(
+      "channel",
+      "/channel read --channel-kind department --channel-id engineering",
+    );
+    expect(h.submitter.submit).not.toHaveBeenCalled();
     expect(h.refreshSidebarChannels).not.toHaveBeenCalled();
   });
 
