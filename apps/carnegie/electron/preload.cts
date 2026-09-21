@@ -34,16 +34,19 @@ function subscribeToEventStream(query: { projectId: string; after: string }, lis
 }
 
 const exposedApiMethods = [
-  "listGoals", "getGoal", "getSettings", "updateSettingsPreferences", "updateSettingsModelPool", "updateSettingsAuthorityDefaults", "listProviderConnections", "loginProvider", "logoutProvider", "getBudgetSummary", "getBillingSummary", "getArrangements", "getChannel", "postChannelMessage", "getProjection", "listEvents", "streamEvents",
+  "listGoals", "getGoal", "createGoal", "listProjects", "getOrganization", "provisionProjectAccess", "transitionGoal",
+  "getSettings", "updateSettingsPreferences", "updateSettingsModelPool", "updateSettingsAuthorityDefaults", "listProviderConnections", "loginProvider", "logoutProvider", "startAccountLogin", "accountLoginStatus", "cancelAccountLogin", "logoutAccount", "getBudgetSummary", "getBillingSummary", "getArrangements", "getChannel", "postChannelMessage", "getProjection", "listEvents", "streamEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
   "requestCriticalAction", "approveAndRunCriticalAction", "selectFullAccessMode", "denyCriticalAction", "listInbox",
-  "listModels", "createConversation", "sendConversationTurn",
-  "createCouncil", "submitCouncilBrief", "revealCouncil", "decideCouncil",
-  "createDepartmentPlan", "createMissionBundle", "spawnWorker", "cancelWorker",
-  "createGoalIntegrationBranch", "createDepartmentBranch", "createWorkerWorktree",
+  "listModels", "createConversation", "getConversation", "sendConversationTurn", "cancelConversation", "listConversationEvents",
+  "activateHead", "createCouncil", "getCouncil", "submitCouncilBrief", "revealCouncil", "decideCouncil",
+  "createDepartmentPlan", "getDepartmentPlan", "createMissionBundle", "getMissionBundle", "spawnWorker", "getWorker", "observeWorker", "sendWorkerMessage", "cancelWorker",
+  "createGoalIntegrationBranch", "createDepartmentBranch", "createWorkerWorktree", "freezeGoalIntegrationRevision", "advanceWorkerIntegration",
+  "captureEvidence", "getEvidenceDump",
   "acceptWorker", "certifyWorker", "certifyConditionalWorker",
-  "requestMetronomeCorrection", "requestMetronomeSafePause",
+  "scanMetronome", "raiseMetronomeChallenge", "requestMetronomeCorrection", "requestMetronomeSafePause", "resolveMetronomeChallenge", "runEncoreReview",
+  "generateConcertmasterReport",
   "getPersona", "proposePersona", "editPersonaCandidate",
   "listCertifications", "getEvidenceBundle", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal", "listImprovementDigestsForGoal",
 ] as const;
