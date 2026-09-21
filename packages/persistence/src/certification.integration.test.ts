@@ -234,7 +234,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
   });
 
   it("rejects a SHA-only citation when duplicate durable rows disagree about byte length", async () => {
-    const { worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
+    const { goalId, worker, evidenceIds, proof } = await setupWorkerWithCommit(true);
     const store = new FileEvidenceStore(await mkdtemp(join(tmpdir(), "maestro-cert-duplicate-evidence-")));
     const captured = await store.capture({
       context: { correlationId: randomUUID(), commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(), actorId: "test" },
@@ -262,7 +262,7 @@ describeDatabase("Department acceptance and independent Quality certification wi
     await expect(
       certifyQuality(pool, worker.workerId, { verdict: "passed", findings: [], testEvidenceIds: [captured.sha256] }, "quality", proof, headContext("quality"), store),
     ).rejects.toBeInstanceOf(CertificationError);
-    expect((await listQualityCertifications(pool, worker.workerId)).length).toBe(0);
+    expect((await listQualityCertifications(pool, goalId)).length).toBe(0);
   });
 
   it("binds the certification to the exact Task Contract identity and integrated commit", async () => {
