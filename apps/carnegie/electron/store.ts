@@ -1,20 +1,12 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { app, safeStorage } from "electron";
+import { createLocalSecretStore } from "@maestro/local-backend";
+import { persistConnectionConfig, restoreConnectionConfig, type ConnectionConfig, type StoredConnectionConfig } from "./connection-storage.js";
 
-export interface ConnectionConfig {
-  apiUrl: string;
-  token: string;
-  projectId: string;
-}
+export type { ConnectionConfig } from "./connection-storage.js";
 
 export type PublicConnectionConfig = Omit<ConnectionConfig, "token">;
-
-interface StoredConfig {
-  apiUrl: string;
-  projectId: string;
-  tokenEncryptedBase64: string;
-}
 
 function configPath(): string {
   return join(app.getPath("userData"), "connection.json");
@@ -30,22 +22,21 @@ function assertLoopback(apiUrl: string): void {
 export function loadConnectionConfig(): ConnectionConfig | undefined {
   const path = configPath();
   if (!existsSync(path)) return undefined;
-  const stored = JSON.parse(readFileSync(path, "utf8")) as StoredConfig;
-  const token = safeStorage.decryptString(Buffer.from(stored.tokenEncryptedBase64, "base64"));
-  return { apiUrl: stored.apiUrl, projectId: stored.projectId, token };
+  const stored = JSON.parse(readFileSync(path, "utf8")) as StoredConnectionConfig;
+  return restoreConnectionConfig(stored, {
+    isAvailable: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (value) => safeStorage.encryptString(value).toString("base64"),
+    decrypt: (value) => safeStorage.decryptString(Buffer.from(value, "base64")),
+  }, createLocalSecretStore());
 }
 
 export function saveConnectionConfig(config: ConnectionConfig): PublicConnectionConfig {
   assertLoopback(config.apiUrl);
-  if (!safeStorage.isEncryptionAvailable()) {
-    // ponytail: no plaintext fallback — an OS without a secret store fails closed rather than risking the bearer token on disk unencrypted.
-    throw new Error("OS-level secret storage is unavailable on this machine; cannot save the control-plane token securely");
-  }
-  const stored: StoredConfig = {
-    apiUrl: config.apiUrl,
-    projectId: config.projectId,
-    tokenEncryptedBase64: safeStorage.encryptString(config.token).toString("base64"),
-  };
+  const stored = persistConnectionConfig(config, {
+    isAvailable: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (value) => safeStorage.encryptString(value).toString("base64"),
+    decrypt: (value) => safeStorage.decryptString(Buffer.from(value, "base64")),
+  }, createLocalSecretStore());
   writeFileSync(configPath(), JSON.stringify(stored), { mode: 0o600 });
   return { apiUrl: config.apiUrl, projectId: config.projectId };
 }

@@ -110,7 +110,7 @@ function reportSetupStep(
   }
 }
 
-const defaultSecretStore = (): LocalSecretStore => {
+export function createLocalSecretStore(): LocalSecretStore {
   const entry = new Entry("maestro", "local-control-plane");
   return {
     read: () => {
@@ -126,7 +126,7 @@ const defaultSecretStore = (): LocalSecretStore => {
       try { entry.deletePassword(); } catch { /* Missing keychain entries are already clear. */ }
     },
   };
-};
+}
 
 const defaultRunCommand: LocalCommandRunner = (file, args, options) => new Promise((resolveResult) => {
   execFile(file, [...args], {
@@ -198,7 +198,7 @@ async function resolveLocalConnectionInternal(
   try { modelGatewayUrl = normalizeModelGatewayUrl(options.env.MAESTRO_MODEL_GATEWAY_URL); }
   catch (error) { return { kind: "setup-required", reason: error instanceof Error ? error.message : "MAESTRO_MODEL_GATEWAY_URL is invalid" }; }
   const fetch = options.fetch ?? globalThis.fetch;
-  const secretStore = options.secretStore ?? defaultSecretStore();
+  const secretStore = options.secretStore ?? createLocalSecretStore();
   const commandRunner = options.runCommand ?? defaultRunCommand;
   const runCommand: LocalCommandRunner = (file, args, commandOptions) => {
     const effectiveOptions = options.signal === undefined ? commandOptions : { ...commandOptions, signal: options.signal };
