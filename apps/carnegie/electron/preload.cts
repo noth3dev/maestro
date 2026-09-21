@@ -67,6 +67,17 @@ contextBridge.exposeInMainWorld("maestro", {
     get: () => ipcRenderer.invoke("maestro:preferences:get"),
     save: (preferences: { theme: string; locale: string }) => ipcRenderer.invoke("maestro:preferences:save", preferences),
   },
+  windowControls: {
+    minimize: () => { ipcRenderer.send("maestro:window:minimize"); },
+    toggleMaximize: () => ipcRenderer.invoke("maestro:window:toggle-maximize"),
+    isMaximized: () => ipcRenderer.invoke("maestro:window:is-maximized"),
+    close: () => { ipcRenderer.send("maestro:window:close"); },
+    onStateChange: (listener: (maximized: boolean) => void) => {
+      const onStateChange = (_event: Electron.IpcRendererEvent, maximized: boolean) => listener(maximized);
+      ipcRenderer.on("maestro:window-state", onStateChange);
+      return () => ipcRenderer.removeListener("maestro:window-state", onStateChange);
+    },
+  },
   events: {
     subscribe: subscribeToEventStream,
   },

@@ -31,6 +31,13 @@ export interface MaestroBridge {
     get(): Promise<Preferences>;
     save(preferences: Preferences): Promise<void>;
   };
+  windowControls: {
+    minimize(): void;
+    toggleMaximize(): Promise<boolean>;
+    isMaximized(): Promise<boolean>;
+    close(): void;
+    onStateChange(listener: (maximized: boolean) => void): () => void;
+  };
   events: {
     subscribe(query: EventQuery, listener: (message: EventStreamMessage) => void): () => void;
   };
