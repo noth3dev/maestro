@@ -29,6 +29,7 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 - `useDurableEvents.ts` reconnect visibility — **Live (code-level).** The subscription preserves the latest cursor, publishes an explicit `connecting/stale` state until an upstream-connected message or the first event, and exposes a retry action that restarts only the subscription from the last durable cursor. `App.tsx` renders the stale banner and retry control; focused subscription/bridge tests cover reconnect, polling, upstream acknowledgement, retry cursor ownership, and redaction paths.
 - `electron/api-error-bridge.ts` plus `main.ts`/`preload.cts` — **Live (code-level).** Renderer API calls use a clone-safe success/error envelope that preserves `ApiError` status/code/detail fields and redacts credential-shaped text before IPC; focused boundary tests pass 3/3.
 - `packages/api-client/src/transport.ts` and `methods/events.ts` — **Live (code-level).** Goal SSE invokes `onConnected` after the HTTP response has a body, and the Electron pump forwards that acknowledgement while idle; API-client and bridge tests cover this response-established path.
+- Task 2 verification gate — Focused 8 files / 71 tests, full non-integration 299 files / 2,076 tests with 9 skipped, Carnegie build, changed-file ESLint, and diff-check all pass. Independent no-edit review at code HEAD `426c9bfb` returned `REVIEW: PASS`; live Electron/Postgres/provider acceptance remains pending in `execution/PENDING_LIVE_CHECKS.md`.
 
 ## Home / Task Contract intake (Task 3)
 
