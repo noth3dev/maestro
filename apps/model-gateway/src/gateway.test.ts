@@ -99,8 +99,8 @@ describe("model gateway", () => {
     const closing = gateway.close();
     createGate.resolve();
 
-    await expect(pendingAdmission).rejects.toThrow("model gateway is closed");
     await closing;
+    await expect(pendingAdmission).rejects.toThrow("model gateway is closed");
     expect(providerClose).toHaveBeenCalledOnce();
   });
 

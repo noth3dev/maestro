@@ -27,6 +27,7 @@ export class ModelGateway implements ModelGatewayPort {
   private readonly loginOperators = new Map<string, string>();
   private readonly loginRequests = new Map<string, import("@maestro/agent-runtime").GatewayAccountLoginStartResult>();
   private readonly loginRequestFlights = new Map<string, Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>>();
+  private readonly admissionFlights = new Set<Promise<GatewayBinding>>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -107,6 +108,16 @@ export class ModelGateway implements ModelGatewayPort {
   }
 
   async admit(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
+    const flight = this.admitInternal(request);
+    this.admissionFlights.add(flight);
+    try {
+      return await flight;
+    } finally {
+      this.admissionFlights.delete(flight);
+    }
+  }
+
+  private async admitInternal(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     if (this.closed) throw new Error("model gateway is closed");
@@ -192,6 +203,7 @@ export class ModelGateway implements ModelGatewayPort {
 
   async close(): Promise<void> {
     this.closed = true;
+    await Promise.allSettled([...this.admissionFlights]);
     await Promise.all([...this.bindings.values()].map(({ provider }) => provider.close().catch(() => undefined)));
     this.bindings.clear();
     this.loginOperators.clear();
