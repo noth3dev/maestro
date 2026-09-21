@@ -32,6 +32,13 @@ export class MigrationChecksumMismatchError extends Error {
   }
 }
 
+export class MigrationSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MigrationSourceError";
+  }
+}
+
 export interface MigrationResult {
   /** Filenames actually applied during this call, in application order. Empty if already current. */
   applied: readonly string[];
@@ -67,6 +74,13 @@ export async function ensureMigrationLedgerTable(client: PoolClient): Promise<vo
  * released, even on error.
  */
 export async function runMigrations(pool: Pool, migrations: readonly MigrationFile[] = readMigrationFiles()): Promise<MigrationResult> {
+  const orderedMigrations = [...migrations].sort((left, right) => left.filename < right.filename ? -1 : left.filename > right.filename ? 1 : 0);
+  const migrationNames = new Set<string>();
+  for (const migration of orderedMigrations) {
+    if (migrationNames.has(migration.filename)) throw new MigrationSourceError(`Duplicate migration filename: ${migration.filename}`);
+    migrationNames.add(migration.filename);
+  }
+
   const client = await pool.connect();
   try {
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY.toString()]);
@@ -77,9 +91,12 @@ export async function runMigrations(pool: Pool, migrations: readonly MigrationFi
         "SELECT filename, checksum FROM schema_migrations",
       );
       const recordedByFilename = new Map(recorded.rows.map((row) => [row.filename, row.checksum]));
+      for (const filename of recordedByFilename.keys()) {
+        if (!migrationNames.has(filename)) throw new MigrationSourceError(`Migration source omitted an already-applied file: ${filename}`);
+      }
 
       const applied: string[] = [];
-      for (const { filename, sql } of migrations) {
+      for (const { filename, sql } of orderedMigrations) {
         const checksum = computeMigrationChecksum(sql);
         const existingChecksum = recordedByFilename.get(filename);
         if (existingChecksum !== undefined) {

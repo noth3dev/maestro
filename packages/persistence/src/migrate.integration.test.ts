@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
-import { readMigrationFiles, runMigrations, MigrationChecksumMismatchError } from "./migrate.js";
+import { computeMigrationChecksum, readMigrationFiles, runMigrations, MigrationChecksumMismatchError, MigrationSourceError } from "./migrate.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -66,7 +66,8 @@ describeDatabase("production migration runner", () => {
         sql: "CREATE TABLE migration_added_after_initial_run (id integer NOT NULL)",
       };
 
-      const second = await runMigrations(pool, [...readMigrationFiles(), added]);
+      const migrationSet = [...readMigrationFiles(), added];
+      const second = await runMigrations(pool, migrationSet);
       expect(second.applied).toEqual([added.filename]);
       expect(first.applied.length).toBeGreaterThan(0);
 
@@ -75,8 +76,26 @@ describeDatabase("production migration runner", () => {
         [added.filename],
       );
       expect(priorLedger.rows).toEqual(firstLedger.rows);
+      const addedLedger = await pool.query<{ filename: string; checksum: string }>(
+        "SELECT filename, checksum FROM schema_migrations WHERE filename = $1",
+        [added.filename],
+      );
+      expect(addedLedger.rows).toEqual([{ filename: added.filename, checksum: computeMigrationChecksum(added.sql) }]);
+
+      const third = await runMigrations(pool, migrationSet);
+      expect(third.applied).toEqual([]);
       const addedTable = await pool.query("SELECT to_regclass('migration_added_after_initial_run') AS exists");
       expect(addedTable.rows[0]!.exists).not.toBeNull();
+    } finally {
+      await drop();
+    }
+  });
+
+  it("rejects a supplied migration source that omits an already-applied file", async () => {
+    const { pool, drop } = await freshSchema();
+    try {
+      await runMigrations(pool);
+      await expect(runMigrations(pool, readMigrationFiles().slice(1))).rejects.toBeInstanceOf(MigrationSourceError);
     } finally {
       await drop();
     }
