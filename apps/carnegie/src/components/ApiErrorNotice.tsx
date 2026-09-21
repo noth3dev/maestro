@@ -1,3 +1,4 @@
+import React from "react";
 import { Icon } from "../icons.js";
 import { useT } from "../i18n/index.js";
 import { classifyApiError } from "../lib/command-id.js";

@@ -9,6 +9,7 @@ import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type
 import { initializeCarnegieConnection } from "./bootstrap.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
+import { invokeWithErrorEnvelope } from "./api-error-bridge.js";
 import { EVENT_STREAM_CHANNELS, pumpEventStream, type EventStreamMessage } from "./event-stream-bridge.js";
 import { abortAllEventStreams, abortEventStreamsForSender, type ActiveEventStream } from "./event-stream-lifecycle.js";
 import {
@@ -282,13 +283,15 @@ function registerIpcHandlers(): void {
     activeEventStreams.delete(streamId);
   });
 
-  ipcMain.handle("maestro:api", async (_event, method: string, args: unknown[]) => {
-    if (!isExposedMethod(method)) throw new Error(`Method not exposed to the renderer: ${method}`);
-    if (method === "streamEvents") throw new Error("Use the dedicated durable event stream bridge");
-    if (api === undefined) throw new Error("Not connected to a control plane yet");
-    const call = api[method] as (...callArgs: unknown[]) => unknown;
-    return call.apply(api, args);
-  });
+  ipcMain.handle("maestro:api", (_event, method: string, args: unknown[]) =>
+    invokeWithErrorEnvelope(() => {
+      if (!isExposedMethod(method)) throw new Error(`Method not exposed to the renderer: ${method}`);
+      if (method === "streamEvents") throw new Error("Use the dedicated durable event stream bridge");
+      if (api === undefined) throw new Error("Not connected to a control plane yet");
+      const call = api[method] as (...callArgs: unknown[]) => unknown;
+      return call.apply(api, args);
+    }),
+  );
 }
 
 function createWindow(): void {

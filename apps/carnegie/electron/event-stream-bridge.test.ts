@@ -33,9 +33,13 @@ class FakeSubscriber {
 describe("Carnegie Electron durable event bridge", () => {
   it("adapts one IPC stream into an async iterator and closes on end", async () => {
     const subscriber = new FakeSubscriber();
-    const stream = createRendererEventStream(subscriber.subscribe.bind(subscriber), query);
+    let connected = false;
+    const stream = createRendererEventStream(subscriber.subscribe.bind(subscriber), query, undefined, () => { connected = true; });
     const next = stream[Symbol.asyncIterator]().next();
     expect(subscriber.calls).toEqual([query]);
+    expect(connected).toBe(false);
+    subscriber.emit({ kind: "connected" });
+    expect(connected).toBe(true);
     subscriber.emit({ kind: "event", event });
     expect(await next).toEqual({ done: false, value: event });
     const done = stream[Symbol.asyncIterator]().next();
@@ -64,11 +68,11 @@ describe("Carnegie Electron durable event bridge", () => {
   it("emits events, completion, and non-abort errors without leaking credentials", async () => {
     const messages: EventStreamMessage[] = [];
     await pumpEventStream(async function* () { yield event; }, query, new AbortController().signal, (message) => messages.push(message));
-    expect(messages).toEqual([{ kind: "event", event }, { kind: "end" }]);
+    expect(messages).toEqual([{ kind: "connected" }, { kind: "event", event }, { kind: "end" }]);
 
     const failed: EventStreamMessage[] = [];
-    await pumpEventStream(async function* () { yield* [] as typeof event[]; throw new Error("gateway down"); }, query, new AbortController().signal, (message) => failed.push(message));
-    expect(failed).toEqual([{ kind: "error", message: "gateway down" }]);
-    expect(JSON.stringify(messages)).not.toContain("Bearer");
+    await pumpEventStream(async function* () { yield* [] as typeof event[]; throw new Error("gateway down token=provider-secret"); }, query, new AbortController().signal, (message) => failed.push(message));
+    expect(failed).toEqual([{ kind: "error", message: "gateway down token=[redacted]" }]);
+    expect(JSON.stringify(failed)).not.toContain("provider-secret");
   });
 });

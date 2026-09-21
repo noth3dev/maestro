@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDurableEventSubscription, type DurableEvent, type DurableEventsApi } from "./useDurableEvents.js";
+import { createDurableEventSubscription, resolveSubscriptionCursor, type DurableEvent, type DurableEventsApi } from "./useDurableEvents.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const event = (eventId: string, cursor: string): DurableEvent => ({
@@ -19,6 +19,11 @@ function apiFor(streamEvents: DurableEventsApi["streamEvents"], listEvents: Dura
 }
 
 describe("durable Carnegie events", () => {
+  it("retries from the last durable cursor only for the active project", () => {
+    expect(resolveSubscriptionCursor("project-a", "0", { projectId: "project-a", baseCursor: "0", cursor: "42" })).toBe("42");
+    expect(resolveSubscriptionCursor("project-b", "0", { projectId: "project-a", baseCursor: "0", cursor: "42" })).toBe("0");
+  });
+
   it("reconnects from the latest cursor and emits no duplicate event", async () => {
     const calls: string[] = [];
     let connection = 0;
@@ -52,6 +57,40 @@ describe("durable Carnegie events", () => {
     expect(calls).toEqual(["0", "1"]);
     expect(states.at(-1)?.events.map((item) => item.eventId)).toEqual(["event-1", "event-2"]);
     expect(states.at(-1)?.cursor).toBe("2");
+  });
+
+  it("keeps the durable state stale while an SSE reconnect is waiting for its first event", async () => {
+    let streamAttempts = 0;
+    let releaseReconnect: (() => void) | undefined;
+    const control = { stop: undefined as (() => void) | undefined };
+    let sawStaleReconnect = false;
+    const api = apiFor(async function* () {
+      streamAttempts += 1;
+      if (streamAttempts === 1) {
+        yield event("event-1", "1");
+        throw new Error("temporary disconnect");
+      }
+      await new Promise<void>((resolve) => {
+        releaseReconnect = resolve;
+        queueMicrotask(() => resolve());
+      });
+      yield event("event-2", "2");
+    });
+    const handle = createDurableEventSubscription({
+      api,
+      projectId,
+      reconnectDelayMs: 0,
+      maxReconnectAttempts: 1,
+      maxPollingAttempts: 0,
+      onState: (state) => {
+        if (state.transport === "connecting" && state.stale) sawStaleReconnect = true;
+        if (state.cursor === "2") control.stop?.();
+      },
+    });
+    control.stop = handle.stop;
+    await handle.completed;
+    releaseReconnect?.();
+    expect(sawStaleReconnect).toBe(true);
   });
 
   it("retains last-known events and marks the state stale when the stream fails", async () => {

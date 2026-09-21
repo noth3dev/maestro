@@ -4,7 +4,7 @@ import { contextBridge, ipcRenderer } from "electron";
 // contextBridge.exposeInMainWorld can only clone a plain object of functions (a Proxy fails with
 // "An object could not be cloned"), and importing an ESM sibling into this CommonJS preload isn't
 // reliable across Electron's bundled Node version. Keep this list in sync with apiBridge.ts.
-type RendererEventStreamMessage = { kind: "event" | "end" | "error"; event?: unknown; message?: string };
+type RendererEventStreamMessage = { kind: "connected" | "event" | "end" | "error"; event?: unknown; message?: string };
 type RendererEventListener = (message: RendererEventStreamMessage) => void;
 const eventChannels = { start: "maestro:events:start", message: "maestro:events:message", stop: "maestro:events:stop" } as const;
 
@@ -51,10 +51,36 @@ const exposedApiMethods = [
   "listCertifications", "getEvidenceBundle", "listMetronomeChallenges", "listEncoreCouncilRounds", "getConcertmasterReport", "getGitIntegrationState", "listWorkersForGoal", "listImprovementDigestsForGoal",
 ] as const;
 
+type SerializedBridgeError =
+  | { readonly kind: "api-error"; readonly status: number; readonly code: string; readonly message: string; readonly detail?: string }
+  | { readonly kind: "error"; readonly message: string };
+type ApiBridgeResponse =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly error: SerializedBridgeError };
+
+function isApiBridgeResponse(value: unknown): value is ApiBridgeResponse {
+  return typeof value === "object" && value !== null && "ok" in value && typeof (value as { ok?: unknown }).ok === "boolean";
+}
+
+function restoreBridgeError(error: SerializedBridgeError): Error {
+  const restored = new Error(error.message);
+  if (error.kind === "api-error") {
+    Object.assign(restored, { name: "ApiError", status: error.status, code: error.code, ...(error.detail === undefined ? {} : { detail: error.detail }) });
+  }
+  return restored;
+}
+
+async function invokeApi(method: string, args: unknown[]): Promise<unknown> {
+  const response = await ipcRenderer.invoke("maestro:api", method, args) as unknown;
+  if (!isApiBridgeResponse(response)) return response;
+  if (response.ok) return response.value;
+  throw restoreBridgeError(response.error);
+}
+
 const api = Object.fromEntries(
   exposedApiMethods
     .filter((method) => method !== "streamEvents")
-    .map((method) => [method, (...args: unknown[]) => ipcRenderer.invoke("maestro:api", method, args)]),
+    .map((method) => [method, (...args: unknown[]) => invokeApi(method, args)]),
 ) as Record<string, (...args: unknown[]) => unknown>;
 
 

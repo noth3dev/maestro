@@ -24,9 +24,9 @@ import type { ViewName } from "./views.js";
 import type { HomeMode } from "./homeMode.js";
 import type { EventQuery } from "@maestro/api-client";
 import { createRendererEventStream } from "../electron/event-stream-bridge.js";
-import { useDurableEvents, type DurableEventState } from "./useDurableEvents.js";
+import { useDurableEvents, type UseDurableEventsResult } from "./useDurableEvents.js";
 
-function Shell({ eventState }: { eventState: DurableEventState }) {
+function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
   const [view, setView] = useState<ViewName>("home");
   const [homeMode, setHomeMode] = useState<HomeMode>("maestro");
 
@@ -58,7 +58,8 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
       <div className="app-content">
         {eventState.stale && (
           <div className="event-stale-banner" role="status">
-            Showing the last durable state while live updates reconnect.{eventState.error === undefined ? "" : ` ${eventState.error}`}
+            <span>Showing the last durable state while live updates reconnect.{eventState.error === undefined ? "" : ` ${eventState.error}`}</span>
+            <button type="button" className="btn btn-sm" onClick={eventState.retry}>retry live updates</button>
           </div>
         )}
         {body}
@@ -70,8 +71,8 @@ function Shell({ eventState }: { eventState: DurableEventState }) {
 function ConnectedWorkspace({ projectId }: { projectId: string }) {
   const durableEventsApi = useMemo(() => ({
     listEvents: (query: EventQuery) => window.maestro.api.listEvents(query),
-    streamEvents: (query: EventQuery, options?: { signal?: AbortSignal }) =>
-      createRendererEventStream(window.maestro.events.subscribe, query, options?.signal),
+    streamEvents: (query: EventQuery, options?: { signal?: AbortSignal; onConnected?: () => void }) =>
+      createRendererEventStream(window.maestro.events.subscribe, query, options?.signal, options?.onConnected),
   }), []);
   const eventState = useDurableEvents(durableEventsApi, projectId);
   return (

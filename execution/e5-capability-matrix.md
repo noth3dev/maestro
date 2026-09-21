@@ -9,7 +9,7 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 - **Backend-blocked** — no valid server contract/durable source of truth; no fake action is shown.
 - **Out-of-scope** — excluded by an explicit roadmap gate.
 
-**Not attempted this session:** any live Electron/Playwright/real-provider verification. No `MAESTRO_TEST_DATABASE_URL`, no Docker, no running Control Plane were available in this sandbox — every status below is from static code reading and `vitest`/`tsc -b`, never a live run. Do not upgrade any row to `Live` from this document alone.
+**Not attempted this session:** any live Electron/Playwright/real-provider verification. Current checks confirm `MAESTRO_TEST_DATABASE_URL` is empty; Docker is available but only unrelated Supabase containers are running; no Control Plane/provider is available. The Electron process is present, but no live E5 path was exercised. Every status below remains from static code reading and `vitest`/`tsc -b`, never a live run. Do not upgrade any row to `Live` from this document alone.
 
 ---
 
@@ -22,11 +22,12 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 
 ## Shared primitives (Task 2)
 
-- `lib/command-id.ts` — **Live.** `newCommandId()` and `classifyApiError()` implemented and unit-tested (7/7 passing), classifying every `StableApiErrorCode` into retryable/non-retryable with a title/detail pair.
-- `components/ApiErrorNotice.tsx` — **Live.** Renders `classifyApiError()`'s output with a retry button only when retryable. No test file yet (`ApiErrorNotice.test.tsx` per plan's own convention is missing).
-- `components/AsyncState.tsx` — **Not started.** No file exists.
-- `components/ConfirmActionDialog.tsx` — **Not started.** No file exists. This blocks Task 6's "use the shared confirmation dialog for cancellation" requirement and Task 4's stop/emergency-stop confirmation requirement — those currently have no confirmation step at all (see Dashboard below).
-- `useDurableEvents.ts` reconnect visibility — **Live already**, pre-existing (`App.tsx` renders a stale banner from `eventState.stale`).
+- `lib/command-id.ts` — **Live (code-level).** `newCommandId()` and `classifyApiError()` preserve stable status/code fields from clone-safe IPC errors, redact credential-shaped message/detail text, and classify every `StableApiErrorCode` with a stable title plus retry policy; focused classification tests pass 10/10.
+- `components/ApiErrorNotice.tsx` — **Live (code-level).** Renders `classifyApiError()`'s sanitized output with a retry button only when retryable; dedicated notice and `AsyncState` tests cover retryable and authority-denial paths.
+- `components/AsyncState.tsx` — **Live (code-level).** Shared loading (`role=status`, `aria-busy`), ready, empty, and API-error states are covered by 5 tests.
+- `components/ConfirmActionDialog.tsx` — **Live (code-level).** Closed state, unique labelled effect summary, danger styling, Escape cancellation, surface-only Enter confirmation, and button callbacks are covered by 4 tests. Task 4/6 still need to adopt it at their own task boundaries.
+- `useDurableEvents.ts` reconnect visibility — **Live (code-level).** The subscription preserves the latest cursor, publishes an explicit `connecting/stale` state until an upstream-connected message or the first event, and exposes a retry action that restarts only the subscription from the last durable cursor. `App.tsx` renders the stale banner and retry control; focused subscription/bridge tests cover reconnect, polling, upstream acknowledgement, retry cursor ownership, and redaction paths.
+- `electron/api-error-bridge.ts` plus `main.ts`/`preload.cts` — **Live (code-level).** Renderer API calls use a clone-safe success/error envelope that preserves `ApiError` status/code/detail fields and redacts credential-shaped text before IPC; focused boundary tests pass 3/3.
 
 ## Home / Task Contract intake (Task 3)
 
@@ -88,11 +89,10 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 
 ## Immediate next steps for whoever picks this up
 
-1. **Verify the resolved Task 5 direction against the actual route code, then build the read-only Department Plan / Mission Bundle panel** (see above) — this unblocks Task 6, since `spawnWorker` needs the real `councilId`/`departmentId`/`itemId` a resolved Mission Bundle carries.
-2. Build `components/AsyncState.tsx` and `components/ConfirmActionDialog.tsx` (Task 2) — several already-built screens (Dashboard's stop/emergency-stop) are missing required confirmation because of this gap.
-3. Wire `getConversation`/`cancelConversation`/`listConversationEvents` into `Home.tsx` (Task 3 gap).
-4. `views/Workers.tsx` (Task 6) is the single highest-value missing screen for an end-to-end run, once Task 5's question is resolved.
-5. Read `lib/inbox-data.ts` in full to confirm/correct the Task 8 approval-routing note above before building a separate `Approvals.tsx`.
+1. Wire `getConversation`/`cancelConversation`/`listConversationEvents` into `Home.tsx` (Task 3 gap).
+2. Verify the resolved Task 5 direction against the actual route code, then build the read-only Department Plan / Mission Bundle panel (see above) — this unblocks Task 6, since `spawnWorker` needs the real `councilId`/`departmentId`/`itemId` a resolved Mission Bundle carries.
+3. `views/Workers.tsx` (Task 6) is the single highest-value missing screen for an end-to-end run, once Task 5's question is resolved.
+4. Read `lib/inbox-data.ts` in full to confirm/correct the Task 8 approval-routing note above before building a separate `Approvals.tsx`.
 
 ## Bridge duplication risk (flagged during this session's plan review, still unresolved)
 

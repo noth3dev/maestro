@@ -468,3 +468,16 @@
 @media (prefers-reduced-motion: reduce) {
   .radial-flow .react-flow__viewport, .radial-flow .react-flow__pane { transition: none !important; animation: none !important; }
 }
+
+/* ── shared async/action primitives ── */
+.async-state { padding:16px; color:var(--text-muted); font-size:12px; }
+.async-state-loading { display:flex; align-items:center; justify-content:center; min-height:64px; }
+.async-state-empty { border:1px dashed var(--border-strong); border-radius:var(--radius); text-align:center; }
+.confirm-action-backdrop { position:fixed; inset:0; z-index:50; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.42); }
+.confirm-action-dialog { width:min(440px,100%); display:grid; gap:12px; padding:20px; border:1px solid var(--border-strong); border-radius:var(--radius-lg); background:var(--surface-2); color:var(--text-primary); box-shadow:var(--shadow-lg); }
+.confirm-action-dialog h2 { font-size:16px; line-height:1.25; }
+.confirm-action-dialog p { color:var(--text-secondary); font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
+.confirm-action-dialog-danger { border-color:var(--rust); }
+.confirm-action-buttons { display:flex; justify-content:flex-end; gap:8px; }
+.btn-danger { border-color:var(--rust); background:var(--rust); color:#fff; }
+.btn-danger:hover { opacity:.9; }

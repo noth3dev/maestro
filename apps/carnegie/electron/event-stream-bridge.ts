@@ -7,6 +7,7 @@ export const EVENT_STREAM_CHANNELS = {
 } as const;
 
 export type EventStreamMessage =
+  | { kind: "connected" }
   | { kind: "event"; event: GoalEvent }
   | { kind: "end" }
   | { kind: "error"; message: string };
@@ -15,8 +16,14 @@ export type EventStreamSubscriber = (query: EventQuery, listener: (message: Even
 export type EventStreamSource = (query: EventQuery, options: { signal: AbortSignal }) => AsyncIterable<GoalEvent>;
 export type EventStreamEmitter = (message: EventStreamMessage) => void;
 
+function redactStreamError(value: string): string {
+  return value
+    .replace(/((?:["']?(?:authorization|token|access[_ -]?token|refresh[_ -]?token|id[_ -]?token|api[-_ ]?key|client[_ -]?secret|secret|password|credential)["']?)\s*[:=]\s*)(["']?)(?:Bearer\s+)?[^\s,;}"']+(["']?)/gi, "$1$2[redacted]$3")
+    .replace(/\bBearer\s+[^\s,;}"']+/gi, "Bearer [redacted]");
+}
+
 function asError(message: string): Error {
-  return new Error(message || "SSE stream failed");
+  return new Error(redactStreamError(message) || "SSE stream failed");
 }
 
 /**
@@ -27,6 +34,7 @@ export function createRendererEventStream(
   subscribe: EventStreamSubscriber,
   query: EventQuery,
   signal?: AbortSignal,
+  onConnected?: () => void,
 ): AsyncIterable<GoalEvent> {
   const queue: GoalEvent[] = [];
   const waiters: Array<{ resolve: (result: IteratorResult<GoalEvent>) => void; reject: (error: Error) => void }> = [];
@@ -57,7 +65,9 @@ export function createRendererEventStream(
   };
 
   const onMessage = (message: EventStreamMessage): void => {
-    if (message.kind === "event") {
+    if (message.kind === "connected") {
+      onConnected?.();
+    } else if (message.kind === "event") {
       const waiter = waiters.shift();
       if (waiter !== undefined) waiter.resolve({ done: false, value: message.event });
       else queue.push(message.event);
@@ -104,13 +114,18 @@ export async function pumpEventStream(
   signal: AbortSignal,
   emit: EventStreamEmitter,
 ): Promise<void> {
+  let connected = false;
   try {
     for await (const event of source(query, { signal })) {
       if (signal.aborted) return;
+      if (!connected) {
+        connected = true;
+        emit({ kind: "connected" });
+      }
       emit({ kind: "event", event });
     }
     if (!signal.aborted) emit({ kind: "end" });
   } catch (error) {
-    if (!signal.aborted) emit({ kind: "error", message: error instanceof Error ? error.message : "SSE stream failed" });
+    if (!signal.aborted) emit({ kind: "error", message: redactStreamError(error instanceof Error ? error.message : "SSE stream failed") });
   }
 }

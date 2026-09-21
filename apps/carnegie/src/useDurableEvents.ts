@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
-import type { ApiClient, GoalEvent } from "@maestro/api-client";
+import { useEffect, useRef, useState } from "react";
+import type { ApiClient, EventQuery, GoalEvent } from "@maestro/api-client";
 
 export type DurableEvent = GoalEvent;
-export type DurableEventsApi = Pick<ApiClient, "listEvents"> & Partial<Pick<ApiClient, "streamEvents">>;
+export type DurableStreamOptions = { signal?: AbortSignal; onConnected?: () => void };
+export type DurableEventsApi = Pick<ApiClient, "listEvents"> & {
+  streamEvents?: (query: EventQuery, options?: DurableStreamOptions) => AsyncIterable<DurableEvent>;
+};
 
 export type DurableEventTransport = "connecting" | "sse" | "polling";
 export interface DurableEventState {
@@ -11,6 +14,21 @@ export interface DurableEventState {
   stale: boolean;
   transport: DurableEventTransport;
   error: string | undefined;
+}
+
+export interface UseDurableEventsResult extends DurableEventState {
+  /** Restarts only the durable event subscription; screen selection and Goal state remain untouched. */
+  retry: () => void;
+}
+
+export interface DurableRetryRequest {
+  readonly projectId: string;
+  readonly baseCursor: string | undefined;
+  readonly cursor: string;
+}
+
+export function resolveSubscriptionCursor(projectId: string, initialCursor: string | undefined, request: DurableRetryRequest | undefined): string {
+  return request?.projectId === projectId && request.baseCursor === initialCursor ? request.cursor : initialCursor ?? "0";
 }
 
 export interface DurableEventSubscriptionOptions {
@@ -140,11 +158,19 @@ export function createDurableEventSubscription(options: DurableEventSubscription
 
       let reconnectAttempts = 0;
       while (!controller.signal.aborted) {
-        // A healthy reopened stream may be idle; publish the handback before awaiting its first event.
-        publish({ transport: "sse", stale: false, error: undefined });
+        publish({ transport: "connecting", stale: true, error: undefined });
+        let connected = false;
+        const markConnected = (): void => {
+          connected = true;
+          publish({ transport: "sse", stale: false, error: undefined });
+        };
         try {
-          for await (const event of options.api.streamEvents({ projectId: options.projectId, after: state.cursor }, { signal: controller.signal })) {
+          for await (const event of options.api.streamEvents(
+            { projectId: options.projectId, after: state.cursor },
+            { signal: controller.signal, onConnected: markConnected },
+          )) {
             if (controller.signal.aborted) return;
+            if (!connected) markConnected();
             append([event]);
             publish({ transport: "sse", stale: false, error: undefined });
             reconnectAttempts = 0;
@@ -171,16 +197,25 @@ export function createDurableEventSubscription(options: DurableEventSubscription
   return { stop: () => controller.abort(), completed };
 }
 
-export function useDurableEvents(api: DurableEventsApi, projectId: string, options: Omit<DurableEventSubscriptionOptions, "api" | "projectId" | "onState"> = {}): DurableEventState {
-  const [state, setState] = useState<DurableEventState>({ events: [], cursor: options.cursor ?? "0", stale: false, transport: "connecting", error: undefined });
+export function useDurableEvents(api: DurableEventsApi, projectId: string, options: Omit<DurableEventSubscriptionOptions, "api" | "projectId" | "onState"> = {}): UseDurableEventsResult {
   const { cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts, pollingSseRetryAttempts } = options;
+  const retryRequestRef = useRef<DurableRetryRequest | undefined>(undefined);
+  const scopeRef = useRef(`${projectId}\0${cursor ?? ""}`);
+  const scope = `${projectId}\0${cursor ?? ""}`;
+  if (scopeRef.current !== scope) {
+    scopeRef.current = scope;
+    retryRequestRef.current = undefined;
+  }
+  const subscriptionCursor = resolveSubscriptionCursor(projectId, cursor, retryRequestRef.current);
+  const [state, setState] = useState<DurableEventState>({ events: [], cursor: subscriptionCursor, stale: false, transport: "connecting", error: undefined });
+  const [retryGeneration, setRetryGeneration] = useState(0);
 
   useEffect(() => {
-    setState({ events: [], cursor: cursor ?? "0", stale: false, transport: "connecting", error: undefined });
+    setState({ events: [], cursor: subscriptionCursor, stale: false, transport: "connecting", error: undefined });
     const handle = createDurableEventSubscription({
       api,
       projectId,
-      ...(cursor === undefined ? {} : { cursor }),
+      cursor: subscriptionCursor,
       ...(reconnectDelayMs === undefined ? {} : { reconnectDelayMs }),
       ...(maxReconnectAttempts === undefined ? {} : { maxReconnectAttempts }),
       ...(pollIntervalMs === undefined ? {} : { pollIntervalMs }),
@@ -189,7 +224,13 @@ export function useDurableEvents(api: DurableEventsApi, projectId: string, optio
       onState: setState,
     });
     return () => handle.stop();
-  }, [api, projectId, cursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts, pollingSseRetryAttempts]);
+  }, [api, projectId, cursor, subscriptionCursor, reconnectDelayMs, maxReconnectAttempts, pollIntervalMs, maxPollingAttempts, pollingSseRetryAttempts, retryGeneration]);
 
-  return state;
+  return {
+    ...state,
+    retry: () => {
+      retryRequestRef.current = { projectId, baseCursor: cursor, cursor: state.cursor };
+      setRetryGeneration((generation) => generation + 1);
+    },
+  };
 }
