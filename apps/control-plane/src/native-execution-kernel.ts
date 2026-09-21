@@ -154,6 +154,10 @@ export function createNativeExecutionKernel(options: NativeExecutionKernelOption
         pendingChildSpawns.set(request.parent, pending + 1);
         try {
           const spawned = await parent.runtime.spawn(request);
+          if (closed) {
+            await parent.runtime.release?.(spawned.invocation).catch(() => undefined);
+            throw new Error("native execution kernel is closed");
+          }
           const references = executionInvocations.get(request.parent);
           if (references === undefined) {
             await parent.runtime.release?.(spawned.invocation).catch(() => undefined);

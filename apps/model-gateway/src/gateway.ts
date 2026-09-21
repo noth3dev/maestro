@@ -109,13 +109,20 @@ export class ModelGateway implements ModelGatewayPort {
   async admit(request: GatewayAdmissionRequest): Promise<GatewayBinding> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
+    if (this.closed) throw new Error("model gateway is closed");
     await this.options.registry.refreshModels();
+    if (this.closed) throw new Error("model gateway is closed");
     const plugin = this.options.registry.resolve({ providerId: request.providerId, modelId: request.model.id });
     const identity = this.options.registry.resolveModel({ providerId: request.providerId, modelId: request.model.id });
     if (identity.provider !== request.model.provider || identity.id !== request.model.id) throw new Error("provider returned an unexpected model identity");
     const account = await this.options.credentials.ensure(request.accountRef);
+    if (this.closed) throw new Error("model gateway is closed");
     if (account === undefined || account.operatorId !== request.operatorId || account.providerId !== request.providerId) throw new Error("credential binding is not owned by operator");
     const provider = await plugin.create({ model: identity, account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode }, dataPolicyHash: request.dataPolicyHash });
+    if (this.closed) {
+      await provider.close().catch(() => undefined);
+      throw new Error("model gateway is closed");
+    }
     if (provider.identity.provider !== identity.provider || provider.identity.id !== identity.id || provider.accountRef !== account.accountRef) {
       await provider.close().catch(() => undefined);
       throw new Error("provider identity or account binding mismatch");
