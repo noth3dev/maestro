@@ -617,6 +617,8 @@ export async function cancelWorkerAfterConfirmation(
 
 ## Task 7: Add Git integration, worktree, acceptance, certification, and evidence
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `7767f2ff`. Focused Carnegie coverage passed 4 files / 17 tests, changed-file ESLint and `git diff --check` passed. The full Carnegie build remains blocked by the pre-existing missing `@playwright/test` and `@earendil-works/pi-tui` dependencies plus unrelated CLI type errors; this does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/views/Git.tsx`
 - Modify: `apps/carnegie/src/views/EvidenceLog.tsx`
