@@ -199,3 +199,66 @@ it("logs out of the managed account and revokes its metadata binding", async () 
   expect(loggedOut).toBe(true);
   await expect(credentials.ensure("openai-codex-operator-1")).resolves.toBeUndefined();
 });
+
+
+describe("model gateway account login (Claude)", () => {
+  it("shares one in-flight Claude login across duplicate requestIds", async () => {
+    const registry = new ProviderRegistry();
+    const credentials = new InMemoryCredentialStore();
+    let starts = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const claude = {
+      startClaudeLogin: async () => { starts += 1; await gate; return { providerId: "anthropic-claude" as const, loginId: "login-1", authUrl: "https://claude.ai/oauth/authorize" }; },
+      getLoginStatus: async () => ({ loginId: "login-1", state: "pending" as const }), cancelLogin: async () => {},
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", claude });
+    const first = gateway.startAccountLogin!({ requestId: "same-request", operatorId: "operator-1", providerId: "anthropic-claude" });
+    const second = gateway.startAccountLogin!({ requestId: "same-request", operatorId: "operator-1", providerId: "anthropic-claude" });
+    await Promise.resolve();
+    release();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { providerId: "anthropic-claude", loginId: "login-1", authUrl: "https://claude.ai/oauth/authorize" },
+      { providerId: "anthropic-claude", loginId: "login-1", authUrl: "https://claude.ai/oauth/authorize" },
+    ]);
+    expect(starts).toBe(1);
+  });
+
+  it("persists the real Claude token pair for a native-OAuth login exactly once, not on every status poll", async () => {
+    const registry = new ProviderRegistry();
+    const credentials = new InMemoryCredentialStore();
+    const bindSpy = vi.spyOn(credentials, "bind");
+    const claudeCredentials = { accessToken: "access-1", refreshToken: "refresh-1", expiresAt: Date.now() + 3_600_000 };
+    const claude = {
+      startClaudeLogin: async () => ({ providerId: "anthropic-claude" as const, loginId: "login-1", authUrl: "https://claude.ai/oauth/authorize" }),
+      getLoginStatus: async () => ({ loginId: "login-1", state: "succeeded" as const }),
+      cancelLogin: async () => {},
+      getCredentials: (loginId: string) => (loginId === "login-1" ? claudeCredentials : undefined),
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", claude });
+    await gateway.startAccountLogin?.({ requestId: "r1", operatorId: "operator-1", providerId: "anthropic-claude" });
+
+    await gateway.accountLoginStatus?.({ requestId: "r2", operatorId: "operator-1", providerId: "anthropic-claude", loginId: "login-1" });
+    await gateway.accountLoginStatus?.({ requestId: "r3", operatorId: "operator-1", providerId: "anthropic-claude", loginId: "login-1" });
+    await gateway.accountLoginStatus?.({ requestId: "r4", operatorId: "operator-1", providerId: "anthropic-claude", loginId: "login-1" });
+
+    expect(bindSpy).toHaveBeenCalledOnce();
+    expect(bindSpy).toHaveBeenCalledWith(
+      { operatorId: "operator-1", providerId: "anthropic-claude", authMode: "managed-subscription", accountRef: "anthropic-claude-operator-1" },
+      JSON.stringify(claudeCredentials),
+    );
+    await expect(credentials.resolveForGateway("anthropic-claude-operator-1")).resolves.toBe(JSON.stringify(claudeCredentials));
+  });
+
+  it("logs out of the managed Claude account and revokes its metadata binding", async () => {
+    const registry = new ProviderRegistry();
+    const credentials = new InMemoryCredentialStore();
+    await credentials.bindManaged({ operatorId: "operator-1", providerId: "anthropic-claude", accountRef: "anthropic-claude-operator-1" });
+    let loggedOut = false;
+    const claude = { startClaudeLogin: async () => ({ providerId: "anthropic-claude" as const, loginId: "login-1", authUrl: "https://claude.ai/oauth/authorize" }), getLoginStatus: async () => ({ loginId: "login-1", state: "succeeded" as const }), cancelLogin: async () => {}, logout: async () => { loggedOut = true; }, close: async () => {} };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", claude });
+    await expect(gateway.logoutAccount?.({ requestId: "r1", operatorId: "operator-1", providerId: "anthropic-claude" })).resolves.toBeUndefined();
+    expect(loggedOut).toBe(true);
+    await expect(credentials.ensure("anthropic-claude-operator-1")).resolves.toBeUndefined();
+  });
+});

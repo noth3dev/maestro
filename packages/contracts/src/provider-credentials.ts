@@ -28,20 +28,21 @@ const ProviderCredentialBindingCommonSchema = {
 export const ProviderCredentialBindingSchema = z.union([
   z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.enum(["openai", "anthropic"]), authMode: z.literal("api-key") }).strict(),
   z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.literal("openai-codex"), authMode: z.literal("managed-subscription") }).strict(),
+  z.object({ ...ProviderCredentialBindingCommonSchema, providerId: z.literal("anthropic-claude"), authMode: z.literal("managed-subscription") }).strict(),
 ]);
 export type ProviderCredentialBinding = z.infer<typeof ProviderCredentialBindingSchema>;
 
 /** Browser-based account login is deliberately limited to the public Codex app-server boundary. */
-export const ProviderAccountLoginStartInputSchema = z.object({ providerId: z.literal("openai-codex") }).strict();
+export const ProviderAccountLoginStartInputSchema = z.object({ providerId: z.enum(["openai-codex", "anthropic-claude"]) }).strict();
 export type ProviderAccountLoginStartInput = z.infer<typeof ProviderAccountLoginStartInputSchema>;
 export const ProviderAccountLoginStartResultSchema = z.object({
-  providerId: z.literal("openai-codex"),
+  providerId: z.enum(["openai-codex", "anthropic-claude"]),
   loginId: z.string().min(1).max(256),
   authUrl: z.string().url().max(2048),
 }).strict();
 export type ProviderAccountLoginStartResult = z.infer<typeof ProviderAccountLoginStartResultSchema>;
 export const ProviderAccountLoginStatusSchema = z.object({
-  providerId: z.literal("openai-codex"),
+  providerId: z.enum(["openai-codex", "anthropic-claude"]),
   loginId: z.string().min(1).max(256),
   state: z.enum(["pending", "succeeded", "failed", "cancelled", "unknown"]),
   message: z.string().max(512).optional(),

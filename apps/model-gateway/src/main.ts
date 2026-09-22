@@ -1,7 +1,8 @@
 import { CodexAppServerClient, CodexOAuthClient, createCodexAppServerPlugin, createCodexResponsesPlugin, createOpenAiPlugin } from "@maestro/model-provider-openai";
-import { createAnthropicPlugin } from "@maestro/model-provider-anthropic";
+import { createAnthropicPlugin, ClaudeOAuthClient, createClaudeSubscriptionPlugin } from "@maestro/model-provider-anthropic";
 import { ProviderRegistry } from "@maestro/agent-runtime";
 import { createCodexAccessTokenResolver } from "./codex-token-resolver.js";
+import { createClaudeAccessTokenResolver } from "./claude-token-resolver.js";
 import { KeychainCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 import { buildModelGatewayServer } from "./rpc.js";
@@ -64,6 +65,21 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
       }));
     }
   }
+  // Anthropic Claude Pro/Max support: native OAuth + Messages API path, same
+  // shape as the Codex OAuth branch above. Set MAESTRO_CLAUDE_DISABLE=true to
+  // disable Claude account-login support entirely.
+  const claudeAccountRef = `anthropic-claude-${operatorId}`;
+  const claudeModels = optionalModelsFromEnv(env.MAESTRO_CLAUDE_MODELS);
+  let claude: ClaudeOAuthClient | undefined;
+  if (env.MAESTRO_CLAUDE_DISABLE !== "true") {
+    const oauth = new ClaudeOAuthClient();
+    claude = oauth;
+    accountRefs["anthropic-claude"] = claudeAccountRef;
+    registry.register(createClaudeSubscriptionPlugin({
+      resolveAccessToken: createClaudeAccessTokenResolver({ credentials, operatorId, refresh: (refreshToken) => oauth.refresh(refreshToken) }),
+      ...(claudeModels === undefined ? {} : { models: claudeModels }),
+    }));
+  }
   // Register provider adapters independently from credentials. The gateway
   // filters discovery and admission by the active operator-owned binding.
   registry.register(createOpenAiPlugin({ models: modelsFromEnv(env.OPENAI_MODELS, "gpt-5"), resolveApiKey: (ref) => credentials.resolveForGateway(ref) }));
@@ -72,7 +88,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
     env.OPENAI_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "openai", authMode: "api-key", accountRef: openAiAccountRef }, env.OPENAI_API_KEY) : undefined,
     env.ANTHROPIC_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "anthropic", authMode: "api-key", accountRef: anthropicAccountRef }, env.ANTHROPIC_API_KEY) : undefined,
   ]).then(() => undefined);
-  const gateway = createModelGateway({ registry, credentials, ...(codex === undefined ? {} : { codex }), operatorId, ready: initialBindings, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
+  const gateway = createModelGateway({ registry, credentials, ...(codex === undefined ? {} : { codex }), ...(claude === undefined ? {} : { claude }), operatorId, ready: initialBindings, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
   return { app: buildModelGatewayServer({ gateway, token, operatorId }), gateway, accountRefs };
 }
 

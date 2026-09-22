@@ -25,13 +25,13 @@ const CredentialRevokeSchema = z.object({
   requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai", "anthropic"]),
 }).strict();
 const AccountLoginStartSchema = z.object({
-  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"),
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai-codex", "anthropic-claude"]),
 }).strict();
 const AccountLoginStatusSchema = z.object({
-  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"), loginId: z.string().min(1).max(256),
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai-codex", "anthropic-claude"]), loginId: z.string().min(1).max(256),
 }).strict();
 const AccountLogoutSchema = z.object({
-  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.literal("openai-codex"),
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai-codex", "anthropic-claude"]),
 }).strict();
 const TurnSchema = z.object({
   binding: BindingSchema, requestId: z.string().min(1).max(128), sessionId: z.string().min(1).max(128), turnId: z.string().min(1).max(128),

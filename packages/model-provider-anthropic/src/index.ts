@@ -4,6 +4,7 @@ import { normalizeToolArguments, type ModelContentPart, type ModelMessage, type 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export { ClaudeOAuthClient, type ClaudeOAuthCredentials, type ClaudeOAuthClientOptions, type ClaudeManagedLogin, type ClaudeLoginStatus } from "./claude-oauth.js";
+export * from "./claude-subscription.js";
 
 export class AnthropicProviderError extends Error {
   readonly name = "AnthropicProviderError";

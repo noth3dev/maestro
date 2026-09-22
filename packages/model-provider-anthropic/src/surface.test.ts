@@ -7,7 +7,9 @@ describe("model-provider-anthropic surface", () => {
       [
         "AnthropicProviderError",
         "ClaudeOAuthClient",
+        "ClaudeSubscriptionError",
         "createAnthropicPlugin",
+        "createClaudeSubscriptionPlugin",
       ]
     `);
   });
