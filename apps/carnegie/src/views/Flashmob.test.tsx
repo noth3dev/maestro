@@ -7,7 +7,7 @@ import { FlashmobSession } from "./FlashmobSession.js";
 vi.mock("../icons.js", () => ({ Icon: () => null }));
 vi.stubGlobal("React", React);
 
-function findButton(node: ReactNode, label: string): ReactElement<{ disabled?: boolean }> | undefined {
+function findButton(node: ReactNode, label: string): ReactElement<{ disabled?: boolean; onClick?: unknown }> | undefined {
   if (node === null || typeof node !== "object") return undefined;
   if (Array.isArray(node)) {
     for (const child of node) {
@@ -17,7 +17,7 @@ function findButton(node: ReactNode, label: string): ReactElement<{ disabled?: b
     return undefined;
   }
   if (!("type" in node) || !("props" in node)) return undefined;
-  const element = node as ReactElement<{ children?: ReactNode; disabled?: boolean }>;
+  const element = node as ReactElement<{ children?: ReactNode; disabled?: boolean; onClick?: unknown }>;
   if (element.type === "button") {
     const text = renderToStaticMarkup(<>{element.props.children}</>);
     if (text.includes(label)) return element;
