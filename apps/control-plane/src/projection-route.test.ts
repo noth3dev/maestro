@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ProjectionReadModel } from "@maestro/contracts";
-import { buildServer, type OperatorAuthenticator } from "./server.js";
+import { buildServer } from "./server.js";
+import type { OperatorAuthenticator } from "./server-ports.js";
 import type { ProjectionService } from "./projection-service.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";

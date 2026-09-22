@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildServer, type ConversationService } from "./server.js";
-import type { GoalService, OperatorAuthenticator } from "./server.js";
+import type { GoalService } from "./server.js";
+import type { OperatorAuthenticator } from "./server-ports.js";
 import { ModelGatewayClientError } from "./model-gateway-client.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";

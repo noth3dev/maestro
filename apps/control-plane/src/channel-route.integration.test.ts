@@ -6,7 +6,8 @@ import { executeReadCommand } from "../../cli/src/tui/commands/read-commands.js"
 import { executeWriteCommand } from "../../cli/src/tui/commands/write-commands.js";
 import { applyAllMigrations, assertProjectMembership, bootstrapLocalOperator, bootstrapPermanentOrganization, getChannel, postChannelMessage } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
-import { buildServer, type GoalService, type OperatorAuthenticator } from "./server.js";
+import { buildServer, type GoalService } from "./server.js";
+import type { OperatorAuthenticator } from "./server-ports.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;

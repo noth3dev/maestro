@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildServer, type GoalService, type OperatorAuthenticator, type SettingsService } from "./server.js";
+import { buildServer, type GoalService } from "./server.js";
+import type { OperatorAuthenticator, SettingsService } from "./server-ports.js";
 import type { SettingsRead } from "@maestro/contracts";
 
 const operator = { operatorId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", credentialId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06" };

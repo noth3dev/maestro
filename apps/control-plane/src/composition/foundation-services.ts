@@ -11,7 +11,7 @@ import {
   readActivePersonaProfile,
   type PostgresAuthorityRepository,
 } from "@maestro/persistence";
-import type { OperatorAuthenticator } from "../server.js";
+import type { OperatorAuthenticator } from "../server-ports.js";
 import { FileEvidenceStore } from "@maestro/evidence";
 import {
   createCriticalActionService,

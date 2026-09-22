@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildServer, type GoalService, type OperatorAuthenticator, type ProviderCredentialService } from "./server.js";
+import { buildServer, type GoalService } from "./server.js";
+import type { OperatorAuthenticator, ProviderCredentialService } from "./server-ports.js";
 import { ModelGatewayClientError } from "./model-gateway-client.js";
 import type { AccountLoginStore } from "@maestro/persistence";
 

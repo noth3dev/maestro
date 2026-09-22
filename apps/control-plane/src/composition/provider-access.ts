@@ -2,7 +2,7 @@ import type { Pool } from "pg";
 import type { ModelGatewayPort } from "@maestro/agent-runtime";
 import { createPostgresSettingsService } from "@maestro/persistence";
 import type { MaestroConfig } from "../config.js";
-import type { ProviderCredentialService } from "../server.js";
+import type { ProviderCredentialService } from "../server-ports.js";
 import { readModelMapSource } from "./model-map-source.js";
 
 type GatewayModel = Awaited<ReturnType<NonNullable<ModelGatewayPort["listModels"]>>>[number];

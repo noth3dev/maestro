@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildServer, type ChannelService } from "./server.js";
-import type { GoalService, OperatorAuthenticator } from "./server.js";
+import { buildServer } from "./server.js";
+import type { GoalService } from "./server.js";
+import type { ChannelService, OperatorAuthenticator } from "./server-ports.js";
 import { ProjectMembershipRequiredError } from "@maestro/persistence";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";

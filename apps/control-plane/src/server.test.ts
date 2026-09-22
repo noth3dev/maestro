@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { once } from "node:events";
 import { request as httpRequest, type IncomingMessage } from "node:http";
-import { buildServer, type EventService, type InboxService, type GoalService, type OperatorAuthenticator, type HeadParticipationService, type CouncilService, type EncoreService, type ProjectDiscoveryService, type OrganizationService, type ConcertmasterReportService } from "./server.js";
+import { buildServer, type GoalService, type HeadParticipationService, type CouncilService, type EncoreService, type ConcertmasterReportService } from "./server.js";
+import type { EventService, InboxService, OperatorAuthenticator, ProjectDiscoveryService, OrganizationService } from "./server-ports.js";
 import { ReadStateGoalNotFoundError, type ReadStateService } from "./read-state-service.js";
 import type { WorkerService } from "./worker-service.js";
 import type { Worker } from "@maestro/contracts";

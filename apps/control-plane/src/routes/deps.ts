@@ -1,4 +1,4 @@
-import type { RouteDeps } from "../server.js";
+import type { RouteDeps } from "../server-ports.js";
 
 /**
  * Narrow route dependencies per register function. Each route file receives

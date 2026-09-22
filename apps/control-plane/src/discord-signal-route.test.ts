@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { signDiscordSignal, deriveDiscordIncidentFingerprint, type DiscordSignal } from "@maestro/domain";
 import { DiscordPersistenceError } from "@maestro/persistence";
-import { buildServer, type DiscordSignalService, type GoalService, type OperatorAuthenticator } from "./server.js";
+import { buildServer, type GoalService } from "./server.js";
+import type { DiscordSignalService, OperatorAuthenticator } from "./server-ports.js";
 
 const operator = { operatorId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", credentialId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06" };
 const goal = { goalId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01", state: "active" as const, version: 1 };
