@@ -106,6 +106,19 @@ describeDatabase("durable provider account login sessions", () => {
     await expect(store.reserveStart("operator-1", "request-identity", "openai-codex", "control-plane-2")).resolves.toMatchObject({ created: false, record: { loginId: reserved.record.loginId, state: "pending" } });
   });
 
+  it("returns the same durable login identity for a repeated operator request with the anthropic-claude provider", async () => {
+    const store = createPostgresAccountLoginStore(pool);
+    const first = await store.reserveStart("operator-1", "request-claude-1", "anthropic-claude", "control-plane-1");
+    const second = await store.reserveStart("operator-1", "request-claude-1", "anthropic-claude", "control-plane-1");
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.record.loginId).toBe(first.record.loginId);
+    const pending = await store.completeStart(first.record.loginId, "provider-login-claude-1", "https://claude.ai/login?state=opaque");
+    expect(pending).toMatchObject({ loginId: first.record.loginId, providerId: "anthropic-claude", providerLoginId: "provider-login-claude-1", authUrl: "https://claude.ai/login?state=opaque", state: "pending" });
+    const read = await store.get(first.record.loginId, "operator-1");
+    expect(read).toEqual(pending);
+  });
+
   it("records a lost gateway session as terminal unknown and prevents resurrection", async () => {
     const store = createPostgresAccountLoginStore(pool);
     const reserved = await store.reserveStart("operator-1", "request-2", "openai-codex", "control-plane-1");

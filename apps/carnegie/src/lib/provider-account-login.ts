@@ -1,6 +1,6 @@
 import type { ProviderAccountLoginStatus } from "@maestro/contracts";
 
-const PROVIDER_AUTH_HOSTS = ["auth.openai.com", "chatgpt.com"] as const;
+const PROVIDER_AUTH_HOSTS = ["auth.openai.com", "chatgpt.com", "claude.ai"] as const;
 
 export function isProviderAuthUrlAllowed(value: string): boolean {
   try {

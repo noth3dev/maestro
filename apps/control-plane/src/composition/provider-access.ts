@@ -91,16 +91,24 @@ export function composeProviderCredentials(deps: ProviderAccessDeps): ProviderCr
     ...(gateway.startAccountLogin === undefined || gateway.accountLoginStatus === undefined || gateway.cancelAccountLogin === undefined
       ? {}
       : {
-          startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) =>
+          startAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex" | "anthropic-claude" }) =>
             gateway.startAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
-          accountLoginStatus: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) =>
-            gateway.accountLoginStatus!({ ...input, operatorId: config.modelGatewayOperatorId }),
-          cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) =>
-            gateway.cancelAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
+          accountLoginStatus: (input: {
+            operatorId: string;
+            requestId: string;
+            providerId: "openai-codex" | "anthropic-claude";
+            loginId: string;
+          }) => gateway.accountLoginStatus!({ ...input, operatorId: config.modelGatewayOperatorId }),
+          cancelAccountLogin: (input: {
+            operatorId: string;
+            requestId: string;
+            providerId: "openai-codex" | "anthropic-claude";
+            loginId: string;
+          }) => gateway.cancelAccountLogin!({ ...input, operatorId: config.modelGatewayOperatorId }),
           ...(gateway.logoutAccount === undefined
             ? {}
             : {
-                logoutAccount: (input: { operatorId: string; requestId: string; providerId: "openai-codex" }) =>
+                logoutAccount: (input: { operatorId: string; requestId: string; providerId: "openai-codex" | "anthropic-claude" }) =>
                   gateway.logoutAccount!({ ...input, operatorId: config.modelGatewayOperatorId }),
               }),
         }),

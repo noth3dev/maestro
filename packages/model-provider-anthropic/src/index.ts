@@ -3,6 +3,9 @@ import { normalizeToolArguments, type ModelContentPart, type ModelMessage, type 
 
 export type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+export { ClaudeOAuthClient, type ClaudeOAuthCredentials, type ClaudeOAuthClientOptions, type ClaudeManagedLogin, type ClaudeLoginStatus } from "./claude-oauth.js";
+export * from "./claude-subscription.js";
+
 export class AnthropicProviderError extends Error {
   readonly name = "AnthropicProviderError";
   constructor(readonly code: "provider_auth" | "provider_quota" | "provider_unavailable" | "provider_model_mismatch" | "provider_malformed_response" | "provider_cancelled", readonly retryable: boolean, message: string) {

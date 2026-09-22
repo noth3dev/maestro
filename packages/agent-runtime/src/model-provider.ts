@@ -191,11 +191,11 @@ export interface GatewayCredentialRevokeRequest {
 export interface GatewayAccountLoginStartRequest {
   readonly requestId: string;
   readonly operatorId: string;
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
 }
 
 export interface GatewayAccountLoginStartResult {
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
   readonly loginId: string;
   readonly authUrl: string;
 }
@@ -203,12 +203,12 @@ export interface GatewayAccountLoginStartResult {
 export interface GatewayAccountLoginStatusRequest {
   readonly requestId: string;
   readonly operatorId: string;
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
   readonly loginId: string;
 }
 
 export interface GatewayAccountLoginStatusResult {
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
   readonly loginId: string;
   readonly state: "pending" | "succeeded" | "failed" | "cancelled";
   readonly message?: string;
@@ -217,7 +217,7 @@ export interface GatewayAccountLoginStatusResult {
 export interface GatewayAccountLogoutRequest {
   readonly requestId: string;
   readonly operatorId: string;
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
 }
 
 export interface GatewayBinding {

@@ -159,10 +159,10 @@ export interface ApiClient {
   >;
   loginProvider(input: ProviderCredentialLoginInput): Promise<ProviderCredentialBinding>;
   logoutProvider(providerId: "openai" | "anthropic"): Promise<void>;
-  startAccountLogin(): Promise<ProviderAccountLoginStartResult>;
-  accountLoginStatus(loginId: string): Promise<ProviderAccountLoginStatus>;
-  cancelAccountLogin(loginId: string): Promise<void>;
-  logoutAccount(): Promise<void>;
+  startAccountLogin(providerId: "openai-codex" | "anthropic-claude"): Promise<ProviderAccountLoginStartResult>;
+  accountLoginStatus(providerId: "openai-codex" | "anthropic-claude", loginId: string): Promise<ProviderAccountLoginStatus>;
+  cancelAccountLogin(providerId: "openai-codex" | "anthropic-claude", loginId: string): Promise<void>;
+  logoutAccount(providerId: "openai-codex" | "anthropic-claude"): Promise<void>;
   createConversation(input: CreateConversationInput, options?: { idempotencyKey?: string }): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
   sendConversationTurn(

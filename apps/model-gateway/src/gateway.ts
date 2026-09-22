@@ -3,6 +3,7 @@ import { ProviderRegistry, type ProviderReference } from "@maestro/agent-runtime
 import type { GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialBinding, GatewayCredentialRevokeRequest, GatewayModelListRequest, GatewayTurnRequest, ModelCatalogEntry, ModelGatewayPort, ModelProviderPort, ProviderCancellationOutcome, ProviderPlugin } from "@maestro/agent-runtime";
 import type { CredentialStore } from "./credential-store.js";
 import type { CodexAppServerClient } from "@maestro/model-provider-openai";
+import type { ClaudeOAuthClient } from "@maestro/model-provider-anthropic";
 
 export interface GatewayOptions {
   readonly registry: ProviderRegistry;
@@ -22,6 +23,12 @@ export interface GatewayOptions {
    */
   readonly codex?: Pick<CodexAppServerClient, "startChatGptLogin" | "loginStatus" | "cancelLogin" | "close"> &
     Partial<Pick<CodexAppServerClient, "logout">> & { getCredentials?(loginId: string): { accessToken: string; refreshToken: string; expiresAt: number; accountId: string } | undefined };
+  /**
+   * Optional Anthropic (Claude Pro/Max) account login boundary. `ClaudeOAuthClient`
+   * satisfies this shape natively (no external subprocess bridge exists for Claude).
+   */
+  readonly claude?: Pick<ClaudeOAuthClient, "startClaudeLogin" | "getLoginStatus" | "cancelLogin" | "close"> &
+    Partial<Pick<ClaudeOAuthClient, "logout">> & { getCredentials?(loginId: string): { accessToken: string; refreshToken: string; expiresAt: number } | undefined };
 }
 
 interface InternalBinding {
@@ -37,6 +44,7 @@ export class ModelGateway implements ModelGatewayPort {
   private readonly loginRequestFlights = new Map<string, Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>>();
   private readonly admissionFlights = new Set<Promise<GatewayBinding>>();
   private readonly persistedCodexLogins = new Set<string>();
+  private readonly persistedClaudeLogins = new Set<string>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -55,13 +63,16 @@ export class ModelGateway implements ModelGatewayPort {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
-    if (request.providerId !== "openai-codex" || this.options.codex === undefined) throw new Error("account login is unavailable");
+    if (request.providerId !== "openai-codex" && request.providerId !== "anthropic-claude") throw new Error("account login is unavailable");
+    if (request.providerId === "openai-codex" && this.options.codex === undefined) throw new Error("account login is unavailable");
+    if (request.providerId === "anthropic-claude" && this.options.claude === undefined) throw new Error("account login is unavailable");
     const previous = this.loginRequests.get(request.requestId);
     if (previous !== undefined) return previous;
     const inFlight = this.loginRequestFlights.get(request.requestId);
     if (inFlight !== undefined) return inFlight;
     const flight = (async () => {
-      const login = await this.options.codex!.startChatGptLogin();
+      const login =
+        request.providerId === "openai-codex" ? await this.options.codex!.startChatGptLogin() : await this.options.claude!.startClaudeLogin();
       this.loginOperators.set(login.loginId, request.operatorId);
       this.loginRequests.set(request.requestId, login);
       return login;
@@ -78,34 +89,61 @@ export class ModelGateway implements ModelGatewayPort {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     this.assertLoginOperator(request);
-    if (this.options.codex === undefined) throw new Error("account login is unavailable");
-    const status = await this.options.codex.loginStatus(request.loginId);
+    if (request.providerId === "openai-codex") {
+      if (this.options.codex === undefined) throw new Error("account login is unavailable");
+      const status = await this.options.codex.loginStatus(request.loginId);
+      if (status.state === "succeeded") {
+        const accountRef = `openai-codex-${this.options.operatorId}`;
+        const existing = await this.options.credentials.ensure(accountRef);
+        const credentials = this.options.codex.getCredentials?.(request.loginId);
+        if (credentials !== undefined) {
+          // Native OAuth path: persist the real token pair once per succeeded
+          // login. A client polling status after success would otherwise
+          // trigger a full keychain write on every single poll.
+          if (!this.persistedCodexLogins.has(request.loginId)) {
+            await this.options.credentials.bind({ operatorId: this.options.operatorId, providerId: "openai-codex", authMode: "managed-subscription", accountRef }, JSON.stringify(credentials));
+            this.persistedCodexLogins.add(request.loginId);
+          }
+        } else if (existing === undefined) {
+          if (this.options.credentials.bindManaged === undefined) throw new Error("managed account binding is unavailable");
+          await this.options.credentials.bindManaged({ operatorId: this.options.operatorId, providerId: "openai-codex", accountRef });
+        }
+      }
+      return { providerId: "openai-codex", loginId: request.loginId, state: status.state, ...(status.state === "failed" ? { message: status.message } : {}) };
+    }
+    if (this.options.claude === undefined) throw new Error("account login is unavailable");
+    const status = await this.options.claude.getLoginStatus(request.loginId);
     if (status.state === "succeeded") {
-      const accountRef = `openai-codex-${this.options.operatorId}`;
+      const accountRef = `anthropic-claude-${this.options.operatorId}`;
       const existing = await this.options.credentials.ensure(accountRef);
-      const credentials = this.options.codex.getCredentials?.(request.loginId);
+      const credentials = this.options.claude.getCredentials?.(request.loginId);
       if (credentials !== undefined) {
         // Native OAuth path: persist the real token pair once per succeeded
         // login. A client polling status after success would otherwise
         // trigger a full keychain write on every single poll.
-        if (!this.persistedCodexLogins.has(request.loginId)) {
-          await this.options.credentials.bind({ operatorId: this.options.operatorId, providerId: "openai-codex", authMode: "managed-subscription", accountRef }, JSON.stringify(credentials));
-          this.persistedCodexLogins.add(request.loginId);
+        if (!this.persistedClaudeLogins.has(request.loginId)) {
+          await this.options.credentials.bind({ operatorId: this.options.operatorId, providerId: "anthropic-claude", authMode: "managed-subscription", accountRef }, JSON.stringify(credentials));
+          this.persistedClaudeLogins.add(request.loginId);
         }
       } else if (existing === undefined) {
         if (this.options.credentials.bindManaged === undefined) throw new Error("managed account binding is unavailable");
-        await this.options.credentials.bindManaged({ operatorId: this.options.operatorId, providerId: "openai-codex", accountRef });
+        await this.options.credentials.bindManaged({ operatorId: this.options.operatorId, providerId: "anthropic-claude", accountRef });
       }
     }
-    return { providerId: "openai-codex", loginId: request.loginId, state: status.state, ...(status.state === "failed" ? { message: status.message } : {}) };
+    return { providerId: "anthropic-claude", loginId: request.loginId, state: status.state, ...(status.state === "failed" ? { message: status.message } : {}) };
   }
 
   async cancelAccountLogin(request: import("@maestro/agent-runtime").GatewayAccountLoginStatusRequest): Promise<void> {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     this.assertLoginOperator(request);
-    if (this.options.codex === undefined) throw new Error("account login is unavailable");
-    await this.options.codex.cancelLogin(request.loginId);
+    if (request.providerId === "openai-codex") {
+      if (this.options.codex === undefined) throw new Error("account login is unavailable");
+      await this.options.codex.cancelLogin(request.loginId);
+      return;
+    }
+    if (this.options.claude === undefined) throw new Error("account login is unavailable");
+    await this.options.claude.cancelLogin(request.loginId);
   }
 
   private assertLoginOperator(request: { operatorId: string; loginId: string }): void {
@@ -117,9 +155,18 @@ export class ModelGateway implements ModelGatewayPort {
     if (this.closed) throw new Error("model gateway is closed");
     await this.options.ready;
     if (request.operatorId !== this.options.operatorId) throw new Error("credential operator context mismatch");
-    if (request.providerId !== "openai-codex" || this.options.codex?.logout === undefined) throw new Error("account logout is unavailable");
-    await this.options.codex.logout();
-    const accountRef = `openai-codex-${this.options.operatorId}`;
+    if (request.providerId === "openai-codex") {
+      if (this.options.codex?.logout === undefined) throw new Error("account logout is unavailable");
+      await this.options.codex.logout();
+      const accountRef = `openai-codex-${this.options.operatorId}`;
+      const binding = await this.options.credentials.ensure(accountRef);
+      if (binding !== undefined) await this.options.credentials.revoke(accountRef, this.options.operatorId);
+      await this.invalidateProviderBindings(this.options.operatorId, request.providerId);
+      return;
+    }
+    if (request.providerId !== "anthropic-claude" || this.options.claude?.logout === undefined) throw new Error("account logout is unavailable");
+    await this.options.claude.logout();
+    const accountRef = `anthropic-claude-${this.options.operatorId}`;
     const binding = await this.options.credentials.ensure(accountRef);
     if (binding !== undefined) await this.options.credentials.revoke(accountRef, this.options.operatorId);
     await this.invalidateProviderBindings(this.options.operatorId, request.providerId);
@@ -227,6 +274,7 @@ export class ModelGateway implements ModelGatewayPort {
     this.loginOperators.clear();
     this.loginRequests.clear();
     await this.options.codex?.close().catch(() => undefined);
+    await this.options.claude?.close().catch(() => undefined);
   }
 }
 

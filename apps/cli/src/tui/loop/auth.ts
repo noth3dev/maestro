@@ -73,7 +73,7 @@ export class AuthFlows {
     c.editor.hidden = false;
     c.editor.setText("");
     controller?.abort();
-    if (loginId !== undefined && c.client !== undefined) void c.client.cancelAccountLogin(loginId).catch(() => undefined);
+    if (loginId !== undefined && c.client !== undefined) void c.client.cancelAccountLogin("openai-codex", loginId).catch(() => undefined);
     c.view.render();
   };
 
@@ -94,7 +94,7 @@ export class AuthFlows {
     const controller = new AbortController();
     c.accountLoginController = controller;
     try {
-      const login = await c.client.startAccountLogin();
+      const login = await c.client.startAccountLogin("openai-codex");
       if (!isCurrentAccountLoginOperation(controller, c.accountLoginController)) return;
       c.accountLoginId = login.loginId;
       c.accountLoginUrl = login.authUrl;
@@ -102,6 +102,7 @@ export class AuthFlows {
       c.view.render();
       const status = await waitForAccountLogin({
         client: c.client,
+        providerId: "openai-codex",
         loginId: login.loginId,
         authUrl: login.authUrl,
         signal: controller.signal,

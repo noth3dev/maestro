@@ -281,4 +281,45 @@ describe("composeProviderCredentials", () => {
       providerId: "openai-codex",
     });
   });
+
+  it("forwards account-login calls for the anthropic-claude providerId with the fixed gateway operator identity", async () => {
+    const gateway = fakeGateway();
+    const service = composeProviderCredentials({ pool: fakePool(), config, modelGateway: gateway })!;
+    await service.startAccountLogin!({ operatorId: "caller-operator", requestId: "request-1", providerId: "anthropic-claude" });
+    expect(gateway.startAccountLogin).toHaveBeenCalledWith({
+      operatorId: GATEWAY_OPERATOR,
+      requestId: "request-1",
+      providerId: "anthropic-claude",
+    });
+    await service.accountLoginStatus!({
+      operatorId: "caller-operator",
+      requestId: "request-1",
+      providerId: "anthropic-claude",
+      loginId: "login-1",
+    });
+    expect(gateway.accountLoginStatus).toHaveBeenCalledWith({
+      operatorId: GATEWAY_OPERATOR,
+      requestId: "request-1",
+      providerId: "anthropic-claude",
+      loginId: "login-1",
+    });
+    await service.cancelAccountLogin!({
+      operatorId: "caller-operator",
+      requestId: "request-1",
+      providerId: "anthropic-claude",
+      loginId: "login-1",
+    });
+    expect(gateway.cancelAccountLogin).toHaveBeenCalledWith({
+      operatorId: GATEWAY_OPERATOR,
+      requestId: "request-1",
+      providerId: "anthropic-claude",
+      loginId: "login-1",
+    });
+    await service.logoutAccount!({ operatorId: "caller-operator", requestId: "request-2", providerId: "anthropic-claude" });
+    expect(gateway.logoutAccount).toHaveBeenCalledWith({
+      operatorId: GATEWAY_OPERATOR,
+      requestId: "request-2",
+      providerId: "anthropic-claude",
+    });
+  });
 });

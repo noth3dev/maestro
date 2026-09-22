@@ -10,6 +10,13 @@ describe("provider account login", () => {
     expect(isProviderAuthUrlAllowed("https://example.com/redirect")).toBe(false);
   });
 
+  it("accepts only HTTPS URLs from the Anthropic Claude authentication host", () => {
+    expect(isProviderAuthUrlAllowed("https://claude.ai/oauth/authorize")).toBe(true);
+    expect(isProviderAuthUrlAllowed("http://claude.ai/oauth/authorize")).toBe(false);
+    expect(isProviderAuthUrlAllowed("https://login.claude.ai/oauth/authorize")).toBe(false);
+    expect(isProviderAuthUrlAllowed("https://claude.example.com/oauth/authorize")).toBe(false);
+  });
+
   it("keeps polling until the provider login succeeds", async () => {
     const readStatus = vi
       .fn()

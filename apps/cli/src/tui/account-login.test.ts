@@ -14,6 +14,7 @@ describe("account login polling boundary", () => {
     await expect(
       waitForAccountLogin({
         client: { accountLoginStatus },
+        providerId: "openai-codex",
         loginId: "login-1",
         authUrl: "https://auth.example.test/login-1",
         signal: new AbortController().signal,
@@ -26,6 +27,7 @@ describe("account login polling boundary", () => {
 
     expect(openExternalUrl).toHaveBeenCalledWith("https://auth.example.test/login-1");
     expect(accountLoginStatus).toHaveBeenCalledTimes(2);
+    expect(accountLoginStatus).toHaveBeenCalledWith("openai-codex", "login-1");
     expect(onOpenFailure).not.toHaveBeenCalled();
   });
 });

@@ -121,16 +121,21 @@ export interface ProviderCredentialService {
   startAccountLogin?(input: {
     operatorId: string;
     requestId: string;
-    providerId: "openai-codex";
+    providerId: "openai-codex" | "anthropic-claude";
   }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>;
   accountLoginStatus?(input: {
     operatorId: string;
     requestId: string;
-    providerId: "openai-codex";
+    providerId: "openai-codex" | "anthropic-claude";
     loginId: string;
   }): Promise<import("@maestro/agent-runtime").GatewayAccountLoginStatusResult>;
-  cancelAccountLogin?(input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }): Promise<void>;
-  logoutAccount?(input: { operatorId: string; requestId: string; providerId: "openai-codex" }): Promise<void>;
+  cancelAccountLogin?(input: {
+    operatorId: string;
+    requestId: string;
+    providerId: "openai-codex" | "anthropic-claude";
+    loginId: string;
+  }): Promise<void>;
+  logoutAccount?(input: { operatorId: string; requestId: string; providerId: "openai-codex" | "anthropic-claude" }): Promise<void>;
 }
 
 export interface SettingsService {

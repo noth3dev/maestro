@@ -48,7 +48,11 @@ function accountLoginStart(value: unknown): GatewayAccountLoginStartResult {
   if (!value || typeof value !== "object")
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login");
   const record = value as Record<string, unknown>;
-  if (record.providerId !== "openai-codex" || typeof record.loginId !== "string" || typeof record.authUrl !== "string")
+  if (
+    (record.providerId !== "openai-codex" && record.providerId !== "anthropic-claude") ||
+    typeof record.loginId !== "string" ||
+    typeof record.authUrl !== "string"
+  )
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login");
   let url: URL;
   try {
@@ -56,22 +60,22 @@ function accountLoginStart(value: unknown): GatewayAccountLoginStartResult {
   } catch {
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login URL");
   }
-  if (url.protocol !== "https:" || !["chatgpt.com", "auth.openai.com"].includes(url.hostname))
+  if (url.protocol !== "https:" || !["chatgpt.com", "auth.openai.com", "claude.ai"].includes(url.hostname))
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned untrusted account login URL");
-  return { providerId: "openai-codex", loginId: record.loginId, authUrl: record.authUrl };
+  return { providerId: record.providerId, loginId: record.loginId, authUrl: record.authUrl };
 }
 function accountLoginStatus(value: unknown): GatewayAccountLoginStatusResult {
   if (!value || typeof value !== "object")
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
   const record = value as Record<string, unknown>;
   if (
-    record.providerId !== "openai-codex" ||
+    (record.providerId !== "openai-codex" && record.providerId !== "anthropic-claude") ||
     typeof record.loginId !== "string" ||
     !["pending", "succeeded", "failed", "cancelled", "unknown"].includes(String(record.state))
   )
     throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login status");
   return {
-    providerId: "openai-codex",
+    providerId: record.providerId,
     loginId: record.loginId,
     state: record.state as GatewayAccountLoginStatusResult["state"],
     ...(typeof record.message === "string" ? { message: record.message } : {}),
