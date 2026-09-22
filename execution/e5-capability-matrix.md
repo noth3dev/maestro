@@ -9,7 +9,7 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 - **Backend-blocked** — no valid server contract/durable source of truth; no fake action is shown.
 - **Out-of-scope** — excluded by an explicit roadmap gate.
 
-**Current verification state (2026-09-23):** The fresh real-PostgreSQL suite passed 432 test files / 2,874 tests (exit 0); root and Carnegie builds passed; exact Carnegie Playwright passed 4 tests with 5 designed CDP skips; changed-file ESLint and `git diff --check` passed; and secret/artifact scans were clean. Real Electron/CDP startup still stops at the existing embedded PGlite mutex-timeout boundary, so Task 14 remains `Backend-blocked` and no row is upgraded to `Live` from automated tests alone.
+**Current verification state (2026-09-23):** The fresh real-PostgreSQL suite passed 432 test files / 2,874 tests (exit 0); root and Carnegie builds passed; exact Carnegie Playwright passed 4 tests with 5 designed CDP skips; changed-file ESLint and `git diff --check` passed; and secret/artifact scans were clean. A fresh Docker-backed Electron rerun now auto-bootstrapped PostgreSQL, Control Plane (`4310`), and Model Gateway (`4321`) and reached the authenticated Home UI; the bounded real composer request failed at the exact provider boundary with `No Concertmaster model is available`. Task 14 remains `Backend-blocked`; no row is upgraded to `Live` without durable/provider evidence.
 
 ---
 
@@ -114,3 +114,7 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 ## Task 14 live verification update (2026-09-23)
 
 Task 14 was attempted against the real Electron window at commit `e6dc7db8`. Carnegie built and exposed CDP `9222`, but local bootstrap stopped at the existing PGlite database: `bootstrap.status()` returned `setup-required` after a mutex timeout. No Control Plane, Model Gateway, or database listener became available. A fresh disposable PGlite directory passed, while a copied existing-data probe failed with `RuntimeError: Aborted()`. The live matrix therefore remains `backend-blocked`; no project, conversation, contract, Goal, Worker, evidence, certification, report, or provider response was created. See `execution/e5-live-evidence/README.md`.
+
+## Task 14 live verification rerun (2026-09-23)
+
+A fresh Electron profile with no explicit `MAESTRO_API_URL` used Docker-backed local auto-bootstrap. The visible Carnegie window reached the authenticated Home UI with PostgreSQL on `55432`, Control Plane on `4310`, and Model Gateway on `4321`; the bounded window capture passed. A documentation-only request was submitted through the visible composer and the UI returned `conversation not started`, `turn failed`, and `No Concertmaster model is available`. No conversation, Task Contract, Goal, Worker, evidence, certification, report, provider response, or external effect was produced. This is a provider/model-catalog blocker at the exact boundary, not a fabricated success. Evidence: `/tmp/e5-live-rerun22-home-after-turn.png`, `/tmp/e5-live-rerun22-turn.log`.

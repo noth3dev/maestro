@@ -3,7 +3,7 @@
 ## Run
 
 - Date: 2026-09-23
-- Commit under test: `e6dc7db8`
+- Commit under test for the fresh rerun: `29a3153e` (historical first attempt below references `e6dc7db8`)
 - Environment: WSL2; `DISPLAY=:0`, `WAYLAND_DISPLAY=wayland-0`
 - Credentials: no token, secret, or credential ID is recorded here.
 - Irreversible effects: none. No provider turn, Goal launch, Worker spawn, approval, Git mutation, or external effect was executed.
@@ -31,7 +31,7 @@
 
 ## Result
 
-Task 14 is **backend-blocked at local database bootstrap**. It did not produce a project ID, conversation ID, Task Contract ID, Goal ID, Worker/evidence/certification/report records, or provider response. The correct status is `backend-blocked`, not `Live`.
+Task 14 is **backend-blocked at provider/model availability**. The fresh rerun proves local Docker PostgreSQL, Control Plane, Model Gateway, and the visible authenticated Carnegie shell; the real composer request failed with `No Concertmaster model is available` before conversation/Task Contract creation. It produced no Goal, Worker/evidence/certification/report records, provider response, or external effect. The correct status is `backend-blocked`, not `Live`.
 
 ## Fresh Task 15 verification (2026-09-23)
 
@@ -43,3 +43,12 @@ Task 14 is **backend-blocked at local database bootstrap**. It did not produce a
 - Secret/artifact scan: zero Bearer/provider-key patterns, credential-header assignments, or token-field matches; generated Playwright directories removed.
 - These results close the automated verification gap but do not close E5: Task 14 still has no usable Control Plane, embedded database, Model Gateway, or provider listener, and produced no live project/Goal records.
 - Independent no-edit review: **PASS** for the current patch with no P0/P1 findings. It confirmed the Playwright-owned exclusion is required because removing it makes Vitest collect Playwright specs and fail. A pre-existing P2 remains: `router-runtime.integration.test.ts` imports constants from `native-worker-acceptance.integration.test.ts`, registering that suite during focused runs; move shared constants to a non-test fixture module in a later cleanup.
+
+## Fresh Task 14 rerun (2026-09-23)
+
+- The disposable Docker PostgreSQL instance was reachable at `127.0.0.1:55432`. A fresh Carnegie profile was launched without `MAESTRO_API_URL`, with `MAESTRO_LOCAL_DB_ENGINE=docker`, and CDP on `9223`; this exercised the intended local auto-bootstrap path rather than the manual remote-connection path.
+- The real visible window reached the authenticated Carnegie Home UI. Bootstrap started the local Control Plane on `4310` and Model Gateway on `4321`; no embedded PGlite mutex failure occurred in this rerun.
+- The bounded window capture passed. A documentation-only, no-external-effect request was entered through the visible Home composer. The screenshot shows the real UI state: `conversation not started`, `turn failed`, and `No Concertmaster model is available`.
+- No conversation ID, Task Contract ID/version/hash, Goal ID, Worker/evidence/certification/report record, provider response, or external effect exists. The selected project label was visible as `e236ddca`, but no full project ID was copied from secure renderer state after the provider failed.
+- The exact blocker is now the configured model/provider catalog, not local database bootstrap or Control Plane reachability. Evidence: `/tmp/e5-live-rerun22-home-after-turn.png`, `/tmp/e5-live-rerun22-turn.log`, `/tmp/e5-live-rerun22-playwright-live.log`.
+- The fresh Electron, Control Plane, Model Gateway, and disposable PostgreSQL processes were stopped/removed after capture.
