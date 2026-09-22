@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import type { Certification, EvidenceBundleRead, EvidenceCaptureInput, EvidenceRecord } from "@maestro/contracts";
+import type { GoalEvent } from "@maestro/api-client";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
+import { filterEvents, eventLinks, loadEventPage, type EventFilters } from "../lib/event-data.js";
 import { captureEvidence, getEvidenceBundle, getEvidenceDump, listCertifications } from "../lib/integration-data.js";
 import { newCommandId } from "../lib/command-id.js";
 import type { ViewName } from "../views.js";
@@ -18,9 +20,9 @@ function shortSha(value: string): string {
   return `${value.slice(0, 12)}…`;
 }
 
-export function EvidenceLog({ onNavigate: _onNavigate }: { onNavigate: (view: ViewName) => void }) {
+export function EvidenceLog({ onNavigate, eventCursor = "0" }: { onNavigate: (view: ViewName) => void; eventCursor?: string }) {
   const { config } = useConnection();
-  const { selectedGoalId } = useGoals();
+  const { goals, selectedGoalId } = useGoals();
   const [bundle, setBundle] = useState<EvidenceBundleRead | undefined>(undefined);
   const [certifications, setCertifications] = useState<readonly Certification[]>([]);
   const [dump, setDump] = useState<EvidenceDump | undefined>(undefined);
@@ -29,6 +31,10 @@ export function EvidenceLog({ onNavigate: _onNavigate }: { onNavigate: (view: Vi
   const [error, setError] = useState<string | undefined>(undefined);
   const [captureError, setCaptureError] = useState<string | undefined>(undefined);
   const [captureBusy, setCaptureBusy] = useState(false);
+  const [events, setEvents] = useState<readonly GoalEvent[]>([]);
+  const [eventLoading, setEventLoading] = useState(false);
+  const [eventError, setEventError] = useState<string | undefined>(undefined);
+  const [eventFilters, setEventFilters] = useState<EventFilters>({});
   const [correlationId, setCorrelationId] = useState("");
   const [kind, setKind] = useState("");
   const [mediaType, setMediaType] = useState("");
@@ -66,6 +72,28 @@ export function EvidenceLog({ onNavigate: _onNavigate }: { onNavigate: (view: Vi
     };
   }, [config?.projectId, selectedGoalId]);
 
+  useEffect(() => {
+    setEvents([]);
+    setEventError(undefined);
+    setEventFilters((current) => ({ ...current, goalId: selectedGoalId ?? "" }));
+    if (config === undefined) return;
+    let active = true;
+    setEventLoading(true);
+    void loadEventPage(window.maestro.api, { projectId: config.projectId, after: "0" })
+      .then((page) => {
+        if (active) setEvents(page.events);
+      })
+      .catch((cause: unknown) => {
+        if (active) setEventError(cause instanceof Error ? cause.message : "Could not load durable events");
+      })
+      .finally(() => {
+        if (active) setEventLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [config?.projectId, selectedGoalId, eventCursor]);
+
   if (config === undefined) return <EmptyState />;
 
   const capture = async (): Promise<void> => {
@@ -98,6 +126,9 @@ export function EvidenceLog({ onNavigate: _onNavigate }: { onNavigate: (view: Vi
       setCaptureBusy(false);
     }
   };
+
+  const filteredEvents = filterEvents(events, eventFilters);
+  const eventTypes = [...new Set(events.map((event) => event.eventType))].sort();
 
   return (
     <div className="evlog-main">
@@ -163,6 +194,69 @@ export function EvidenceLog({ onNavigate: _onNavigate }: { onNavigate: (view: Vi
             <p className="form-hint">This dump is a durable server record. It cannot be edited or deleted here.</p>
           </section>
         )}
+
+        <section className="office-panel" aria-labelledby="durable-events-heading">
+          <h2 id="durable-events-heading">Durable project events</h2>
+          <p className="form-hint">Events below are read from the Control Plane. Filters change the view of returned records only.</p>
+          <div className="dash-field-group">
+            <label className="dash-field">
+              <span>Goal</span>
+              <select
+                className="input"
+                aria-label="Filter events by Goal"
+                value={eventFilters.goalId ?? ""}
+                onChange={(event) => setEventFilters((current) => ({ ...current, goalId: event.target.value }))}
+              >
+                <option value="">All Goals</option>
+                {(goals ?? []).map((goal) => <option key={goal.goalId} value={goal.goalId}>{goal.goalId}</option>)}
+              </select>
+            </label>
+            <label className="dash-field">
+              <span>Event type</span>
+              <select
+                className="input"
+                aria-label="Filter events by type"
+                value={eventFilters.eventType ?? ""}
+                onChange={(event) => setEventFilters((current) => ({ ...current, eventType: event.target.value }))}
+              >
+                <option value="">All event types</option>
+                {eventTypes.map((eventType) => <option key={eventType} value={eventType}>{eventType}</option>)}
+              </select>
+            </label>
+            <label className="dash-field">
+              <span>After cursor</span>
+              <input className="input" inputMode="numeric" aria-label="Filter events after cursor" value={eventFilters.afterCursor ?? ""} onChange={(event) => setEventFilters((current) => ({ ...current, afterCursor: event.target.value }))} />
+            </label>
+            <label className="dash-field">
+              <span>Before cursor</span>
+              <input className="input" inputMode="numeric" aria-label="Filter events before cursor" value={eventFilters.beforeCursor ?? ""} onChange={(event) => setEventFilters((current) => ({ ...current, beforeCursor: event.target.value }))} />
+            </label>
+            <label className="dash-field">
+              <span>From time</span>
+              <input className="input" type="datetime-local" aria-label="Filter events from time" value={eventFilters.fromTime ?? ""} onChange={(event) => setEventFilters((current) => ({ ...current, fromTime: event.target.value }))} />
+            </label>
+            <label className="dash-field">
+              <span>To time</span>
+              <input className="input" type="datetime-local" aria-label="Filter events to time" value={eventFilters.toTime ?? ""} onChange={(event) => setEventFilters((current) => ({ ...current, toTime: event.target.value }))} />
+            </label>
+          </div>
+          {eventLoading && <p role="status">loading durable events…</p>}
+          {eventError !== undefined && <p className="alert alert-warning" role="alert">{eventError}</p>}
+          {!eventLoading && eventError === undefined && filteredEvents.length === 0 && <p className="office-panel-empty">No durable events match these filters.</p>}
+          <div className="event-log-list">
+            {filteredEvents.map((event) => (
+              <article key={event.eventId} className="office-subpanel event-log-item">
+                <div><strong>{event.eventType}</strong> · cursor {event.cursor}</div>
+                <div className="form-hint">Goal {event.goalId} · {new Date(event.occurredAt).toLocaleString()}</div>
+                {eventLinks(event).length > 0 && (
+                  <div className="event-log-links" aria-label={`Evidence links for ${event.eventType}`}>
+                    {eventLinks(event).map((link) => <button key={link.view} type="button" className="btn btn-sm" onClick={() => onNavigate(link.view)}>{link.label}</button>)}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="office-panel" aria-labelledby="capture-evidence-heading">
           <h2 id="capture-evidence-heading">Capture evidence</h2>

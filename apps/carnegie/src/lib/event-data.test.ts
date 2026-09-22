@@ -14,8 +14,9 @@ describe("Carnegie durable event data", () => {
   it("loads a server-backed event page with the exact project and cursor scope", async () => {
     const page = { events: [event("event-1", "7")], nextCursor: "7" };
     const listEvents = vi.fn(async () => page);
+    const api = { getChannel: vi.fn(), postChannelMessage: vi.fn(), listEvents };
 
-    await expect(loadEventPage({ listEvents }, { projectId, after: "5" })).resolves.toEqual(page);
+    await expect(loadEventPage(api, { projectId, after: "5" })).resolves.toEqual(page);
     expect(listEvents).toHaveBeenCalledWith({ projectId, after: "5" });
   });
 

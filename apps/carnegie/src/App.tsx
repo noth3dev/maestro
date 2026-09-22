@@ -40,7 +40,7 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
       case "git": return <Git onBack={() => setView("channel")} />;
       case "floor": return <Floor onBack={() => setView("home")} eventCursor={eventState.cursor} />;
       case "inbox": return <Inbox onNavigate={setView} />;
-      case "evlog": return <EvidenceLog onNavigate={setView} />;
+      case "evlog": return <EvidenceLog onNavigate={setView} eventCursor={eventState.cursor} />;
       case "billing": return <Billing />;
       case "settings": return <Settings />;
       case "persona": return <Persona />;
@@ -58,7 +58,7 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
       {!noSidebar && <Sidebar view={view} onNavigate={setView} />}
       <div className="app-content">
         {eventState.stale && (
-          <div className="event-stale-banner" role="status">
+          <div className="event-stale-banner" role="status" aria-live="polite" aria-atomic="true">
             <span>Showing the last durable state while live updates reconnect.{eventState.error === undefined ? "" : ` ${eventState.error}`}</span>
             <button type="button" className="btn btn-sm" onClick={eventState.retry}>retry live updates</button>
           </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { CHANNEL_SELECTORS, type ChannelRead, type ChannelSelector } from "@maestro/api-client";
 import { Icon } from "../icons.js";
 import { EmptyState } from "../components/EmptyState.js";
@@ -8,7 +8,7 @@ import { Workers } from "./Workers.js";
 import type { MissionBundle } from "@maestro/contracts";
 import { useGoalDetail } from "../useGoalDetail.js";
 import { useGoals } from "../goals.js";
-import { loadChannel, postChannelMessage } from "../lib/channel-data.js";
+import { createChannelMessageAttempt, loadChannel, postChannelMessage, type ChannelMessageAttempt } from "../lib/channel-data.js";
 import { missionBundleMatchesWorker } from "../lib/worker-data.js";
 import type { ViewName } from "../views.js";
 
@@ -34,10 +34,14 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
   const [rosterHidden, setRosterHidden] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | undefined>(undefined);
   const [missionBundle, setMissionBundle] = useState<MissionBundle | undefined>(undefined);
+  const pendingMessageRef = useRef<ChannelMessageAttempt | undefined>(undefined);
+  const channelScopeRef = useRef("");
 
   useEffect(() => {
+    channelScopeRef.current = `${config?.projectId ?? ""}:${selectedGoalId ?? ""}:${selectorKey(selector)}`;
     setSelectedWorkerId(undefined);
     setMissionBundle(undefined);
+    pendingMessageRef.current = undefined;
   }, [config, selectedGoalId, selector]);
 
   useEffect(() => {
@@ -85,15 +89,31 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
 
   const send = async () => {
     if (config === undefined || selectedGoalId === undefined || content.trim() === "" || sending) return;
+    const scopeAtSend = `${config.projectId}:${selectedGoalId}:${selectorKey(selector)}`;
+    const attempt = createChannelMessageAttempt(content, pendingMessageRef.current);
+    pendingMessageRef.current = attempt;
     setSending(true);
     setError(undefined);
     try {
-      await postChannelMessage(window.maestro.api, selectedGoalId, selector, config.projectId, content, crypto.randomUUID());
-      setContent("");
-      const refreshed = await loadChannel(window.maestro.api, selectedGoalId, selector, config.projectId);
-      setChannel(refreshed);
+      await postChannelMessage(window.maestro.api, selectedGoalId, selector, config.projectId, attempt.content, attempt.commandId);
     } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Could not post message");
+      // Keep the draft and command ID so a retry can safely replay the same
+      // idempotent request. Editing the draft creates a fresh attempt below.
+      if (channelScopeRef.current === scopeAtSend) setError(cause instanceof Error ? cause.message : "Could not post message");
+      setSending(false);
+      return;
+    }
+    if (channelScopeRef.current !== scopeAtSend) {
+      setSending(false);
+      return;
+    }
+    setContent("");
+    pendingMessageRef.current = undefined;
+    try {
+      const refreshed = await loadChannel(window.maestro.api, selectedGoalId, selector, config.projectId);
+      if (channelScopeRef.current === scopeAtSend) setChannel(refreshed);
+    } catch (cause: unknown) {
+      if (channelScopeRef.current === scopeAtSend) setError(cause instanceof Error ? cause.message : "Message sent, but the channel could not be refreshed");
     } finally { setSending(false); }
   };
 
@@ -138,7 +158,20 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
         </div>
         <div className="channel-input">
           <div className="chan-composer">
-            <textarea className="chan-composer-input" placeholder={`Message #${selector.channelId}`} rows={1} value={content} disabled={sending || selectedGoalId === undefined} onChange={(event) => setContent(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} />
+            <textarea
+              className="chan-composer-input"
+              aria-label={`Message #${selector.channelId}`}
+              placeholder={`Message #${selector.channelId}`}
+              rows={1}
+              value={content}
+              disabled={sending || selectedGoalId === undefined}
+              onChange={(event) => {
+                const next = event.target.value;
+                setContent(next);
+                if (pendingMessageRef.current?.content !== next.trim()) pendingMessageRef.current = undefined;
+              }}
+              onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }}
+            />
             <button type="button" className="btn btn-primary" disabled={sending || content.trim() === "" || selectedGoalId === undefined} onClick={() => void send()}>{sending ? "Sending…" : "Send"}</button>
           </div>
         </div>

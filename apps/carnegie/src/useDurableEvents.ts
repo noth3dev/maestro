@@ -53,6 +53,19 @@ function eventIdentity(event: DurableEvent): string {
   return event.eventId || event.cursor;
 }
 
+function compareEventOrder(left: DurableEvent, right: DurableEvent): number {
+  try {
+    const leftCursor = BigInt(left.cursor);
+    const rightCursor = BigInt(right.cursor);
+    if (leftCursor < rightCursor) return -1;
+    if (leftCursor > rightCursor) return 1;
+  } catch {
+    const cursorOrder = left.cursor.localeCompare(right.cursor);
+    if (cursorOrder !== 0) return cursorOrder;
+  }
+  return eventIdentity(left).localeCompare(eventIdentity(right));
+}
+
 export function mergeDurableEvents(existing: readonly DurableEvent[], incoming: readonly DurableEvent[]): DurableEvent[] {
   const identities = new Set(existing.map(eventIdentity));
   const merged = [...existing];
@@ -62,7 +75,9 @@ export function mergeDurableEvents(existing: readonly DurableEvent[], incoming: 
     identities.add(identity);
     merged.push(event);
   }
-  return merged;
+  // SSE and catch-up responses can arrive out of order. Keep the projection
+  // ordered by the durable cursor so an older delivery cannot appear newer.
+  return merged.sort(compareEventOrder);
 }
 
 function maxCursor(left: string, right: string): string {

@@ -46,7 +46,7 @@ describe("Channel view", () => {
       getChannel: vi.fn(async () => ({}) as never),
       postChannelMessage: vi.fn(async () => ({}) as never),
     };
-    const selector = { kind: "organization" as const, channelId: "general" };
+    const selector = { kind: "organization" as const, channelId: "general" as const };
     await loadChannel(api, "22222222-2222-4222-8222-222222222222", selector, "11111111-1111-4111-8111-111111111111");
     await postChannelMessage(api, "22222222-2222-4222-8222-222222222222", selector, "11111111-1111-4111-8111-111111111111", "hello", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     expect(api.getChannel).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", selector, { projectId: "11111111-1111-4111-8111-111111111111" });
