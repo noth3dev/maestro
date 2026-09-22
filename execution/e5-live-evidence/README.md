@@ -24,6 +24,7 @@
 6. A disposable fresh-data PGlite probe passed on port `55434` (`READY postgresql://maestro@127.0.0.1:55434/maestro_local`), proving the runtime can start a new database. A copied existing-data probe failed with `RuntimeError: Aborted()`; the original data was untouched.
 7. Browser evidence was run against the real Electron CDP target with `MAESTRO_CARNEGIE_CDP_URL=http://127.0.0.1:9222`: all four `tests/e5-a11y.spec.ts` cases reached the renderer but failed/blocked at the unavailable backend boundary (first failure: missing `Primary navigation`; remaining cases timed out while the recovery screen was displayed). No browser success is claimed.
 8. The same Playwright command without `MAESTRO_CARNEGIE_CDP_URL` skipped all four tests by design; this is not live evidence.
+9. Final Carnegie Playwright command (`npx playwright test --reporter=line`) passed 4 tests and skipped 5 designed CDP-gated tests. The independent Electron radial smoke passed: `RADIAL_SMOKE:{"pass":true,"graph":true,"taskContract":true,"controls":3,"sourceNodes":5}`. Secret-pattern scans over committed E5 evidence/spec files returned zero matches; generated Playwright artifacts were removed.
 
 ## Result
 
