@@ -242,8 +242,46 @@ describe("task contract authoring", () => {
     expect(result.message).toBeUndefined();
   });
 
-  it("routes Home with an attached Goal through its existing direct authoring path", async () => {
-    const api = { ...fakeApi(), listModels: vi.fn(), createConversation: vi.fn(), sendConversationTurn: vi.fn() };
+  it("keeps Home conversational when a Goal is selected", async () => {
+    const conversationId = "44444444-4444-4444-8444-444444444444";
+    const api = {
+      ...fakeApi(),
+      listModels: vi.fn(async () => [
+        {
+          identity: { provider: "openai", id: "gpt-5" },
+          capabilities: ["text"],
+          authModes: ["api-key"],
+          dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] },
+        },
+      ]),
+      createConversation: vi.fn(async () => ({
+        conversationId,
+        projectId,
+        goalId: contract.project.projectId,
+        model: "openai/gpt-5",
+        status: "active" as const,
+        version: 1,
+      })),
+      sendConversationTurn: vi.fn(async () => ({
+        conversation: {
+          conversationId,
+          projectId,
+          goalId: contract.project.projectId,
+          model: "openai/gpt-5",
+          status: "succeeded" as const,
+          version: 2,
+        },
+        turn: {
+          turnId: "55555555-5555-4555-8555-555555555555",
+          conversationId,
+          role: "assistant" as const,
+          content: "I will help with the selected Goal.",
+          status: "completed" as const,
+          cursor: "1",
+          createdAt: "2026-09-16T00:00:00.000Z",
+        },
+      })),
+    };
 
     const result = await submitHomeBrief(api, {
       projectId,
@@ -251,9 +289,13 @@ describe("task contract authoring", () => {
       selectedGoalId: contract.project.projectId,
     });
 
-    expect(api.createTaskContract).toHaveBeenCalledOnce();
-    expect(api.createConversation).not.toHaveBeenCalled();
-    expect(result.draft).toEqual(contract);
+    expect(api.createConversation).toHaveBeenCalledWith(
+      { projectId, goalId: contract.project.projectId, model: "openai/gpt-5" },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    expect(api.createTaskContract).not.toHaveBeenCalled();
+    expect(result.response).toBe("I will help with the selected Goal.");
+    expect(result.draft).toBeUndefined();
   });
 
 

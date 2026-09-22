@@ -43,7 +43,7 @@ export function formatTaskContractReview(contract: TaskContract): string {
 /** Send Home's no-Goal brief through the same durable conversation routes as the TUI. */
 export async function submitGoalLessBrief(
   api: GoalLessIntakeApi,
-  input: { projectId: string; text: string; conversationId?: string },
+  input: { projectId: string; text: string; goalId?: string; conversationId?: string },
 ): Promise<GoalLessIntakeResult> {
   const text = input.text.trim();
   if (text === "") throw new Error("A brief is required to start a Concertmaster conversation");
@@ -54,7 +54,7 @@ export async function submitGoalLessBrief(
     if (selected === undefined) throw new Error("No Concertmaster model is available");
     const model = `${selected.identity.provider}/${selected.identity.id}`;
     const conversation = await api.createConversation(
-      { projectId: input.projectId, goalId: null, model },
+      { projectId: input.projectId, goalId: input.goalId ?? null, model },
       { idempotencyKey: globalThis.crypto.randomUUID() },
     );
     conversationId = conversation.conversationId;
@@ -131,10 +131,13 @@ export type HomeBriefApi = GoalLessIntakeApi & TaskContractAuthoringApi;
 export async function submitHomeBrief(
   api: HomeBriefApi,
   input: { projectId: string; text: string; selectedGoalId: string | undefined; conversationId?: string },
-): Promise<GoalLessIntakeResult | { draft: TaskContract }> {
-  if (input.selectedGoalId === undefined) return submitGoalLessBrief(api, input);
-  const substance = buildTaskContractDraft(input.projectId, input.text);
-  return { draft: await createTaskContractDraft(api, { projectId: input.projectId, substance }) };
+): Promise<GoalLessIntakeResult> {
+  return submitGoalLessBrief(api, {
+    projectId: input.projectId,
+    text: input.text,
+    ...(input.selectedGoalId === undefined ? {} : { goalId: input.selectedGoalId }),
+    ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
+  });
 }
 
 function assertNotLaunched(contract: TaskContract): void {
