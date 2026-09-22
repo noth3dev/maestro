@@ -4856,3 +4856,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - E5 review follow-up 2026-09-23: verified and fixed active navigation semantics in Carnegie (`aria-current="page"` on selected sidebar navigation and `aria-pressed` on Home mode buttons), with RED then GREEN Task 13 coverage. Commit `f309c836` is pushed. Historical Postgres availability text in `PENDING_LIVE_CHECKS.md` was explicitly marked non-current; E5 remains gated by real PostgreSQL-backed full tests and live provider dogfood.
 
 - E5 Task 15 secret/artifact scope completed 2026-09-23: scanned 28 changed/evidence/log files for high-confidence Bearer/provider-key patterns, credential-header assignments, and secret-like environment-value matches; all were zero. Generated Playwright artifact directories were absent after cleanup.
+
+- E5 accessibility review follow-up 2026-09-23: added rendered markup coverage for active sidebar navigation and Home mode state; `task13-a11y`, `Sidebar`, and `Home` focused tests pass 10/10. Commit `8c2af5f9` is pushed.
