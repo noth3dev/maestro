@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Channel } from "./Channel.js";
+import { loadChannel, postChannelMessage, createChannelMessageAttempt } from "../lib/channel-data.js";
 
 vi.mock("../icons.js", () => ({ Icon: () => null }));
 
@@ -38,5 +39,24 @@ describe("Channel view", () => {
     const html = renderToStaticMarkup(<Channel onNavigate={vi.fn()} />);
     expect(html).toContain("refreshing Worker roster; showing last durable state");
     expect(html).toContain("disconnected");
+  });
+
+  it("preserves exact Goal/project/channel scope and the caller command ID", async () => {
+    const api = {
+      getChannel: vi.fn(async () => ({}) as never),
+      postChannelMessage: vi.fn(async () => ({}) as never),
+    };
+    const selector = { kind: "organization" as const, channelId: "general" };
+    await loadChannel(api, "22222222-2222-4222-8222-222222222222", selector, "11111111-1111-4111-8111-111111111111");
+    await postChannelMessage(api, "22222222-2222-4222-8222-222222222222", selector, "11111111-1111-4111-8111-111111111111", "hello", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    expect(api.getChannel).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", selector, { projectId: "11111111-1111-4111-8111-111111111111" });
+    expect(api.postChannelMessage).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", selector, { projectId: "11111111-1111-4111-8111-111111111111", content: "hello" }, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  });
+
+  it("reuses an idempotency command only for the unchanged retry-safe draft", () => {
+    const first = createChannelMessageAttempt(" hello ");
+    expect(createChannelMessageAttempt("hello", first)).toBe(first);
+    expect(createChannelMessageAttempt("changed", first)).not.toBe(first);
+    expect(createChannelMessageAttempt("changed", first).commandId).not.toBe(first.commandId);
   });
 });

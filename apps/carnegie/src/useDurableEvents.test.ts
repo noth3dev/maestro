@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDurableEventSubscription, resolveSubscriptionCursor, type DurableEvent, type DurableEventsApi } from "./useDurableEvents.js";
+import { createDurableEventSubscription, mergeDurableEvents, resolveSubscriptionCursor, type DurableEvent, type DurableEventsApi } from "./useDurableEvents.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const event = (eventId: string, cursor: string): DurableEvent => ({
@@ -19,6 +19,11 @@ function apiFor(streamEvents: DurableEventsApi["streamEvents"], listEvents: Dura
 }
 
 describe("durable Carnegie events", () => {
+  it("keeps event state ordered by durable cursor when delivery is out of order", () => {
+    const merged = mergeDurableEvents([event("event-2", "2")], [event("event-1", "1"), event("event-3", "3")]);
+    expect(merged.map((item) => item.cursor)).toEqual(["1", "2", "3"]);
+  });
+
   it("retries from the last durable cursor only for the active project", () => {
     expect(resolveSubscriptionCursor("project-a", "0", { projectId: "project-a", baseCursor: "0", cursor: "42" })).toBe("42");
     expect(resolveSubscriptionCursor("project-b", "0", { projectId: "project-a", baseCursor: "0", cursor: "42" })).toBe("0");
