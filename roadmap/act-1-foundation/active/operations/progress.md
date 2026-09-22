@@ -4858,3 +4858,5 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - E5 Task 15 secret/artifact scope completed 2026-09-23: scanned 28 changed/evidence/log files for high-confidence Bearer/provider-key patterns, credential-header assignments, and secret-like environment-value matches; all were zero. Generated Playwright artifact directories were absent after cleanup.
 
 - E5 accessibility review follow-up 2026-09-23: added rendered markup coverage for active sidebar navigation and Home mode state; `task13-a11y`, `Sidebar`, and `Home` focused tests pass 10/10. Commit `8c2af5f9` is pushed.
+
+- Heartbeat #16 E5 recheck 2026-09-23 at `f282458c`: root/Carnegie builds, 8-file/35-test focused UI suite, exact Carnegie Playwright (4 passed / 5 CDP-gated skips), diff check, and clean-tree check passed. No native PostgreSQL/Docker/Control Plane/Model Gateway listener is available; E5 and the E6 phase gate remain open.

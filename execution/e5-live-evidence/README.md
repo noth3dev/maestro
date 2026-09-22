@@ -27,6 +27,7 @@
 9. Final Carnegie Playwright command (`npx playwright test --reporter=line`) passed 4 tests and skipped 5 designed CDP-gated tests. The independent Electron radial smoke passed: `RADIAL_SMOKE:{"pass":true,"graph":true,"taskContract":true,"controls":3,"sourceNodes":5}`. Secret-pattern scans over committed E5 evidence/spec files returned zero matches; generated Playwright artifacts were removed.
 10. Full-scope secret/artifact scan covered 28 changed/evidence/log files (including Task 14/15 logs): zero high-confidence Bearer/provider-key patterns, zero credential-header assignments, and zero matches against secret-like environment values. `apps/carnegie/test-results` and `playwright-report` were absent after cleanup.
 11. Review follow-up at `8c2af5f9` added rendered markup coverage for selected sidebar navigation and Home mode state; the three focused files (`task13-a11y`, `Sidebar`, `Home`) passed 10/10 tests.
+12. Heartbeat #16 recheck at `f282458c`: root build and Carnegie build passed; the focused E5/UI suite passed 8 files / 35 tests; exact Carnegie Playwright passed 4 tests with 5 designed CDP skips; `git diff --check` and clean-tree checks passed.
 
 ## Result
 

@@ -21,3 +21,6 @@
 
 
 - [ ] **plan-E5 Task 15 final gate — attempted 2026-09-23, not closed:** root build and Carnegie build passed; exact Carnegie Playwright passed 4 tests / skipped 5; diff check passed. Unrestricted `npm test` first failed at the unavailable `127.0.0.1:55432` endpoint after 336 tests passed. A disposable PGlite replacement was unsuitable for the full suite: repeated 30-second worker/evidence timeouts and an isolated `pg` `unexpected parseComplete` protocol error appeared; no code failure is claimed from that substitute. A real PostgreSQL-backed full suite and live Control Plane/provider acceptance remain required before E5 completion.
+
+
+- [ ] **plan-E5 heartbeat #16 recheck (2026-09-23, `f282458c`):** root build, Carnegie build, focused E5/UI suite (8 files / 35 tests), exact Carnegie Playwright (4 passed / 5 designed CDP skips), diff check, and clean-tree check passed. Runtime remains unchanged: no Docker/native PostgreSQL, Control Plane, Model Gateway, or listener is available, so Task 14/15 cannot close and E6 remains gated.
