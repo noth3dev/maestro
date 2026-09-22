@@ -1163,3 +1163,8 @@ Run tasks in this order:
 Do not start Tasks 5–8 as isolated UI mockups. Task 3 and Task 4 must first prove that a real request becomes a real durable Goal. If Task 14 is blocked by `Durable store is unavailable`, provider behavior, or another external dependency, stop at the failing boundary, preserve the evidence, and update `PENDING_LIVE_CHECKS.md` rather than bypassing the dependency.
 
 **Task 1.5 should land before any later task attempts a live check.** Every live-run step from Task 3 Step 8 onward assumes a reachable Control Plane; until Task 1.5 lands, those steps keep re-discovering the same "no Control Plane/provider" blocker Task 1.5 exists to remove. Re-attempt any live step recorded as blocked in `PENDING_LIVE_CHECKS.md` once Task 1.5 is closed, before assuming it's still blocked.
+
+
+## Task 15 verification update (2026-09-23)
+
+The final gate is **not closed**. Evidence at commit `2c767e29` / current verification: root `npm run build` passed; `apps/carnegie npm run build` passed; exact Carnegie Playwright command passed 4 tests with 5 designed skips; `git diff --check` passed. The first unrestricted `npm test` exited 1 because the configured `127.0.0.1:55432` PostgreSQL endpoint was unavailable (336 tests passed before database-backed setup failures). A second run against a disposable PGlite socket on `55432` was stopped after repeated 30-second timeouts; an isolated Improvement Candidate run passed 7/9 but exposed the PGlite socket `Received unexpected parseComplete message from backend` protocol error. No code regression is attributed without a real PostgreSQL run. The live Task 14 blocker remains authoritative; see `execution/e5-live-evidence/README.md`.
