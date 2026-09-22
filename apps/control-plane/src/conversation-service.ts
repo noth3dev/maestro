@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import type { TaskContractService } from "./task-contract-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 import {
   appendConversationEvent,
@@ -27,13 +26,10 @@ import {
   type ConversationTurnResult,
   type CreateConversationInput,
   type ModelCatalogEntry,
-  type TaskContract,
 } from "@maestro/contracts";
 import {
   buildMaestroSystemPrompt,
   createMaestroAgentRuntime,
-  createTaskContractDraftingTool,
-  OVERTURE_TASK_CONTRACT_CREATE_TOOL,
   ToolRegistry,
   parseModelRef,
   formatModelRef,
@@ -125,8 +121,6 @@ export function createPostgresConversationService(options: {
   accountRefs: Readonly<Record<string, string>>;
   dataPolicyHash?: string;
   tools?: ToolRegistry;
-  /** Narrow creator used only by project-scoped, goal-less Overture intake. */
-  taskContractService?: TaskContractService;
   /** Resolves the persisted role/task-class persona before a model turn starts. */
   personaResolver?: (input: {
     readonly roleId: string;
@@ -162,23 +156,7 @@ export function createPostgresConversationService(options: {
       }
     }
   };
-  // The provider's final text is not authoritative draft state. Keep the
-  // durable tool result keyed by the root conversation id so clients can
-  // review it even when the provider replies with a summary such as "Draft created".
-  const draftedContracts = new Map<string, TaskContract>();
   const tools = options.tools ?? new ToolRegistry();
-  if (options.taskContractService !== undefined && tools.get(OVERTURE_TASK_CONTRACT_CREATE_TOOL) === undefined) {
-    tools.register(
-      createTaskContractDraftingTool({
-        createTaskContract: (contractId, input, actor) =>
-          options.taskContractService!.createTaskContract(contractId, input, {
-            operatorId: actor.operatorId,
-            credentialId: "conversation-runtime",
-          }),
-        onCreated: (contract, context) => draftedContracts.set(context.commandId, contract),
-      }),
-    );
-  }
   const policyHash = options.dataPolicyHash ?? "maestro-local-v1";
 
   async function conversationSystemPrompt(projectId: string, goalId: string | null): Promise<string> {
@@ -196,17 +174,18 @@ export function createPostgresConversationService(options: {
   }
 
   function grantFor(row: ConversationRow, _accountRef: string) {
-    const goalLessDrafting = row.goal_id === null && options.taskContractService !== undefined;
+    // Ordinary Concertmaster conversations are conversational only. Overture
+    // owns planning tools and will receive a separate, explicit grant later.
     return {
       grantId: `grant-${row.conversation_id}`,
-      allowedTools: goalLessDrafting ? [OVERTURE_TASK_CONTRACT_CREATE_TOOL] : [],
+      allowedTools: [],
       allowedSkills: [],
       modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })],
       pathScope: [],
       outboundDataClasses: ["public", "workspace"],
       remaining: {
         modelTurns: 8,
-        toolCalls: goalLessDrafting ? 2 : 0,
+        toolCalls: 0,
         childCalls: 0,
         outputTokens: 8_192,
         wallTimeMs: 120_000,
@@ -392,14 +371,16 @@ export function createPostgresConversationService(options: {
           },
           grant: {
             grantId: `grant-${conversationId}`,
-            allowedTools: goalId === null && options.taskContractService !== undefined ? [OVERTURE_TASK_CONTRACT_CREATE_TOOL] : [],
+            // Ordinary Concertmaster conversations never receive planning or
+            // Task Contract tools. Overture will use an explicit runtime grant.
+            allowedTools: [],
             allowedSkills: [],
             modelPolicy: [input.model],
             pathScope: [],
             outboundDataClasses: ["public", "workspace"],
             remaining: {
               modelTurns: 8,
-              toolCalls: goalId === null && options.taskContractService !== undefined ? 2 : 0,
+              toolCalls: 0,
               childCalls: 0,
               outputTokens: 8_192,
               wallTimeMs: 120_000,
@@ -474,7 +455,7 @@ export function createPostgresConversationService(options: {
         streamWriteFailed = true;
       }
       const status: Conversation["status"] = streamWriteFailed ? "unknown" : statusFromObservation(observed?.status ?? "unknown");
-      let content =
+      const content =
         observed?.answer.state === "available"
           ? observed.answer.text
           : status === "failed"
@@ -482,15 +463,6 @@ export function createPostgresConversationService(options: {
             : status === "cancelled"
               ? cancellationContent("cancelled")
               : "Model turn outcome is unavailable";
-      const draftedContract = draftedContracts.get(conversationId);
-      if (draftedContract !== undefined) {
-        draftedContracts.delete(conversationId);
-        if (status === "succeeded") {
-          // Return the host-validated durable contract, not provider prose, so a
-          // TUI or other client can render the exact content before confirmation.
-          content = JSON.stringify(draftedContract);
-        }
-      }
       const finalized = await finalizeConversationTurn(options.pool, {
         conversationId,
         projectId: input.projectId,

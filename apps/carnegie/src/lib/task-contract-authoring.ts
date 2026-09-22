@@ -1,5 +1,5 @@
 import type { ApiClient } from "@maestro/api-client";
-import { TaskContractSchema, type ConversationTurn, type TaskContract, type TaskContractSubstance } from "@maestro/contracts";
+import { type ConversationTurn, type TaskContract, type TaskContractSubstance } from "@maestro/contracts";
 
 export type TaskContractAuthoringApi = Pick<
   ApiClient,
@@ -34,28 +34,6 @@ type EditableTaskContractFields = Partial<Omit<TaskContractSubstance, "project" 
 };
 
 const newId = (): string => globalThis.crypto.randomUUID();
-
-function parseContractDraft(content: string, projectId: string): TaskContract | undefined {
-  let value: unknown;
-  try {
-    value = JSON.parse(content);
-  } catch {
-    const fenced = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    const candidate = fenced?.[1] ?? content.slice(content.indexOf("{"), content.lastIndexOf("}") + 1);
-    if (candidate === "" || !candidate.includes("{")) return undefined;
-    try {
-      value = JSON.parse(candidate);
-    } catch {
-      return undefined;
-    }
-  }
-  try {
-    const draft = TaskContractSchema.parse(value);
-    return draft.project.projectId === projectId ? draft : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 /** Stable, complete JSON representation shown before a Task Contract confirmation. */
 export function formatTaskContractReview(contract: TaskContract): string {
@@ -92,12 +70,11 @@ export async function submitGoalLessBrief(
   } catch (cause) {
     throw new ConversationTurnError(conversationId, cause);
   }
-  const draft = result.turn.status === "completed" ? parseContractDraft(result.turn.content, input.projectId) : undefined;
   return {
     conversationId,
     response: result.turn.content,
-    draft,
-    ...(draft === undefined ? { message: result.turn.content } : { message: undefined }),
+    draft: undefined,
+    message: undefined,
     turnStatus: result.turn.status,
   };
 }

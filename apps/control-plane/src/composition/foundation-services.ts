@@ -87,7 +87,6 @@ export function composeFoundationServices(deps: FoundationServicesDeps) {
           gateway: modelGateway,
           gatewayOperatorId: config.modelGatewayOperatorId,
           accountRefs: config.modelAccountRefs,
-          taskContractService,
           personaResolver: conversationPersonaResolver,
         });
   const goalService = createDurableGoalService({

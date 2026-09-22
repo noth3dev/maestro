@@ -95,7 +95,7 @@ describe("task contract authoring", () => {
     expect(review).toContain('"externalServiceAssumptions"');
   });
 
-  it("sends a no-Goal Home brief through the durable conversation intake and returns the reviewed draft", async () => {
+  it("sends a no-Goal Home brief through the durable Concertmaster conversation without creating a draft", async () => {
     const api = {
       listModels: vi.fn(async () => [
         {
@@ -126,7 +126,7 @@ describe("task contract authoring", () => {
           turnId: "55555555-5555-4555-8555-555555555555",
           conversationId: "44444444-4444-4444-8444-444444444444",
           role: "assistant" as const,
-          content: JSON.stringify(contract),
+          content: "I can help you think through that request.",
           status: "completed" as const,
           cursor: "1",
           createdAt: "2026-09-16T00:00:00.000Z",
@@ -145,7 +145,9 @@ describe("task contract authoring", () => {
       { projectId, text: "Ship the pricing copy safely" },
       expect.objectContaining({ idempotencyKey: expect.any(String) }),
     );
-    expect(result.draft).toEqual(contract);
+    expect(result.response).toBe("I can help you think through that request.");
+    expect(result.draft).toBeUndefined();
+    expect(result.message).toBeUndefined();
   });
 
   it("keeps the created conversation identity when a real turn fails", async () => {
@@ -236,7 +238,8 @@ describe("task contract authoring", () => {
     const result = await submitHomeBrief(api, { projectId, text: "help", selectedGoalId: undefined });
 
     expect(result.draft).toBeUndefined();
-    expect(result.message).toContain("desired outcome");
+    expect(result.response).toContain("desired outcome");
+    expect(result.message).toBeUndefined();
   });
 
   it("routes Home with an attached Goal through its existing direct authoring path", async () => {

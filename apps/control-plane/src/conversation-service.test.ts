@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createPostgresConversationService, modelActivity } from "./conversation-service.js";
 import { CONCERTMASTER_PERSONA_BASELINE } from "@maestro/domain";
 import type { ModelGatewayPort, ModelTurnRequest } from "@maestro/agent-runtime";
@@ -556,7 +556,7 @@ describe("postgres conversation service", () => {
   });
 });
 
-describe("goal-less Overture drafting boundary", () => {
+describe("goal-less Concertmaster conversation boundary", () => {
   const draft = {
     desiredOutcome: "Ship the intake feature",
     userVisibleBehavior: ["The operator can submit a brief"],
@@ -579,40 +579,16 @@ describe("goal-less Overture drafting boundary", () => {
     externalServiceAssumptions: ["None"],
     budget: { ceiling: "100 USD", reportingExpectations: ["Report spend"], stoppingConditions: ["Stop at ceiling"] },
   };
-  function contract(contractId: string) {
-    return {
-      contractId,
-      schemaVersion: 1 as const,
-      version: 1,
-      ...draft,
-      decisionHistory: [],
-      contentHash: "a".repeat(64),
-      launchState: "awaiting_confirmation" as const,
-    };
-  }
-
-  it("offers only task-contract:create to goal-less runtime and creates through the durable service", async () => {
+  it("keeps ordinary goal-less Concertmaster conversation free of Task Contract tools", async () => {
     const pool = new FakePool();
-    const createTaskContract = vi.fn(async (contractId: string) => contract(contractId));
     const requests: Array<{ tools: readonly { name: string }[]; childCalls: number }> = [];
     const gateway = fakeGateway();
     gateway.turn = async (request) => {
       requests.push({ tools: request.tools, childCalls: request.limits.maxChildCalls });
-      if (requests.length === 1)
-        return {
-          requestId: request.requestId,
-          model: { provider: "openai", id: "gpt-5" },
-          text: "",
-          toolCalls: [
-            { id: "create-1", name: "task-contract:create", arguments: { state: "valid", value: { projectId, substance: draft } } },
-          ],
-          stopReason: "tool_use",
-          usage: { state: "available", totalTokens: 3 },
-        };
       return {
         requestId: request.requestId,
         model: { provider: "openai", id: "gpt-5" },
-        text: "Draft created",
+        text: "I can help you think through that request.",
         toolCalls: [],
         stopReason: "end_turn",
         usage: { state: "available", totalTokens: 3 },
@@ -623,25 +599,14 @@ describe("goal-less Overture drafting boundary", () => {
       gateway,
       gatewayOperatorId: "gateway-operator",
       accountRefs: { openai: "acct-1" },
-      taskContractService: { createTaskContract } as never,
     });
     const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5" }, operator);
     const result = await service.turn(conversation.conversationId, { projectId, text: "Ship the intake feature" }, operator);
-    expect(JSON.parse(result.turn.content)).toMatchObject({
-      contractId: expect.any(String),
-      desiredOutcome: draft.desiredOutcome,
-      launchState: "awaiting_confirmation",
-    });
-    expect(createTaskContract).toHaveBeenCalledOnce();
-    expect(requests[0]).toMatchObject({ tools: [{ name: "task-contract:create" }], childCalls: 0 });
-    expect(requests[0]!.tools).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: expect.stringMatching(/worker|mission|ipython/i) })]),
-    );
+    expect(result.turn.content).toBe("I can help you think through that request.");
+    expect(requests[0]).toMatchObject({ tools: [], childCalls: 0 });
   });
-
   it("keeps the existing Goal-bound grant empty even when the model proposes the drafting tool", async () => {
     const pool = new FakePool();
-    const createTaskContract = vi.fn();
     const gateway = fakeGateway();
     gateway.turn = async (request) => ({
       requestId: request.requestId,
@@ -656,11 +621,9 @@ describe("goal-less Overture drafting boundary", () => {
       gateway,
       gatewayOperatorId: "gateway-operator",
       accountRefs: { openai: "acct-1" },
-      taskContractService: { createTaskContract } as never,
     });
     const conversation = await service.create({ projectId, goalId, model: "openai/gpt-5" }, operator);
     const result = await service.turn(conversation.conversationId, { projectId, text: "Do not use intake" }, operator);
     expect(result.turn.status).toBe("failed");
-    expect(createTaskContract).not.toHaveBeenCalled();
   });
 });
