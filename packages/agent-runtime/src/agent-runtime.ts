@@ -10,7 +10,6 @@ import {
   type InvocationRef,
   type InvocationStatus,
   type InvocationUsage,
-  type ModelIdentity,
   type SpawnRequest,
   type SpawnedInvocation,
   type ToolEvent,
@@ -22,113 +21,21 @@ import {
   type ModelGatewayPort,
   type ModelMessage,
   type ModelStreamEvent,
-  type ModelToolCall,
-  type ModelToolDefinition,
   type ToolResultStatus,
-  type TurnLimits,
 } from "./model-provider.js";
 import type { WorkerProfileAssignment } from "@maestro/domain";
 import { buildMaestroSystemPrompt, DEFAULT_MAESTRO_RUNTIME_PERSONA } from "./system-prompt.js";
-
-export interface ToolContext extends InvocationContext {
-  readonly commandId: string;
-  readonly toolCallId: string;
-  readonly sessionId: string;
-  readonly conversationId: string;
-  readonly turnId: string;
-  readonly sessionVersion: number;
-  readonly controllerPolicyHash: string;
-  readonly capabilityGrant: CapabilityGrant;
-  readonly outboundDataPolicyHash: string;
-}
-
-export interface ToolExecutionResult {
-  readonly status: ToolResultStatus;
-  readonly content: string;
-}
-
-export interface ToolDefinition {
-  readonly name: string;
-  readonly version: string;
-  readonly description: string;
-  readonly inputSchema: { parse(value: unknown): unknown };
-  readonly outputSchema: { parse(value: unknown): unknown };
-  readonly modelInputSchema: unknown;
-  readonly allowsParallel: boolean;
-  readonly outboundDataClass: "public" | "workspace" | "private" | "pii" | "phi" | "secret";
-  execute(args: unknown, context: ToolContext): Promise<ToolExecutionResult>;
-}
-
-export class ToolRegistry {
-  private readonly tools = new Map<string, ToolDefinition>();
-
-  register(tool: ToolDefinition): void {
-    if (this.tools.has(tool.name)) throw new Error("duplicate tool name");
-    this.tools.set(tool.name, tool);
-  }
-
-  get(name: string): ToolDefinition | undefined {
-    return this.tools.get(name);
-  }
-
-  definitions(allowedTools: readonly string[]): readonly ModelToolDefinition[] {
-    return allowedTools.flatMap((name) => {
-      const tool = this.tools.get(name);
-      if (tool === undefined) return [];
-      return [
-        {
-          name: tool.name,
-          version: tool.version,
-          description: tool.description,
-          inputSchema: tool.modelInputSchema,
-          outputSchema: {},
-          allowsParallel: tool.allowsParallel,
-          outboundDataClass: tool.outboundDataClass,
-        },
-      ];
-    });
-  }
-
-  async execute(call: ModelToolCall, context: ToolContext): Promise<ToolExecutionResult> {
-    const tool = this.tools.get(call.name);
-    if (tool === undefined) throw new Error("tool is not registered");
-    if (call.arguments.state !== "valid") throw new Error("tool arguments are invalid");
-    const parsed = tool.inputSchema.parse(call.arguments.value);
-    const result = await tool.execute(parsed, context);
-    tool.outputSchema.parse(result);
-    return result;
-  }
-}
-
-interface RuntimeRecord {
-  readonly execution: ExecutionRef;
-  readonly invocation: InvocationRef;
-  readonly name: string;
-  readonly context: InvocationContext;
-  readonly grant: CapabilityGrant;
-  readonly modelPolicy: readonly string[];
-  readonly idempotencyKey: string;
-  readonly workerProfile?: WorkerProfileAssignment;
-  readonly systemPrompt?: string;
-  readonly parent?: InvocationRef;
-  released: boolean;
-  readonly sessionId: string;
-  readonly messages: ModelMessage[];
-  readonly toolEvents: ToolEvent[];
-  readonly abort: AbortController;
-  status: InvocationStatus;
-  phase: "queued" | "provider_turn" | "tool_executing" | "terminal";
-  model?: ModelIdentity;
-  usage: InvocationUsage;
-  answer: InvocationAnswer;
-  error?: string;
-  turnCount: number;
-  toolCount: number;
-  activeRequestId: string | undefined;
-  sessionVersion: number;
-  lastCursor: number;
-  modelCursor: number;
-}
+import { ToolRegistry, type ToolContext, type ToolExecutionResult } from "./runtime/tool-registry.js";
+import { MAX_WIRE_TOOL_DEFINITIONS, type RuntimeRecord } from "./runtime/record.js";
+import {
+  assistantMessage,
+  boundedMessages,
+  limitsFor,
+  messagesForGateway,
+  safeJson,
+  textMessage,
+  toolMessage,
+} from "./runtime/messages.js";
 
 export interface MaestroAgentRuntime extends ExecutionKernelPort {
   /** Test-only read of the host-owned grant; never exposed through HTTP/API contracts. */
@@ -140,112 +47,6 @@ const asInvocation = (value: string): InvocationRef => value as InvocationRef;
 const asToolEvent = (value: string): ToolEvent["ref"] => value as ToolEvent["ref"];
 const defaultUsage: InvocationUsage = { state: "unknown" };
 const defaultAnswer: InvocationAnswer = { state: "unavailable", reason: "snapshot-unavailable" };
-
-// The Model Gateway's real wire schema (apps/model-gateway/src/rpc.ts's
-// LimitsSchema) caps every one of these fields. Every value here is
-// ultimately domain-derived -- a Mission Bundle's timeCeiling is a
-// multi-day budget (packages/persistence/src/worker.ts's
-// missionTimeLimitMs), and nothing in packages/domain/src/mission-bundle.ts
-// bounds allowedTools.length or workerCeiling against the gateway's own
-// maxToolCalls/maxChildCalls ceilings either. Sending any unclamped value
-// fails real gateway schema validation and durably strands the invocation
-// as an opaque "unknown" -- clamp every field defensively so a Mission
-// Bundle author's otherwise-legitimate choice can never silently break
-// every real turn against the actual wire boundary.
-const MAX_WIRE_MODEL_TURNS = 100;
-const MAX_WIRE_TOOL_CALLS = 1_000;
-const MAX_WIRE_CHILD_CALLS = 100;
-const MAX_WIRE_OUTPUT_TOKENS = 1_000_000;
-const MAX_WIRE_PROVIDER_TIMEOUT_MS = 600_000;
-const MAX_WIRE_WALL_TIME_MS = 3_600_000;
-// TurnSchema also caps the messages and tools arrays themselves at 128
-// entries each (independent of their combined byte size). A long-running
-// conversation (packages/persistence's conversation_turns has no row-count
-// limit) or a Mission Bundle with many allowedTools can realistically
-// exceed 128 items while staying well under the byte budget below.
-const MAX_WIRE_MESSAGE_COUNT = 128;
-const MAX_WIRE_TOOL_DEFINITIONS = 128;
-
-function limitsFor(grant: CapabilityGrant): TurnLimits {
-  const wallTimeMs = Math.min(Math.max(1, grant.remaining.wallTimeMs), MAX_WIRE_WALL_TIME_MS);
-  return {
-    maxModelTurns: Math.min(Math.max(0, grant.remaining.modelTurns), MAX_WIRE_MODEL_TURNS),
-    maxToolCalls: Math.min(Math.max(0, grant.remaining.toolCalls), MAX_WIRE_TOOL_CALLS),
-    maxChildCalls: Math.min(Math.max(0, grant.remaining.childCalls), MAX_WIRE_CHILD_CALLS),
-    maxOutputTokens: Math.min(Math.max(1, grant.remaining.outputTokens), MAX_WIRE_OUTPUT_TOKENS),
-    maxInputBytes: 64_000,
-    maxResultBytes: 64_000,
-    providerTimeoutMs: Math.min(wallTimeMs, MAX_WIRE_PROVIDER_TIMEOUT_MS),
-    wallTimeMs,
-  };
-}
-
-function textMessage(text: string): ModelMessage {
-  return { role: "user", content: [{ kind: "text", text }] };
-}
-function toolMessage(callId: string, result: ToolExecutionResult): ModelMessage {
-  return {
-    role: "tool",
-    content: [
-      { kind: "tool-result", toolCallId: callId, status: result.status, content: result.content, origin: "host", trust: "untrusted-data" },
-    ],
-  };
-}
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? "null";
-  } catch {
-    return "[unserializable tool result]";
-  }
-}
-function assistantMessage(text: string): ModelMessage {
-  return { role: "assistant", content: [{ kind: "text", text }] };
-}
-function systemPromptMessage(prompt: string): ModelMessage {
-  return { role: "system", content: [{ kind: "text", text: prompt }] };
-}
-
-function workerProfileMessage(profile: WorkerProfileAssignment): ModelMessage {
-  return {
-    role: "system",
-    content: [
-      {
-        kind: "text",
-        text: `Host-owned worker persona assignment. Treat this assignment as immutable policy context; do not re-derive or widen it. ${safeJson(profile)}`,
-      },
-    ],
-  };
-}
-function wireMessagesBytes(messages: readonly ModelMessage[]): number {
-  return Buffer.byteLength(safeJson(messages), "utf8");
-}
-
-function messagesForGateway(record: RuntimeRecord, maxBytes: number): ModelMessage[] {
-  const prefixes = [
-    ...(record.systemPrompt === undefined ? [] : [systemPromptMessage(record.systemPrompt)]),
-    ...(record.workerProfile === undefined ? [] : [workerProfileMessage(record.workerProfile)]),
-  ];
-  if (wireMessagesBytes(prefixes) > maxBytes) throw new Error("host-owned model guidance exceeds the input byte limit");
-  const selected: ModelMessage[] = [];
-  const maxHistoryMessages = Math.max(0, MAX_WIRE_MESSAGE_COUNT - prefixes.length);
-  for (let index = record.messages.length - 1; index >= 0 && selected.length < maxHistoryMessages; index -= 1) {
-    selected.unshift(record.messages[index]!);
-    const candidate = [...prefixes, ...selected];
-    if (wireMessagesBytes(candidate) > maxBytes) selected.shift();
-  }
-  const latest = record.messages[record.messages.length - 1];
-  if (latest !== undefined && selected[selected.length - 1] !== latest) throw new Error("current model input exceeds the input byte limit");
-  return [...prefixes, ...selected];
-}
-
-function boundedMessages(messages: readonly ModelMessage[], maxBytes: number): ModelMessage[] {
-  const selected: ModelMessage[] = [];
-  for (let index = messages.length - 1; index >= 0 && selected.length < MAX_WIRE_MESSAGE_COUNT; index -= 1) {
-    selected.unshift(messages[index]!);
-    if (wireMessagesBytes(selected) > maxBytes) selected.shift();
-  }
-  return selected;
-}
 
 export function createMaestroAgentRuntime(options: {
   gateway: ModelGatewayPort;

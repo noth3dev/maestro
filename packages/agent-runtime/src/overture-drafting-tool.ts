@@ -7,7 +7,7 @@ import {
   type CreateTaskContractInput,
   type TaskContract,
 } from "@maestro/contracts";
-import type { ToolDefinition, ToolExecutionResult, ToolContext } from "./agent-runtime.js";
+import type { ToolDefinition, ToolExecutionResult, ToolContext } from "./runtime/tool-registry.js";
 
 /** The only capability exposed to a goal-less conversational intake runtime. */
 export const OVERTURE_TASK_CONTRACT_CREATE_TOOL = "task-contract:create" as const;

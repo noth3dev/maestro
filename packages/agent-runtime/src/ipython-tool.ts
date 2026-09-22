@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ToolContext, ToolDefinition } from "./agent-runtime.js";
+import type { ToolContext, ToolDefinition } from "./runtime/tool-registry.js";
 import type { ToolResultStatus } from "./model-provider.js";
 
 const MAX_CODE_BYTES = 64_000;

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { InvocationObservation, ModelIdentity } from "@maestro/domain";
 import type { GatewayBinding, ModelGatewayPort, ModelTurnResult, TurnLimits } from "./model-provider.js";
-import { createMaestroAgentRuntime, ToolRegistry } from "./agent-runtime.js";
+import { createMaestroAgentRuntime } from "./agent-runtime.js";
+import { ToolRegistry } from "./runtime/tool-registry.js";
 import { createIpPythonTool, deriveIpPythonToolCallCommandId } from "./ipython-tool.js";
 
 const identity: ModelIdentity = { provider: "fake", id: "model-a" };

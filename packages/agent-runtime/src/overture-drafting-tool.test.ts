@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ToolContext } from "./agent-runtime.js";
+import type { ToolContext } from "./runtime/tool-registry.js";
 import { createTaskContractDraftingTool, deriveTaskContractId } from "./overture-drafting-tool.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
