@@ -5,8 +5,8 @@ import type { AccountLoginStore, OperatorContext } from "@maestro/persistence";
 import type { PersonaInspectionService } from "./persona-inspection-service.js";
 import type { RouterCatalogService } from "./composition/router-catalog.js";
 
-import { DurableStoreUnavailableError, type GoalService } from "./goal-service.js";
-import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
+import { type GoalService } from "./goal-service.js";
+import { type CriticalActionService } from "./critical-action-service.js";
 import { type ReadStateService } from "./read-state-service.js";
 import type { ProjectionService } from "./projection-service.js";
 import { type TaskContractService } from "./task-contract-service.js";
@@ -62,6 +62,7 @@ import { registerChannelRoutes } from "./routes/channels.js";
 import { registerReadRoutes } from "./routes/reads.js";
 import { registerDiscordRoutes } from "./routes/discord.js";
 import { registerEventRoutes } from "./routes/events.js";
+import { resolveServiceDefaults } from "./server-defaults.js";
 
 import type {
   ChannelService,
@@ -186,318 +187,57 @@ export function buildServer({
   const maxActiveStreams = 128;
   const loginOwnerId = accountLoginOwnerId ?? `control-plane-${randomUUID()}`;
   const loginOperationStaleAfterMs = 30_000;
-  const channels =
-    channelService ??
-    ({
-      get: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      post: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies ChannelService);
-  const organizations =
-    organizationService ??
-    ({
-      listOrganization: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies OrganizationService);
-  const events = eventService ?? {
-    listEvents: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-  };
-  const projections =
-    projectionService ??
-    ({
-      read: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      compose: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies ProjectionService);
-  const personaInspection =
-    personaInspectionService ??
-    ({
-      read: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      propose: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      edit: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies PersonaInspectionService);
-  const readState = readStateService ?? {
-    listGoals: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    getBudgetSummary: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    getBillingSummary: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    listMetronomeChallenges: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    listEncoreCouncilRounds: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    listCertifications: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    getConcertmasterReport: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    getEvidenceBundle: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    getGitIntegrationState: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    listWorkersForGoal: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    listImprovementDigestsForGoal: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-    listArrangementsForGoal: async () => {
-      throw new DurableStoreUnavailableError();
-    },
-  };
-  const criticalActions = criticalActionService ?? {
-    performCriticalAction: async () => {
-      throw new CriticalActionUnavailableError();
-    },
-    approveAndPerformCriticalAction: async () => {
-      throw new CriticalActionUnavailableError();
-    },
-    denyCriticalAction: async () => {
-      throw new CriticalActionUnavailableError();
-    },
-  };
-  const inbox =
-    inboxService ??
-    ({
-      listPendingApprovals: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies InboxService);
-  const capabilityApprovals =
-    capabilityApprovalService ??
-    ({
-      selectFullAccessMode: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies Pick<CapabilityApprovalService, "selectFullAccessMode">);
-  const evidenceCapture =
-    evidenceCaptureService ??
-    ({
-      capture: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies EvidenceCaptureService);
-  const personaGoalEvidence =
-    personaGoalEvidenceService ??
-    ({
-      capture: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies PersonaGoalEvidenceService);
-  const concertmasterReports =
-    concertmasterReportService ??
-    ({
-      generate: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies ConcertmasterReportService);
-  const taskContracts =
-    taskContractService ??
-    ({
-      createTaskContract: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      getTaskContract: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      updateTaskContract: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      selectOvertureRoles: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      confirmTaskContract: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      launchTaskContract: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies TaskContractService);
-  const headParticipations =
-    headParticipationService ??
-    ({
-      activate: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies HeadParticipationService);
-  const councils =
-    councilService ??
-    ({
-      create: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      get: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      submitBrief: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      reveal: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      decide: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies CouncilService);
-  const departmentPlans =
-    departmentPlanService ??
-    ({
-      create: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      get: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      revise: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies DepartmentPlanService);
-  const missionBundles =
-    missionBundleService ??
-    ({
-      create: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      get: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      issuePersonaOverlay: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies MissionBundleService);
-  const workers =
-    workerService ??
-    ({
-      spawn: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      get: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      observe: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      sendMessage: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      cancel: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies WorkerService);
-  const gitIntegrations =
-    gitIntegrationService ??
-    ({
-      createGoalBranch: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      createDepartmentBranch: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      createWorkerWorktree: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      advanceWorker: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      freezeGoalRevision: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies GitIntegrationService);
-  const certifications =
-    certificationService ??
-    ({
-      accept: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      certify: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      certifyConditional: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies CertificationService);
-  const metronome =
-    metronomeService ??
-    ({
-      scan: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      raise: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      requestCorrection: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      requestSafePause: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      resolve: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      challengeWorkerOverlay: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies MetronomeService);
-  const encore =
-    encoreService ??
-    ({
-      review: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies EncoreService);
-  const discordSignal =
-    discordSignalService ??
-    ({
-      record: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies DiscordSignalService);
-  const conversations =
-    conversationService ??
-    ({
-      listModels: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      create: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      get: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      turn: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      cancel: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-      listEvents: async () => {
-        throw new DurableStoreUnavailableError();
-      },
-    } satisfies ConversationService);
+  const {
+    channels,
+    organizations,
+    events,
+    projections,
+    personaInspection,
+    readState,
+    criticalActions,
+    inbox,
+    capabilityApprovals,
+    evidenceCapture,
+    personaGoalEvidence,
+    concertmasterReports,
+    taskContracts,
+    headParticipations,
+    councils,
+    departmentPlans,
+    missionBundles,
+    workers,
+    gitIntegrations,
+    certifications,
+    metronome,
+    encore,
+    discordSignal,
+    conversations,
+  } = resolveServiceDefaults({
+    channelService,
+    organizationService,
+    eventService,
+    projectionService,
+    personaInspectionService,
+    readStateService,
+    criticalActionService,
+    inboxService,
+    capabilityApprovalService,
+    evidenceCaptureService,
+    personaGoalEvidenceService,
+    concertmasterReportService,
+    taskContractService,
+    headParticipationService,
+    councilService,
+    departmentPlanService,
+    missionBundleService,
+    workerService,
+    gitIntegrationService,
+    certificationService,
+    metronomeService,
+    encoreService,
+    discordSignalService,
+    conversationService,
+  });
   // preClose runs while Fastify can still release open HTTP responses. onClose is too late:
   // Fastify waits for those connections before it invokes onClose.
   app.addHook("preClose", async () => {
