@@ -8,7 +8,7 @@ export interface CredentialBinding extends ProviderAccountBinding {
 }
 
 interface StoredCredential extends CredentialBinding {
-  /** API-key material exists only for api-key bindings. Managed accounts have no Maestro secret. */
+  /** Required non-empty for api-key bindings. Optional for managed-subscription bindings: absent when the account's credential lives entirely outside Maestro (e.g. an external app-server subprocess), present when Maestro itself holds a real OAuth token pair to persist (e.g. the native Codex OAuth client). */
   readonly secret?: string;
 }
 
@@ -190,7 +190,14 @@ export class KeychainCredentialStore implements CredentialStore {
     const cachedRefs = new Set(cached.map((binding) => binding.accountRef));
     for (const binding of index) {
       if (binding.operatorId !== operatorId || cachedRefs.has(binding.accountRef)) continue;
-      const hydrated = await this.ensure(binding.accountRef);
+      // One corrupted/incompatible keychain entry must not take down listing
+      // for every other provider's binding of this operator.
+      let hydrated: CredentialBinding | undefined;
+      try {
+        hydrated = await this.ensure(binding.accountRef);
+      } catch {
+        continue;
+      }
       if (hydrated !== undefined && hydrated.operatorId === operatorId) active.push(hydrated);
     }
     return active;
@@ -268,7 +275,7 @@ function parseStoredCredential(value: string): StoredCredential {
       (parsed.authMode !== "api-key" && parsed.authMode !== "managed-subscription") ||
       typeof parsed.accountRef !== "string" ||
       (parsed.authMode === "api-key" && (typeof parsed.secret !== "string" || parsed.secret.trim() === "")) ||
-      (parsed.authMode === "managed-subscription" && parsed.secret !== undefined)
+      (parsed.secret !== undefined && (typeof parsed.secret !== "string" || parsed.secret.trim() === ""))
     ) throw new Error("invalid credential");
     return parsed as StoredCredential;
   } catch {

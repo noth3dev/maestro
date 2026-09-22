@@ -12,8 +12,16 @@ export interface GatewayOptions {
   readonly operatorId: string;
   /** Resolves after process-provided credentials have been registered. */
   readonly ready?: Promise<void>;
-  /** Optional public OpenAI Codex app-server account boundary. */
-  readonly codex?: Pick<CodexAppServerClient, "startChatGptLogin" | "loginStatus" | "cancelLogin" | "close"> & Partial<Pick<CodexAppServerClient, "logout">>;
+  /**
+   * Optional ChatGPT Codex account login boundary. `CodexAppServerClient` (the
+   * external `codex app-server` subprocess bridge) and `CodexOAuthClient` (the
+   * native, no-external-binary OAuth implementation) both satisfy this shape.
+   * `getCredentials` is native-only: it returns the real token pair for a
+   * succeeded login so it can be persisted, since the app-server keeps that
+   * secret to itself by design.
+   */
+  readonly codex?: Pick<CodexAppServerClient, "startChatGptLogin" | "loginStatus" | "cancelLogin" | "close"> &
+    Partial<Pick<CodexAppServerClient, "logout">> & { getCredentials?(loginId: string): { accessToken: string; refreshToken: string; expiresAt: number; accountId: string } | undefined };
 }
 
 interface InternalBinding {
@@ -28,6 +36,7 @@ export class ModelGateway implements ModelGatewayPort {
   private readonly loginRequests = new Map<string, import("@maestro/agent-runtime").GatewayAccountLoginStartResult>();
   private readonly loginRequestFlights = new Map<string, Promise<import("@maestro/agent-runtime").GatewayAccountLoginStartResult>>();
   private readonly admissionFlights = new Set<Promise<GatewayBinding>>();
+  private readonly persistedCodexLogins = new Set<string>();
   private closed = false;
 
   constructor(private readonly options: GatewayOptions) {}
@@ -74,7 +83,16 @@ export class ModelGateway implements ModelGatewayPort {
     if (status.state === "succeeded") {
       const accountRef = `openai-codex-${this.options.operatorId}`;
       const existing = await this.options.credentials.ensure(accountRef);
-      if (existing === undefined) {
+      const credentials = this.options.codex.getCredentials?.(request.loginId);
+      if (credentials !== undefined) {
+        // Native OAuth path: persist the real token pair once per succeeded
+        // login. A client polling status after success would otherwise
+        // trigger a full keychain write on every single poll.
+        if (!this.persistedCodexLogins.has(request.loginId)) {
+          await this.options.credentials.bind({ operatorId: this.options.operatorId, providerId: "openai-codex", authMode: "managed-subscription", accountRef }, JSON.stringify(credentials));
+          this.persistedCodexLogins.add(request.loginId);
+        }
+      } else if (existing === undefined) {
         if (this.options.credentials.bindManaged === undefined) throw new Error("managed account binding is unavailable");
         await this.options.credentials.bindManaged({ operatorId: this.options.operatorId, providerId: "openai-codex", accountRef });
       }

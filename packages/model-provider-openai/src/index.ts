@@ -159,3 +159,5 @@ export function createOpenAiPlugin(options: OpenAiPluginOptions): ProviderPlugin
 }
 
 export * from "./codex-app-server.js";
+export * from "./codex-oauth.js";
+export * from "./codex-responses.js";

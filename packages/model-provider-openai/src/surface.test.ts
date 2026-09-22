@@ -7,8 +7,11 @@ describe("model-provider-openai surface", () => {
       [
         "CodexAppServerClient",
         "CodexAppServerError",
+        "CodexOAuthClient",
+        "CodexResponsesError",
         "OpenAiProviderError",
         "createCodexAppServerPlugin",
+        "createCodexResponsesPlugin",
         "createOpenAiPlugin",
         "resolveCodexAppServerCommand",
       ]
