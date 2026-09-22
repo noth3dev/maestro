@@ -6,18 +6,23 @@
 
 **Architecture:** Keep Carnegie and the CLI as operator surfaces, but move Overture composition and post-launch progression into the Control Plane. A project-scoped Overture Run owns role assignments, durable artifacts, clarification state, and Task Contract revisions before a Goal exists. After exact Task Contract confirmation and launch, one durable orchestration controller advances existing Head, Council, Department Plan, Mission Bundle, Worker, Evidence, Metronome, Encore, and report services through idempotent events; it pauses only at explicit critical or unsafe boundaries.
 
+**Task artifact boundary:** A typed `TaskContract` is not the whole Task and must not become a giant JSON string. It remains the control-plane envelope for project scope, authority, budget, forbidden effects, approval, immutable revision, and exact content identity. During Overture, the Task Editor also produces a durable **agent execution plan set**: one `task.md`-shaped root document and, when needed, linked phase/slice documents in the same execution-plan style already used by Maestro. These are machine/agent-facing planning artifacts, not a human-authored form and not a second chat system. A plan set may contain multiple documents, dependencies, parallelism, acceptance evidence, stop conditions, and source-artifact references. The Task Contract stores a typed plan-set reference (ID, version, manifest hash), while the durable plan records hold the full documents. The operator sees a concise summary, material diffs, blockers, and the exact contract/plan hashes; Head, Council, Department Plan, and Mission Bundle services consume the plan references after launch. Overture never bypasses those post-launch layers by dispatching Workers directly.
+
 **Tech Stack:** TypeScript, Zod contracts, PostgreSQL migrations, `@maestro/agent-runtime`, `ExecutionKernelPort`, `ModelGatewayPort`, Fastify routes, Electron API bridge, React Carnegie renderer, Vitest, real-PostgreSQL integration tests.
+
+**Plan-set shape:** The root plan document records the requested outcome, boundaries, global invariants, phase graph, and acceptance gates. Each phase document records entry/exit conditions, dependencies, and safe parallelism. Each slice document records the bounded objective, affected subsystem/file boundary, inputs/outputs, required tests/evidence, retry/idempotency behavior, and stop condition. Optional decision/evidence documents are linked by source artifact IDs. The documents may use Markdown because that matches the current `execution/plan-*.md` operating convention, but they are stored as durable Overture plan artifacts with typed IDs and hashes; they are not written into the repository, not treated as a human-authored form, and not executed before launch.
 
 **Spec:** `docs/02-hierarchical-orchestration.md`, `roadmap/act-1-foundation/phase-02-hierarchical-execution.md`, `roadmap/act-1-foundation/phase-07-secretary-office-ui.md`, `execution/plan-E1-conversational-intake.md`, and the completed E5 boundary in `execution/plan-E5-gui-implementation.md`.
 
 ## Global Constraints
 
-- E5 must be closed before E6 execution begins. E6 is a follow-on capability plan, not a replacement for E5's GUI bridge work.
-- The operator uses one Concertmaster conversation. Raw Department IDs, Council IDs, plan versions, item IDs, and provider execution references are not primary operator inputs.
-- Overture is a selectively activated Crew, not six always-running agents and not a local checkbox list.
+- E5 must be closed before E6 execution begins. E6 is a follow-on capability plan, not a replacement for E5's GUI bridge work. At this plan revision, the repository evidence shows E5 Tasks 7–15 are still open; this is a blocking prerequisite, not permission to start E6 early.
+- The operator uses one large, channel-shaped project conversation. Concertmaster owns the user-facing conversation route and initial intake; once Overture is active, Overture role messages, questions, critiques, and artifact updates appear in that same stream with explicit role identity. Raw Department IDs, Council IDs, plan versions, item IDs, and provider execution references are not primary operator inputs.
+- Overture is a selectively activated Crew, not six always-running agents and not a local checkbox list. It participates through the existing channel-shaped conversation; role/artifact/Task Contract panels are progressive-disclosure projections and focused tools over durable Overture state, not a second human-facing chat system.
 - The six canonical roles are `conversation-lead`, `architecture-analyst`, `external-research-scout`, `security-evaluator`, `design-mock-specialist`, and `task-editor`.
 - External research and design roles are conditional. Security boundary review is always present. The minimum role set is selected from the request and recorded durably.
 - Every role receives a role-specific prompt, context boundary, model policy, tool allowlist, output budget, and project scope. No Overture role can spawn a Worker, create a Mission Bundle, modify the repository, or perform a critical action.
+- E1's single goal-less `task-contract:create` drafting path is absorbed into the bounded `task-editor` role during E6. There must be one authoritative draft producer, not a legacy direct tool and a new Crew path competing on the same conversation.
 - Role output is durable artifact state with content hashes and evidence references. Provider text alone is never authoritative state.
 - Task Editor owns one versioned Task Contract. A substantive change creates a new version and content hash.
 - No Goal, Department Head, Mission Bundle, Worker, or execution-side state advances before the operator confirms the exact Task Contract version and content hash and launches it.
@@ -38,6 +43,7 @@ E6 may start only when:
 2. E1 G1–G5 are either complete or explicitly marked as dependencies carried into E6. E6 must not create a second goal-less conversation path.
 3. Existing `TaskContractService`, task-contract exact confirmation, launch, Conversation Service, and native execution kernel contracts are re-used rather than shadowed.
 4. The current E5 Task 5 reviewer findings are resolved before the E5 commit or explicitly separated from E6.
+5. E5's checkbox/manual-ID Overture planning surface is treated as a legacy projection. E6 Task 5 explicitly supersedes it with the channel-first, artifact-backed flow; no new E6 work may preserve checkbox selection or manual downstream identity entry as the normal path.
 
 ## Product State Machine
 
@@ -74,8 +80,10 @@ The following transitions are forbidden:
 - Modify: `packages/domain/src/index.ts`
 - Create: `packages/domain/src/overture-crew.test.ts`
 - Create: `packages/contracts/src/schemas/overture-crew.ts`
+- Modify: `packages/contracts/src/schemas/task-contract.ts` (typed task-plan reference)
 - Modify: `packages/contracts/src/index.ts`
 - Create: `packages/contracts/src/overture-crew.test.ts`
+- Modify: `packages/contracts/src/task-contract.test.ts`
 - Modify: `packages/domain/src/execution-kernel.ts`
 - Modify: `packages/domain/src/execution-kernel.test.ts`
 
@@ -106,7 +114,43 @@ export type OvertureArtifactKind =
   | "security-review"
   | "design-preview"
   | "decision-note"
+  | "task-plan"
   | "task-contract";
+
+export type OvertureTaskPlanDocumentKind = "root" | "phase" | "slice" | "decision" | "evidence";
+
+export interface OvertureTaskPlanRef {
+  readonly planId: string;
+  readonly version: number;
+  readonly manifestHash: string;
+}
+
+export interface OvertureTaskPlanDocument {
+  readonly documentId: string;
+  readonly planId: string;
+  readonly runId: string;
+  readonly projectId: string;
+  readonly kind: OvertureTaskPlanDocumentKind;
+  readonly path: string;
+  readonly title: string;
+  readonly phaseId?: string;
+  readonly sliceId?: string;
+  readonly dependsOnDocumentIds: readonly string[];
+  readonly sourceArtifactIds: readonly string[];
+  readonly content: string;
+  readonly contentHash: string;
+  readonly version: number;
+}
+
+export interface OvertureTaskPlan {
+  readonly planId: string;
+  readonly runId: string;
+  readonly projectId: string;
+  readonly version: number;
+  readonly manifestHash: string;
+  readonly documents: readonly OvertureTaskPlanDocument[];
+  readonly status: "draft" | "review" | "accepted" | "superseded";
+}
 
 export interface OvertureRun {
   readonly runId: string;
@@ -117,6 +161,9 @@ export interface OvertureRun {
   readonly taskContractId?: string;
   readonly taskContractVersion?: number;
   readonly taskContractHash?: string;
+  readonly taskPlanId?: string;
+  readonly taskPlanVersion?: number;
+  readonly taskPlanManifestHash?: string;
   readonly version: number;
 }
 
@@ -147,17 +194,19 @@ export interface InvocationContext {
 - [ ] **Step 3: Write failing execution-context tests for the explicit phase.**
   Prove that `overture` context is project-scoped, has no Goal requirement, cannot carry Worker-only authority fields, and is not silently accepted as a `worker` context.
 - [ ] **Step 4: Implement the domain helpers and Zod schemas.**
-  Reuse the existing canonical Overture role list and hash helper. Keep `missionBundleId` required for existing Worker paths; add the explicit phase and enforce its meaning at the native admission boundary rather than using a fake Mission Bundle identity.
-- [ ] **Step 5: Run focused contract tests.**
+  Reuse the existing canonical Overture role list and hash helper. Keep `missionBundleId` required for existing Worker paths; add the explicit phase and enforce its meaning at the native admission boundary rather than using a fake Mission Bundle identity. Add the typed Task Contract plan reference (plan ID, version, manifest hash); keep legacy direct contracts readable during migration, but require this reference for every E6 Overture-created contract.
+- [ ] **Step 5: Extend `TaskContractSubstance` with the typed task-plan reference.**
+  The reference is `{ planId, version, manifestHash }`. It is required for E6-created Overture contracts and remains optional only for explicitly grandfathered legacy contracts during migration. Include it in canonical hashing, update/create/confirm tests, and reject a launch whose referenced plan is missing, superseded, or hash-mismatched.
+- [ ] **Step 6: Run focused contract tests.**
 
 ```bash
-npx vitest run packages/domain/src/overture-crew.test.ts packages/domain/src/execution-kernel.test.ts packages/contracts/src/overture-crew.test.ts
+npx vitest run packages/domain/src/overture-crew.test.ts packages/domain/src/execution-kernel.test.ts packages/contracts/src/overture-crew.test.ts packages/contracts/src/task-contract.test.ts
 ```
 
-- [ ] **Step 6: Commit.**
+- [ ] **Step 7: Commit.**
 
 ```bash
-git add packages/domain/src/overture-crew.ts packages/domain/src/overture-crew.test.ts packages/domain/src/execution-kernel.ts packages/domain/src/execution-kernel.test.ts packages/domain/src/index.ts packages/contracts/src/schemas/overture-crew.ts packages/contracts/src/overture-crew.test.ts packages/contracts/src/index.ts
+git add packages/domain/src/overture-crew.ts packages/domain/src/overture-crew.test.ts packages/domain/src/execution-kernel.ts packages/domain/src/execution-kernel.test.ts packages/domain/src/index.ts packages/contracts/src/schemas/overture-crew.ts packages/contracts/src/schemas/task-contract.ts packages/contracts/src/overture-crew.test.ts packages/contracts/src/task-contract.test.ts packages/contracts/src/index.ts
 git commit -m "feat(domain): define overture crew and artifact contracts"
 ```
 
@@ -166,7 +215,7 @@ git commit -m "feat(domain): define overture crew and artifact contracts"
 ### Task 2: Persist Overture Runs, Role Assignments, Artifacts, and Clarifications
 
 **Files:**
-- Create: `packages/persistence/migrations/0106_overture_crew_runs.sql`
+- Create: `packages/persistence/migrations/0107_overture_crew_runs.sql`
 - Create: `packages/persistence/src/overture-crew.ts`
 - Create: `packages/persistence/src/overture-crew.test.ts`
 - Create: `packages/persistence/src/overture-crew.integration.test.ts`
@@ -178,7 +227,9 @@ git commit -m "feat(domain): define overture crew and artifact contracts"
 - `overture_runs`: `run_id`, `conversation_id`, `project_id`, `state`, `selected_roles`, `task_contract_id`, `task_contract_version`, `task_contract_hash`, `version`, `created_at`, `updated_at`.
 - `overture_artifacts`: `artifact_id`, `run_id`, `project_id`, `role_id`, `kind`, `version`, `title`, `content`, `content_hash`, `evidence_references`, `status`, `created_at`.
 - `overture_clarifications`: `clarification_id`, `run_id`, `project_id`, `question`, `answer`, `state`, `command_id`, `created_at`, `answered_at`.
-- Foreign keys bind every row to the same project and run. Unique constraints prevent two active versions of the same role/kind artifact and two different results for one command ID.
+- `overture_task_plans`: `plan_id`, `run_id`, `project_id`, `version`, `manifest`, `manifest_hash`, `status`, `created_at`, `updated_at`.
+- `overture_task_plan_documents`: `document_id`, `plan_id`, `run_id`, `project_id`, `kind`, `path`, `title`, optional `phase_id`/`slice_id`, dependency IDs, source artifact IDs, content, content hash, version, and status.
+- Foreign keys bind every row to the same project and run. Unique constraints prevent two active versions of the same role/kind artifact, two different results for one command ID, and two documents with the same path in one plan version.
 - Append-only artifact and clarification history is preserved. Current state is read through a deterministic latest-version query.
 
 **Interfaces:**
@@ -190,13 +241,15 @@ export interface OvertureCrewStore {
   transitionRun(runId: string, projectId: string, expectedVersion: number, state: OvertureRunState, commandId: string): Promise<OvertureRun>;
   appendArtifact(input: OvertureArtifactInput, commandId: string): Promise<OvertureArtifact>;
   listArtifacts(runId: string, projectId: string): Promise<readonly OvertureArtifact[]>;
+  createTaskPlan(input: { runId: string; projectId: string; documents: readonly OvertureTaskPlanDocument[] }, commandId: string): Promise<OvertureTaskPlan>;
+  readTaskPlan(planId: string, projectId: string): Promise<OvertureTaskPlan>;
   recordClarification(input: ClarificationInput, commandId: string): Promise<Clarification>;
 }
 ```
 
 - [ ] **Step 1: Write failing unit tests for project-bound reads, idempotency, version conflicts, and append-only artifact revisions.**
 - [ ] **Step 2: Write failing PostgreSQL tests for migration shape, foreign keys, unique constraints, command replay, and cross-project denial.**
-- [ ] **Step 3: Add migration `0106_overture_crew_runs.sql` using the repository's migration style.**
+- [ ] **Step 3: Add migration `0107_overture_crew_runs.sql` using the repository's migration style.**
 - [ ] **Step 4: Implement transactional store functions with command receipts and stable hashes.**
   A repeated command with identical content returns the original result. Reusing a command ID with changed content fails. State transitions require the expected run version.
 - [ ] **Step 5: Add durable domain events and outbox rows for run creation, role activation, artifact append, clarification request, clarification answer, synthesis, and launch readiness.**
@@ -209,7 +262,7 @@ npx vitest run packages/persistence/src/overture-crew.test.ts packages/persisten
 - [ ] **Step 7: Commit.**
 
 ```bash
-git add packages/persistence/migrations/0106_overture_crew_runs.sql packages/persistence/src/overture-crew.ts packages/persistence/src/overture-crew.test.ts packages/persistence/src/overture-crew.integration.test.ts packages/persistence/src/index.ts packages/persistence/src/test-migrations.integration.test.ts
+git add packages/persistence/migrations/0107_overture_crew_runs.sql packages/persistence/src/overture-crew.ts packages/persistence/src/overture-crew.test.ts packages/persistence/src/overture-crew.integration.test.ts packages/persistence/src/index.ts packages/persistence/src/test-migrations.integration.test.ts
 git commit -m "feat(persistence): store overture runs and planning artifacts"
 ```
 
@@ -257,15 +310,17 @@ export interface OvertureCrewRuntime {
   A role that lacks required facts records a durable clarification request and leaves the run in `waiting_for_operator`; it must not fill required Task Contract fields with placeholders.
 - [ ] **Step 5: Implement role prompt composition and tool registration.**
   Use `createMaestroAgentRuntime` and the existing gateway/kernel path. Persist provider execution binding before presenting a role result. Keep tool output separate from the provider's final text.
-- [ ] **Step 6: Implement Task Editor synthesis through the existing Task Contract service.**
-  The tool may create or amend an awaiting-confirmation contract only. It may not confirm or launch it.
-- [ ] **Step 7: Run focused runtime and authority tests.**
+- [ ] **Step 6: Implement Task Editor synthesis through the existing Task Contract service and durable plan-set store.**
+  The Task Editor writes the phase/slice plan documents and manifest first, then creates or amends an awaiting-confirmation Task Contract containing the typed plan-set reference and hash. It may create or amend drafts only. It may not confirm, launch, create a Goal, create a Department Plan, create a Mission Bundle, or dispatch a Worker.
+- [ ] **Step 7: Remove or route the E1 direct drafting-tool path through Task Editor.**
+  Preserve E1's project/goal-less/authority guarantees and regression tests, but do not leave two independent contract creators. A goal-less conversation may trigger the bounded Overture service; only the Task Editor synthesis path may persist the plan-set reference and Task Contract revision.
+- [ ] **Step 8: Run focused runtime and authority tests.**
 
 ```bash
 npx vitest run packages/agent-runtime/src/overture-crew-runtime.test.ts apps/control-plane/src/overture-crew-tools.test.ts packages/agent-runtime/src/overture-drafting-tool.test.ts
 ```
 
-- [ ] **Step 8: Commit.**
+- [ ] **Step 9: Commit.**
 
 ```bash
 git add packages/agent-runtime/src/overture-role-prompts.ts packages/agent-runtime/src/overture-crew-runtime.ts packages/agent-runtime/src/overture-crew-runtime.test.ts packages/agent-runtime/src/overture-drafting-tool.ts packages/agent-runtime/src/index.ts apps/control-plane/src/overture-crew-tools.ts apps/control-plane/src/overture-crew-tools.test.ts
@@ -285,6 +340,7 @@ git commit -m "feat(agent-runtime): compose bounded overture crew roles"
 - Modify: `apps/control-plane/src/server.ts`
 - Modify: `apps/control-plane/src/composition/foundation-services.ts`
 - Modify: `packages/contracts/src/schemas/conversation.ts` or its current owning file
+- Modify: `packages/contracts/src/schemas/task-contract.ts` to carry the typed plan-set reference
 - Modify: `packages/api-client/src/client.ts`
 - Create: `packages/api-client/src/methods/overture.ts`
 - Create: `packages/api-client/src/methods/overture.test.ts`
@@ -297,6 +353,7 @@ export interface OvertureCrewService {
   answer(runId: string, input: { projectId: string; clarificationId: string; answer: string; commandId: string }, operator: OperatorContext): Promise<OvertureRun>;
   get(runId: string, projectId: string, operator: OperatorContext): Promise<OvertureRun>;
   listArtifacts(runId: string, projectId: string, operator: OperatorContext): Promise<readonly OvertureArtifact[]>;
+  getTaskPlan(planId: string, projectId: string, operator: OperatorContext): Promise<OvertureTaskPlan>;
 }
 ```
 
@@ -306,9 +363,9 @@ export interface OvertureCrewService {
   A vague request produces a real clarification event. A complete answer resumes the same run and does not create a second conversation or run.
 - [ ] **Step 3: Write failing route tests for project boundaries, operator role, idempotency, and stable error envelopes.**
 - [ ] **Step 4: Implement the service and route composition.**
-  The Conversation Service remains the user-facing stream. The Overture service owns Crew state and artifact reads. Concertmaster is the conversation coordinator; role runtimes are subordinate bounded invocations.
+  The Conversation Service remains the user-facing channel stream. The Overture service owns Crew state, role participation, artifact reads, and planning status. Concertmaster is the initial intake/lifecycle coordinator; role runtimes are subordinate bounded invocations whose visible messages and artifact events are attached to the same stream.
 - [ ] **Step 5: Add the API-client methods and Electron bridge entries.**
-  Expose only typed methods for starting a run, reading the run, listing artifacts, answering a clarification, and reading the linked Task Contract. Do not expose raw provider execution references as operator actions.
+  Expose only typed methods for starting a run, reading the run, listing artifacts, reading the phase/slice plan set (`getOvertureTaskPlan`), answering a clarification, and reading the linked Task Contract. Do not expose raw provider execution references, document paths, or downstream identity creation as operator actions.
 - [ ] **Step 6: Run focused Control Plane and API-client tests.**
 
 ```bash
@@ -342,24 +399,24 @@ git add apps/control-plane/src/overture-crew-service.ts apps/control-plane/src/o
 export type OvertureConversationApi = Pick<ApiClient,
   "createConversation" | "getConversation" | "listConversationEvents" |
   "sendConversationTurn" | "cancelConversation" | "startOvertureRun" |
-  "getOvertureRun" | "listOvertureArtifacts" | "answerOvertureClarification" |
+  "getOvertureRun" | "listOvertureArtifacts" | "getOvertureTaskPlan" | "answerOvertureClarification" |
   "getTaskContract" | "updateTaskContract" | "confirmTaskContract" | "launchTaskContract"
 >;
 
 export async function loadOvertureWorkspace(
   api: OvertureConversationApi,
   input: { conversationId: string; runId: string; projectId: string },
-): Promise<{ messages: readonly ConversationMessage[]; run: OvertureRun; artifacts: readonly OvertureArtifact[]; contract?: TaskContract }>;
+): Promise<{ messages: readonly ConversationMessage[]; run: OvertureRun; artifacts: readonly OvertureArtifact[]; taskPlan?: OvertureTaskPlan; contract?: TaskContract }>;
 ```
 
 - [ ] **Step 1: Write failing renderer tests for the complete operator journey.**
-  Start from a project with no Goal, send “plan this”, display the real Concertmaster response, display role activity and artifact revisions, show clarification questions, and continue the same conversation.
+  Start from a project with no Goal, send “plan this”, display the real Concertmaster intake response, transition into the same channel-shaped stream with visible Overture role activity and artifact revisions, show clarification questions, and continue the same conversation.
 - [ ] **Step 2: Write failing tests for stale and cross-project workspace data.**
   A project change clears the workspace. A run or artifact from another project is rejected. Loading and retrying cannot leave a previous artifact or contract visible as current.
 - [ ] **Step 3: Write failing tests for Task Contract review and launch.**
   The UI displays version and content hash, uses the server update response, requires exact confirmation, and performs launch as a separate action. It must not expose Head, Council, Department Plan, or Mission Bundle identity fields as required inputs.
 - [ ] **Step 4: Implement the Home conversation and artifact workspace.**
-  Keep one Concertmaster transcript as the main interaction. Add progressive disclosure for role activity, artifact cards, source references, diffs, clarification state, contract state, and launch readiness.
+  Keep one channel-shaped transcript as the main interaction. Concertmaster and Overture roles are visibly distinct participants in that stream. Add progressive disclosure panels for role activity, artifact cards, source references, phase/slice plan status, material diffs, clarification state, contract state, and launch readiness; panels must not create a second authority or chat path. The operator is not asked to author the execution plan in a JSON form; the UI shows the generated plan-set summary and lets the operator request revisions in the channel.
 - [ ] **Step 5: Reduce Planning to a durable post-launch read surface.**
   Keep E5's planning reads useful, but remove manual identity entry as the normal route. When a launched Goal has a durable planning record, derive all IDs from server responses and show unavailable or blocked states honestly.
 - [ ] **Step 6: Run focused Carnegie tests and build.**
@@ -397,8 +454,8 @@ git commit -m "feat(carnegie): show artifact-backed overture planning"
 
 **Automatic sequence:**
 
-1. Exact Task Contract launch creates or attaches the durable Goal using the contract ID and project boundary.
-2. The orchestrator reads `expectedGroups` and `expectedDepartments` from the launched contract and selects the smallest valid Head set.
+1. Exact Task Contract launch creates or attaches the durable Goal using the contract ID, approved task-plan reference/hash, and project boundary.
+2. The orchestrator validates that the referenced phase/slice plan set is the exact approved version, then reads `expectedGroups` and `expectedDepartments` from the launched contract and selects the smallest valid Head set.
 3. Heads are activated through the existing durable reservation and native admission path.
 4. Each Head produces an independent sealed brief. Missing evidence may spawn a read-only Scout Worker only when the existing policy allows it.
 5. Council reveal and decision happen when required briefs are present or the bounded deadline policy resolves a timeout.
@@ -445,9 +502,9 @@ git commit -m "feat(control-plane): start automatic goal orchestration on launch
 - Modify: `docs/ko/02-hierarchical-orchestration.md`
 
 - [ ] **Step 1: Write a real-PostgreSQL scenario for a non-destructive planning request.**
-  The scenario must record the goal-less conversation, selected Overture roles, at least one artifact per active role, a clarification round when needed, Task Contract versions and hashes, exact confirmation, launch, automatic Head/Council/Plan/Bundle progression, and the first Worker admission.
+  The scenario must record the goal-less conversation, selected Overture roles, at least one artifact per active role, a phase/slice task-plan set with document and manifest hashes, a clarification round when needed, Task Contract versions and hashes bound to that plan set, exact confirmation, launch, automatic Head/Council/Plan/Bundle progression, and the first Worker admission.
 - [ ] **Step 2: Add negative cases.**
-  Verify no execution before launch, no cross-project artifact access, no unknown role, no stale artifact display, no duplicate launch effect, no duplicate provider spawn, and no critical action bypass.
+  Verify no execution before launch, no cross-project artifact access, no unknown role, no stale artifact display, no tampered or mismatched plan manifest, no duplicate launch effect, no duplicate provider spawn, and no critical action bypass.
 - [ ] **Step 3: Run focused integration coverage with disposable PostgreSQL and the fake provider.**
 
 ```bash
@@ -467,6 +524,7 @@ cd apps/carnegie && npm run build
 - [ ] **Step 6: Perform an independent no-edit review against this plan.**
   The reviewer must inspect role composition, artifact durability, authority boundaries, exact launch binding, automatic progression, restart behavior, project scoping, and the end-to-end scenario.
 - [ ] **Step 7: Update capability and status documents only with evidence-backed claims.**
+  This update must also correct the stale Goal-first wording in `docs/02-hierarchical-orchestration.md` and `roadmap/act-1-foundation/phase-02-hierarchical-execution.md`: Overture runs in a project-scoped goal-less conversation and the Goal is created only after exact Task Contract launch. Record that E5's checkbox/manual-ID Overture screen is superseded by E6's channel/artifact model, and that E1's direct drafting tool is subsumed by the Task Editor role.
 - [ ] **Step 8: Commit.**
 
 ```bash
@@ -481,8 +539,9 @@ E6 is complete only when all of these are true:
 - A project-scoped conversation can start a real Overture Run without a selected Goal.
 - Concertmaster activates the minimum required roles and each active role produces a durable, scoped artifact.
 - Clarification is conversational and resumable. Missing facts are never replaced with placeholder values.
-- Task Editor produces one versioned Task Contract tied to its source artifacts.
-- The operator sees and confirms the exact Task Contract version and content hash.
+- Task Editor produces a versioned phase/slice task-plan set tied to its source artifacts.
+- Task Editor produces one versioned Task Contract that references the exact plan-set manifest and content hash.
+- The operator sees the concise summary and confirms the exact Task Contract version/content hash; the full plan remains durable agent-facing state.
 - No Goal or execution state advances before launch.
 - Launch automatically schedules the next orchestration stage without manual Department or Worker identity entry.
 - Restart and outbox replay do not duplicate durable state or provider effects.
@@ -497,7 +556,10 @@ E6 is complete only when all of these are true:
 - [ ] No task creates a second Task Contract or goal-less conversation path.
 - [ ] No task uses `missionBundleId` as a hidden Overture authority substitute.
 - [ ] Every role output has a durable artifact and content hash.
+- [ ] The Task Editor plan set supports multiple phase/slice documents, dependencies, document hashes, and a manifest hash.
+- [ ] The typed Task Contract references the exact approved plan-set version without embedding the full documents as a giant JSON field.
 - [ ] Every mutation has project scope, command identity, and a retry rule.
 - [ ] Every automatic transition has a durable event and recovery path.
 - [ ] Every operator-visible success has a server or provider proof.
+- [ ] The channel remains the primary interaction surface; panels are projections/actions linked to channel messages and durable Overture state.
 - [ ] Every live acceptance claim has IDs, cursors, and saved evidence.
