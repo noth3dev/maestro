@@ -47,7 +47,7 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
       case "luthiery": return <Luthiery />;
       case "arrangements": return <Arrangements />;
       case "flashmob": return <Flashmob onOpenSession={() => setView("flashmobSession")} />;
-      case "flashmobSession": return <FlashmobSession onBack={() => setView("flashmob")} onPromote={() => setView("dashboard")} />;
+      case "flashmobSession": return <FlashmobSession onBack={() => setView("flashmob")} />;
     }
   })();
 

@@ -24,8 +24,6 @@ const homeTitles = [
   "what should the concertmaster take on",
 ];
 
-const suggestions = ["fix the pricing page copy", "audit the auth flow for gaps", "clean up legacy docs"];
-
 type DraftForm = {
   desiredOutcome: string;
   successCriteria: string;
@@ -238,6 +236,12 @@ export function Home({
     }
   };
 
+  const submitComposer = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (isFlashmob) return;
+    void submitBrief(event);
+  };
+
   return (
     <div className="home-main">
       <div className="home-title">{title}</div>
@@ -257,11 +261,18 @@ export function Home({
           {cancelBusy ? "cancelling…" : "cancel turn"}
         </button>
       </section>}
-      <form className={`home-composer${isFlashmob ? " mode-flashmob" : ""}`} onSubmit={(event) => void submitBrief(event)}>
+      <form className={`home-composer${isFlashmob ? " mode-flashmob" : ""}`} onSubmit={submitComposer}>
         <label className="sr-only" htmlFor="home-brief">
           Brief the Concertmaster
         </label>
-        <textarea id="home-brief" placeholder="brief the concertmaster" value={text} onChange={(event) => setText(event.target.value)} />
+        <textarea
+          id="home-brief"
+          placeholder={isFlashmob ? "Flashmob is deferred until its durable backend contract exists." : "brief the concertmaster"}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          disabled={isFlashmob || busy}
+          aria-describedby={isFlashmob ? "home-flashmob-hint" : undefined}
+        />
         <div className="home-composer-row">
           <div className="pill-toggle" role="group" aria-label="Home mode">
             <button type="button" className={mode === "maestro" ? "on" : ""} onClick={() => onModeChange("maestro")}>
@@ -274,7 +285,7 @@ export function Home({
           <button
             className={`btn btn-primary btn-sm home-send-btn${isFlashmob ? " mode-flashmob" : ""}`}
             style={{ marginLeft: "auto" }}
-            disabled={busy || text.trim() === ""}
+            disabled={isFlashmob || busy || text.trim() === ""}
             type="submit"
           >
             {busy && draft === undefined ? "saving…" : "send"} <Icon name="send" style={{ width: 12, height: 12 }} />
@@ -418,13 +429,14 @@ export function Home({
       )}
 
       {isFlashmob && draft === undefined && (
-        <div className="home-suggestions show">
-          {suggestions.map((suggestion) => (
-            <button key={suggestion} className="chip" type="button" onClick={() => setText(suggestion)}>
-              {suggestion}
-            </button>
-          ))}
-        </div>
+        <section className="home-deferred-state" id="home-flashmob-hint" aria-label="Flashmob deferred state">
+          <span className="badge badge-slate">out-of-scope</span>
+          <h2>Flashmob is deferred</h2>
+          <p>
+            This mode cannot create a session, Worker, Goal, or progress locally. Use maestro for the live Concertmaster path.
+          </p>
+          <p className="form-hint">Flashmob can re-enter after Act 1 certification and a durable Act 2 backend contract.</p>
+        </section>
       )}
     </div>
   );

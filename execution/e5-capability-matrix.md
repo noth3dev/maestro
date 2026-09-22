@@ -85,7 +85,9 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Luthiery / Flashmob honesty (Task 12)
 
-**Status: Likely already substantially closed**, based on `operations/findings.md`'s 2026-09-21 entries ("luthiery honestly reported that the control plane does not durably track skill/tool registries") from a separate live dogfood session — re-verify rather than trust this note, but do not treat Task 12 as untouched.
+**Luthiery — Status: Backend-blocked.** `apps/carnegie/src/views/Luthiery.tsx` now renders no local registry rows and exposes only a dependency view. The view names the missing durable `listSkills`/`getSkill` and `listTools`/`getTool` reads, certification/rejection/hash/tag records, project-scoped usage/reuse reads, and authority-checked mutations. Disabled buttons cannot create or certify local records. Re-entry requires the Phase 9 control-plane, typed API-client, Electron-bridge, and durable evidence contracts described in `roadmap/act-1-foundation/phase-09-luthiery.md`. Evidence: `apps/carnegie/src/views/Luthiery.test.tsx` (2/2 passing in the Task 12 focused run).
+
+**Flashmob/Vanguard — Status: Out-of-scope.** Act 2 starts only after Act 1 certification (`roadmap/act-2-flashmob/README.md`); this repository has no durable pre-Goal Flashmob session/run, provenance, bounded execution, or idempotent promotion-to-Goal contract. `Flashmob.tsx` and `FlashmobSession.tsx` therefore render explicit deferred/dependency states only: no sample Worker, Goal, progress, completion, or local promotion state is shown; promotion and composer controls remain disabled. Home's Flashmob mode is likewise non-submitting and points operators to the live Maestro path. Evidence: `apps/carnegie/src/views/Flashmob.test.tsx` (3/3) and `apps/carnegie/src/views/Home.test.tsx` (2/2) in the Task 12 focused run. Re-entry requires the Act 2 roadmap gate plus the missing typed Control Plane/API/bridge contracts and durable evidence linkage.
 
 ## Accessibility / layout (Task 13)
 

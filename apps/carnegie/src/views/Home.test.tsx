@@ -17,4 +17,14 @@ describe("Home Concertmaster conversation", () => {
     expect(html).not.toContain("retry turn");
     expect(html).not.toContain("cancel turn");
   });
+
+  it("keeps the deferred Flashmob composer from submitting", () => {
+    const html = renderToStaticMarkup(<Home onNavigate={vi.fn()} mode="flashmob" onModeChange={vi.fn()} />);
+
+    expect(html).toContain("Flashmob is deferred");
+    expect(html).toMatch(/textarea[^>]*disabled/);
+    expect(html).toMatch(/button[^>]*disabled[^>]*>send/);
+    expect(html).not.toContain("fix the pricing page copy");
+  });
+
 });

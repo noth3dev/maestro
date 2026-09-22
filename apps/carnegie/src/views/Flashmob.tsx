@@ -1,38 +1,34 @@
-import { Icon } from "../icons.js";
 
 export function Flashmob({ onOpenSession }: { onOpenSession: () => void }) {
   return (
     <div className="workspace-view">
       <header className="workspace-view-head">
-        <div className="dash-kicker">quick actions</div>
+        <div className="dash-kicker">Act 2 · deferred</div>
         <h1 className="dash-title">flashmob</h1>
-        <p className="dash-sub">Fast lane for light tasks. This preview is not wired to a live backend yet.</p>
+        <p className="dash-sub">Flashmob/Vanguard is a bounded fast path planned for Act 2, not a live Carnegie capability.</p>
       </header>
-      <div className="page-body workspace-view-body">
-        <div className="fm-session" onClick={onOpenSession}>
-          <div className="fm-session-icon"><Icon name="message-square" /></div>
-          <div className="fm-session-body">
-            <div className="fm-session-title">fix the pricing page copy</div>
-            <div className="fm-session-sub">claude-haiku-4.5 · active · started 4 min ago</div>
+      <div className="page-body workspace-view-body" data-capability-status="out-of-scope">
+        <section className="capability-dependency" aria-labelledby="flashmob-deferred-title">
+          <div className="capability-status-row">
+            <span className="badge badge-slate">out-of-scope</span>
+            <span className="badge badge-rust">backend-blocked</span>
           </div>
-          <span className="badge badge-olive">active</span>
-        </div>
-        <div className="fm-session">
-          <div className="fm-session-icon"><Icon name="message-square" /></div>
-          <div className="fm-session-body">
-            <div className="fm-session-title">summarize competitor pricing pages</div>
-            <div className="fm-session-sub">claude-haiku-4.5 · done · 1 hour ago</div>
-          </div>
-          <span className="badge badge-slate">done</span>
-        </div>
-        <div className="fm-session">
-          <div className="fm-session-icon"><Icon name="arrow-up-right" /></div>
-          <div className="fm-session-body">
-            <div className="fm-session-title">auth flow security audit</div>
-            <div className="fm-session-sub">scope grew beyond grant · promoted to goal "billing refactor"</div>
-          </div>
-          <span className="badge badge-ochre">promoted</span>
-        </div>
+          <h2 id="flashmob-deferred-title">Flashmob is deferred</h2>
+          <p>
+            Act 2 starts only after Act 1 is certified and the project owner opens the roadmap gate. No sample session is a live run.
+          </p>
+          <h3>Missing durable contract</h3>
+          <ul>
+            <li>project-scoped Flashmob session/run records with provenance and evidence references</li>
+            <li>bounded read, send, observe, and cancellation methods with idempotency, lease, and authority checks</li>
+            <li>an explicit promotion command that returns a real Goal or Task Contract ID and carries evidence forward</li>
+          </ul>
+          <h3>Re-entry condition</h3>
+          <p>
+            Re-enter when the Act 2 gate is opened and those Control Plane, API client, Electron bridge, and durable evidence contracts exist.
+          </p>
+          <button type="button" className="btn btn-sm" onClick={onOpenSession}>view deferred session contract</button>
+        </section>
       </div>
     </div>
   );
