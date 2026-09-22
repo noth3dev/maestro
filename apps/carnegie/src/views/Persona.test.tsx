@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   assertValidImprovementCandidateInput,
   improvementCandidateScenarioSuiteHash,
@@ -6,6 +8,8 @@ import {
   type ImprovementCandidateInput,
 } from "@maestro/domain";
 import { buildPersonaCandidateInput } from "./Persona.js";
+import { PersonaPanel } from "./panels/persona/PersonaPanel.js";
+import type { PersonaInspection } from "@maestro/contracts";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -56,5 +60,28 @@ describe("Persona candidate editing", () => {
     expect(edited).not.toHaveProperty("candidateId");
     expect(edited).not.toHaveProperty("contentHash");
     expect(edited).not.toHaveProperty("state");
+  });
+});
+
+
+describe("Persona server state labels", () => {
+  it("keeps the active profile and candidate proposal visibly distinct", () => {
+    const persisted = materializeImprovementCandidate(candidateInput(), {
+      candidateId, version: 2, parentCandidateId: null, authorId: "operator", sessionRef: "session:persona", createdAt: "2026-09-16T00:00:00.000Z",
+    });
+    const model = {
+      roleId: "concertmaster", taskClass: "implementation", version: 7,
+      profile: { agreeableness: 0.4, extraversion: 0.4, imagination: 0.4, realism: 0.4, conscientiousness: 0.4, caution: 0.4, initiative: 0.4, empathy: 0.4, adaptability: 0.4, sociability: 0.4 },
+      coreIdentity: { mission: "deliver truthful work", authority: ["coordinate"], truthfulness: "report evidence", safety: "escalate risk", prohibitedBehavior: ["invent evidence"] },
+      taskClassAdjustment: { roleId: "concertmaster", taskClass: "implementation", version: 2, delta: {}, reason: "implementation" },
+      missionOverlay: {}, proposalTemplate: candidateInput(),
+      candidates: [{ candidate: persisted, candidateId, version: 2, state: "candidate", changedAxes: ["caution"], decision: "pending", invalidated: false }], rollouts: [],
+    } satisfies PersonaInspection;
+    const html = renderToStaticMarkup(<PersonaPanel model={model} expanded />);
+    expect(html).toContain("active persona");
+    expect(html).toContain("learned profile version 7");
+    expect(html).toContain("candidate proposal");
+    expect(html).toContain("rationale: Repeated evidence supports a small caution adjustment.");
+    expect(html).not.toContain("active persona: version 2");
   });
 });

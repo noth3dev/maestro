@@ -17,13 +17,29 @@ export type PersonaInspectionModel = PersonaInspection;
 const DISTINCTIVE_AXES: readonly PersonaAxis[] = ["caution", "initiative", "conscientiousness"];
 const axisLabel = (axis: string) => axis.replaceAll("_", " ");
 
-export function PersonaPanel({ model, expanded = false, error, onPropose }: { model: PersonaInspectionModel; expanded?: boolean; error?: string | undefined; onPropose?: (axis: PersonaAxis, value: number) => void }) {
+export function PersonaPanel({
+  model,
+  expanded = false,
+  error,
+  onPropose,
+  onSubmitProposal,
+  onSaveCandidateEdit,
+  mutationBusy = false,
+}: {
+  model: PersonaInspectionModel;
+  expanded?: boolean;
+  error?: string | undefined;
+  onPropose?: (axis: PersonaAxis, value: number) => void;
+  onSubmitProposal?: (() => void) | undefined;
+  onSaveCandidateEdit?: (() => void) | undefined;
+  mutationBusy?: boolean;
+}) {
   const axes = expanded ? PERSONA_AXES : DISTINCTIVE_AXES;
   return (
     <section className="persona-panel" aria-labelledby="persona-title">
       <header className="persona-panel-head">
         <div><div className="dash-title" id="persona-title">persona</div><div className="dash-sub">{model.roleId} · {model.taskClass}</div></div>
-        {expanded && <span className="badge">learned version {model.version}</span>}
+        <div><span className="badge badge-olive">active persona</span>{expanded && <span className="badge">learned profile version {model.version}</span>}</div>
       </header>
       {error !== undefined && <div className="alert alert-warning" role="alert"><strong>server rejected proposal</strong>: {error}</div>}
 
@@ -52,7 +68,16 @@ export function PersonaPanel({ model, expanded = false, error, onPropose }: { mo
         <h3>active mission overlay</h3><p>{Object.keys(model.missionOverlay).length === 0 ? "none" : Object.entries(model.missionOverlay).map(([axis, delta]) => `${axisLabel(axis)} ${delta}`).join(", ")}</p>
       </div>}
 
-      {expanded && model.candidates.length > 0 && <div className="persona-candidates"><h3>candidate proposals</h3>{model.candidates.map((candidate) => <div key={`${candidate.candidateId}:${candidate.version}`} data-candidate-id={candidate.candidateId}><strong>version {candidate.version}</strong> · {candidate.state} · {candidate.changedAxes.join(", ")} {candidate.invalidated && <span>— pending decision invalidated by version {candidate.version}</span>}</div>)}</div>}
+      {expanded && model.candidates.length > 0 && <div className="persona-candidates"><h3>candidate proposals</h3>{model.candidates.map((candidate) => {
+        const activeRollout = model.rollouts.find((rollout) => rollout.status === "active" && rollout.activeCandidateId === candidate.candidateId);
+        return <div key={`${candidate.candidateId}:${candidate.version}`} data-candidate-id={candidate.candidateId}>
+          <strong>candidate proposal · version {candidate.version}</strong> · {candidate.state} · {candidate.changedAxes.join(", ")} · decision: {candidate.decision} {activeRollout !== undefined && <span>— server-marked active rollout</span>}{candidate.invalidated && <span>— pending decision invalidated by version {candidate.version}</span>}
+          {candidate.candidate !== undefined ? <><p>rationale: {candidate.candidate.evidencePattern}</p><p>predicted effect: {candidate.candidate.predictedEffect}</p></> : <p>rationale: unavailable in this read projection</p>}
+        </div>;
+      })}</div>}
+
+      {onSubmitProposal !== undefined && <div className="persona-actions"><button type="button" className="btn btn-primary" disabled={mutationBusy} onClick={onSubmitProposal}>{mutationBusy ? "proposing…" : "propose persona candidate"}</button></div>}
+      {onSaveCandidateEdit !== undefined && <div className="persona-actions"><button type="button" className="btn btn-primary" disabled={mutationBusy} onClick={onSaveCandidateEdit}>{mutationBusy ? "saving…" : "save candidate edit"}</button></div>}
 
       {expanded && model.rollouts.length > 0 && <div className="persona-rollbacks"><h3>rollout history</h3>{model.rollouts.map((rollout) => <article key={rollout.rolloutId} data-rollout-id={rollout.rolloutId}><strong>{rollout.status}</strong> · active {rollout.activeCandidateId} v{rollout.activeVersion}<p>rollback target: {rollout.rollbackTarget.candidateId} v{rollout.rollbackTarget.version} ({rollout.rollbackTarget.contentHash})</p><ul>{rollout.evidence.map((entry) => <li key={entry.evidenceId}>{entry.kind}: {entry.evidenceId}</li>)}</ul></article>)}</div>}
     </section>

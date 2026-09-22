@@ -16,11 +16,12 @@ function CandidateItem({ candidate }: { candidate: ArrangementCandidate }) {
         <div className="arr-meta">{candidate.kind} · {candidate.state} · v{candidate.version}</div>
         <div className="arr-meta">target: {candidate.target.roleId ?? candidate.target.routingTarget ?? "unscoped"}{candidate.target.taskClass === undefined ? "" : ` / ${candidate.target.taskClass}`}</div>
         <div className="arr-meta">content hash: {candidate.contentHash}</div>
-        {candidate.evaluation !== null && <div className="arr-meta">evaluation: replay {candidate.evaluation.stages.replay} · shadow {candidate.evaluation.stages.shadow} · synthetic {candidate.evaluation.stages.synthetic}</div>}
+        <div className="arr-meta">source evidence: {candidate.sourceEvidenceIds.length === 0 ? "none" : candidate.sourceEvidenceIds.join(", ")}</div>
+        {candidate.evaluation !== null && <><div className="arr-meta">evaluation hash: {candidate.evaluation.evaluationHash}</div><div className="arr-meta">evaluation: replay {candidate.evaluation.stages.replay} · shadow {candidate.evaluation.stages.shadow} · synthetic {candidate.evaluation.stages.synthetic}</div></>}
         {candidate.evaluation?.metricDeltas.map((metric) => (
           <div key={metric.name} className="arr-meta">{metric.name}: {metric.baseline} → {metric.candidate} ({metric.delta >= 0 ? "+" : ""}{metric.delta})</div>
         ))}
-        {candidate.rollout !== null && <div className="arr-meta">rollout: {candidate.rollout.status} · active v{candidate.rollout.activeVersion}</div>}
+        {candidate.rollout !== null && <div className="arr-meta">rollout: {candidate.rollout.status} · active v{candidate.rollout.activeVersion} · hash {candidate.rollout.contentHash}</div>}
       </div>
     </div>
   );
@@ -33,6 +34,8 @@ function CouncilItem({ entry }: { entry: ArrangementCouncil }) {
       <div className="arr-body">
         <div className="arr-title">{entry.finalVerdict} · round {entry.roundId}</div>
         <div className="arr-meta">{entry.question} · {entry.reviewerCount} reviewers</div>
+        <div className="arr-meta">Council: {entry.sameModelOnly ? "same model only" : "independent models"} · {entry.escalated ? "escalated" : "not escalated"}</div>
+        {entry.dissentNotes.length > 0 && <div className="arr-meta">dissent: {entry.dissentNotes.join(" · ")}</div>}
         {entry.judgments.map((judgment, index) => (
           <div key={`${judgment.modelProvider}/${judgment.modelId}:${index}`} className="arr-meta">{judgment.modelProvider}/{judgment.modelId} · {judgment.verdict} · {judgment.reasoning}</div>
         ))}
@@ -54,10 +57,10 @@ function NegativeEvidenceItem({ entry }: { entry: ArrangementNegativeEvidence })
   );
 }
 
-export function Arrangements() {
+export function Arrangements({ initialTab = "active" }: { initialTab?: ArrangementTab } = {}) {
   const { config } = useConnection();
   const { arrangements, loading, error } = useGoalArrangements();
-  const [tab, setTab] = useState<ArrangementTab>("active");
+  const [tab, setTab] = useState<ArrangementTab>(initialTab);
 
   if (config === undefined) return <EmptyState />;
   const items = arrangements === undefined ? [] : arrangements[tab];
@@ -68,6 +71,7 @@ export function Arrangements() {
         <div className="dash-kicker">act 3</div>
         <h1 className="dash-title">Arrangements</h1>
         <p className="dash-sub">Verified improvement state from durable candidates, Encore Council judgments, and bounded rollouts.</p>
+        <span className="badge badge-slate">Act 3 read-only</span>
       </header>
       <div className="page-tabs">
         {(["active", "candidates", "encoreCouncil", "negativeEvidence"] as const).map((name) => (
