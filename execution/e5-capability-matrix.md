@@ -9,7 +9,7 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 - **Backend-blocked** — no valid server contract/durable source of truth; no fake action is shown.
 - **Out-of-scope** — excluded by an explicit roadmap gate.
 
-**Not attempted this session:** any live Electron/Playwright/real-provider verification. Current checks confirm `MAESTRO_TEST_DATABASE_URL` is empty; Docker is available but only unrelated Supabase containers are running; no Control Plane/provider is available. The Electron process is present, but no live E5 path was exercised. Every status below remains from static code reading and `vitest`/`tsc -b`, never a live run. Do not upgrade any row to `Live` from this document alone.
+**Current verification state (2026-09-23):** Real Electron/CDP startup, Carnegie Playwright, and radial smoke were attempted. Carnegie builds and CDP startup pass, but the existing embedded PGlite database fails at local bootstrap with a mutex timeout; no Control Plane, Model Gateway, provider, or durable project flow was available. Task 14 is recorded as `Backend-blocked` with redacted evidence in `execution/e5-live-evidence/README.md`; no row is upgraded to `Live` from unit or renderer tests alone.
 
 ---
 
@@ -91,21 +91,20 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Accessibility / layout (Task 13)
 
-**Status: Partial infrastructure exists.** Per `roadmap/act-1-foundation/phase-08-hardening-release-certification.md`, Carnegie already has `axe-core`, `@playwright/test`, `playwright.config.ts`, and `src/accessibility.playwright.ts` from Plan 7 §S8 — reuse it, do not reinstall. `apps/carnegie/tests/e5-a11y.spec.ts` and `e5-live-acceptance.spec.ts` (Task 13/14's deliverables) do not exist yet.
+**Status: Partial infrastructure exists.** Carnegie now has the Task 13 semantic/responsive checks and CDP-gated live specs in `apps/carnegie/src/task13-a11y.test.ts`, `apps/carnegie/tests/e5-a11y.spec.ts`, and `apps/carnegie/tests/e5-live-acceptance.spec.ts`. Focused Vitest passed 7 files / 34 tests; changed-file ESLint, root/Carnegie builds, exact Carnegie Playwright (4 passed / 5 designed skips), and radial smoke passed. Real-CDP a11y execution reached the recovery renderer but was backend-blocked; no browser success is claimed for unavailable backend routes.
 
 ## Tasks 14–15 (live project progression, final gate)
 
-**Not started, and not attemptable from this sandbox** — no PostgreSQL, no Docker, no running Control Plane, no configured model provider. These require the user's local dev environment.
+**Attempted, not complete.** Task 14 reached the real Electron/CDP boundary and is `Backend-blocked` at existing PGlite bootstrap. Task 15 builds, Playwright, smoke, secret scans, and diff checks passed; the unrestricted full suite requires real PostgreSQL and remains open after the disposable PGlite substitute produced protocol/timeouts. See the dated entries below and `execution/PENDING_LIVE_CHECKS.md`.
 
 ---
 
 ## Immediate next steps for whoever picks this up
 
-1. **Build Task 1.5 (zero-config local bootstrap)** — **partial:** `resolveLocalConnection` is reached through `initializeCarnegieConnection`, and startup progress reaches the renderer. Live first-run acceptance still requires Docker or packaged local binaries; no live auto-bootstrap claim is made.
-2. ~~Wire `getConversation`/`cancelConversation`/`listConversationEvents` into `Home.tsx`~~ — **done**, per `roadmap/act-1-foundation/active/operations/progress.md`'s Task 3 checkpoints (`conversation-data.ts` added, Home reloads durable conversation events, draft/confirmed/launched/rejected phase labels derive from real server state). Re-verify current HEAD before assuming Task 3 is fully closed — a live Electron attempt on 2026-09-21 reached CDP but failed on `Control plane request failed` for lack of a reachable Control Plane (see Task 1.5's rationale).
-3. Verify the resolved Task 5 direction against the actual route code, then build the read-only Department Plan / Mission Bundle panel (see above) — this unblocks Task 6, since `spawnWorker` needs the real `councilId`/`departmentId`/`itemId` a resolved Mission Bundle carries.
-4. `views/Workers.tsx` (Task 6) is the single highest-value missing screen for an end-to-end run, once Task 5's question is resolved.
-5. Read `lib/inbox-data.ts` in full to confirm/correct the Task 8 approval-routing note above before building a separate `Approvals.tsx`.
+1. Restore a real PostgreSQL endpoint for the existing local session or provide the packaged Control Plane/database path; do not reset or rotate credentials as a shortcut.
+2. Re-run Task 14 against the real Control Plane and configured provider, using the bounded no-effect scenario and recording only real durable IDs/evidence.
+3. Re-run Task 15's unrestricted `npm test` against real PostgreSQL, then repeat the independent review and secret/artifact checks.
+4. Keep E6 gated until the E5 completion criteria pass; do not start Overture Crew runtime work from the backend-blocked UI evidence.
 
 ## Bridge duplication risk (flagged during this session's plan review, still unresolved)
 
