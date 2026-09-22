@@ -69,8 +69,10 @@ async function createCertificates(root) {
 }
 
 function incidentEnvelope(secret) {
-  const issuedAt = new Date().toISOString();
-  const observedAt = new Date(Date.now() - 1000).toISOString();
+  // Keep both timestamps behind the receipt clock so millisecond clock adjustments cannot make a
+  // freshly generated fixture fail its own future-timestamp check.
+  const issuedAt = new Date(Date.now() - 1000).toISOString();
+  const observedAt = new Date(Date.now() - 2000).toISOString();
   const identity = { affectedComponent: "control-plane", source: "phase4-watchdog", evidence: ["control plane unavailable after restart"].map((value) => value.trim().toLowerCase().replace(/\s+/g, " ")).sort() };
   const signal = {
     incidentFingerprint: createHash("sha256").update(canonicalJson(identity)).digest("hex"),
