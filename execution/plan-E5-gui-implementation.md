@@ -963,6 +963,8 @@ export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovemen
 
 ## Task 13: Accessibility, visual polish, responsive behavior, and window-scale verification
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `fa4a4454` (RED checks) and `8e9f2ed2` (GREEN). Focused coverage passed 7 files / 34 tests; changed-file ESLint and `git diff --check` passed; Electron radial smoke passed. Playwright browser collection is blocked by missing `@playwright/test`, and the full Carnegie build retains the documented baseline dependency/type errors; no browser evidence is fabricated. This does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/styles/components.css`
 - Modify: `apps/carnegie/src/styles/index.css`
