@@ -1,22 +1,24 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Icon } from "../icons.js";
+import React, { useEffect, useState } from "react";
 import { EmptyState } from "../components/EmptyState.js";
 import { useConnection } from "../connection.js";
 import { useGoalDetail } from "../useGoalDetail.js";
-import { createInboxApprovalExpiry, loadInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
+import { useGoals } from "../goals.js";
 import type { InboxRead } from "@maestro/api-client";
+import type { CapabilitySession } from "@maestro/contracts";
 import type { ViewName } from "../views.js";
+import { Approvals, type WorkerDecisionProjection } from "./Approvals.js";
+import { loadInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
+import { groupInboxItems, requestCriticalAction, selectFullAccessMode, type ApprovalDiscussionProjection } from "../lib/approval-data.js";
 
 export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) {
   const { config } = useConnection();
+  const { selectedGoalId } = useGoals();
   const { detail, loading: detailLoading, error: detailError } = useGoalDetail();
   const [inbox, setInbox] = useState<InboxRead | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [busyId, setBusyId] = useState<string | undefined>(undefined);
-  const [discussionId, setDiscussionId] = useState<string | undefined>(undefined);
-  const [discussionText, setDiscussionText] = useState("");
-  const approvalExpiry = useRef(createInboxApprovalExpiry()).current;
+  const [discussion, setDiscussion] = useState<ApprovalDiscussionProjection[]>([]);
+  const [fullAccessSession, setFullAccessSession] = useState<CapabilitySession | undefined>(undefined);
 
   const refresh = () => {
     if (config === undefined) return;
@@ -30,106 +32,82 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
 
   useEffect(refresh, [config]);
 
-  const approve = async (item: InboxRead["items"][number]) => {
-    if (busyId !== undefined) return;
-    setBusyId(item.decisionId);
+  const approve = async (item: InboxRead["items"][number], expiresAt: string) => {
+    if (config === undefined) return;
     setError(undefined);
-    try {
-      await approveInboxItem(window.maestro.api, item, approvalExpiry(item), item.commandId);
-      window.dispatchEvent(new Event("maestro:inbox-updated"));
-      refresh();
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Could not approve action");
-    } finally { setBusyId(undefined); }
+    await approveInboxItem(window.maestro.api, item, expiresAt);
+    window.dispatchEvent(new Event("maestro:inbox-updated"));
+    refresh();
   };
 
   const deny = async (item: InboxRead["items"][number]) => {
-    if (busyId !== undefined) return;
-    setBusyId(item.decisionId);
     setError(undefined);
-    try {
-      await denyInboxItem(window.maestro.api, item, item.commandId);
-      window.dispatchEvent(new Event("maestro:inbox-updated"));
-      refresh();
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Could not deny action");
-    } finally { setBusyId(undefined); }
+    await denyInboxItem(window.maestro.api, item);
+    window.dispatchEvent(new Event("maestro:inbox-updated"));
+    refresh();
   };
 
-  const discuss = async (item: InboxRead["items"][number]) => {
-    if (busyId !== undefined || config === undefined || discussionText.trim() === "") return;
-    setBusyId(item.decisionId);
+  const discuss = async (item: InboxRead["items"][number], text: string) => {
+    if (config === undefined) return;
     setError(undefined);
-    try {
-      await discussWithConcertmaster(window.maestro.api, { projectId: config.projectId, goalId: item.goalId, text: discussionText.trim() });
-      setDiscussionId(undefined);
-      setDiscussionText("");
-    } catch (cause: unknown) {
-      setError(cause instanceof Error ? cause.message : "Could not discuss with Concertmaster");
-    } finally { setBusyId(undefined); }
+    const previous = discussion.find((entry) => entry.decisionId === item.decisionId);
+    const response = await discussWithConcertmaster(window.maestro.api, {
+      projectId: config.projectId,
+      goalId: item.goalId,
+      text,
+      ...(previous === undefined ? {} : { conversationId: previous.conversationId }),
+    });
+    const next: ApprovalDiscussionProjection = {
+      decisionId: item.decisionId,
+      conversationId: response.conversation.conversationId,
+      projectId: response.conversation.projectId,
+      goalId: response.conversation.goalId ?? item.goalId,
+      response: response.turn.content,
+    };
+    setDiscussion((current) => [...current.filter((entry) => entry.decisionId !== item.decisionId), next]);
+    // Do not refresh the inbox here: the pending approval must remain visible while discussion is open.
   };
+
+  const workerDecisions: WorkerDecisionProjection[] = detail?.certifications.map((certification) => ({
+    id: certification.certificationId,
+    title: `${certification.kind} · ${certification.verdict} · ${certification.producingDepartment}`,
+    detail: `Worker ${certification.workerId} · commit ${certification.integratedCommitSha.slice(0, 12)}… · certified by ${certification.certifiedByDepartment}`,
+    onReview: () => onNavigate("git"),
+  })) ?? [];
 
   if (config === undefined) return <EmptyState />;
+  const groups = groupInboxItems(inbox?.items ?? [], workerDecisions, discussion);
   const displayError = error ?? detailError;
   return (
     <div className="inbox-main">
       <header className="workspace-view-head">
         <div className="dash-kicker">operations</div>
         <h1 className="dash-title">inbox</h1>
-        <p className="dash-sub">Pending approvals across visible Goals; certifications for the selected Goal.</p>
+        <p className="dash-sub">Pending approvals across visible Goals; certifications for the selected Goal. Approvals, worker decisions, and scoped Concertmaster discussions come from durable project state.</p>
       </header>
       <div className="inbox-list workspace-view-body">
         {loading && <p>loading…</p>}
-        {displayError !== undefined && <div className="alert alert-warning">{displayError}</div>}
-        {!loading && error === undefined && inbox !== undefined && inbox.items.length === 0 && <p>No pending approvals.</p>}
-        {inbox?.items.map((item) => (
-          <div key={item.decisionId} className="inbox-item pending">
-            <div className="inbox-icon" style={{ background: "var(--ochre-bg)", color: "var(--ochre-text)" }}><Icon name="shield" /></div>
-            <div className="inbox-body">
-              <div className="inbox-title">{item.action} · {item.target}</div>
-              <div className="inbox-sub">Goal {item.goalId} · {item.reason}</div>
-              <div className="inbox-actions">
-                <button className="inbox-link" disabled={busyId !== undefined} onClick={() => void approve(item)}><Icon name="check" /> {busyId === item.decisionId ? "approving…" : "approve and run"}</button>
-                <button className="inbox-link" disabled={busyId !== undefined} onClick={() => void deny(item)}><Icon name="x" /> deny</button>
-                <button className="inbox-link" data-discuss-path="conversation" disabled={busyId !== undefined} onClick={() => setDiscussionId(item.decisionId)}><Icon name="message-circle" /> Discuss with Concertmaster</button>
-              </div>
-              {discussionId === item.decisionId && <div className="inbox-discuss">
-                <label className="sr-only" htmlFor={`inbox-discuss-${item.decisionId}`}>Discuss with Concertmaster</label>
-                <textarea id={`inbox-discuss-${item.decisionId}`} value={discussionText} onChange={(event) => setDiscussionText(event.target.value)} placeholder="Ask about this decision" />
-                <button className="btn btn-sm" type="button" disabled={busyId !== undefined || discussionText.trim() === ""} onClick={() => void discuss(item)}>send</button>
-              </div>}
-            </div>
-          </div>
-        ))}
-        {detailLoading && <p>loading certifications…</p>}
-        {detail?.certifications.map((certification) => (
-          <div key={certification.certificationId} className="inbox-item info">
-            <div className="inbox-icon" style={{ background: "var(--olive-bg)", color: "var(--olive-text)" }}>
-              <Icon name="check" />
-            </div>
-            <div className="inbox-body">
-              <div className="inbox-title">
-                {certification.kind} · {certification.verdict} · {certification.producingDepartment}
-              </div>
-              <div className="inbox-sub">
-                Worker {certification.workerId} · commit {certification.integratedCommitSha.slice(0, 12)}… · certified by{" "}
-                {certification.certifiedByDepartment}
-              </div>
-              {certification.verdict === "blocked" && (
-                <div className="inbox-sub">
-                  Conditional certification remains blocked; review the server evidence and condition before treating this Worker as
-                  accepted.
-                </div>
-              )}
-              <div className="inbox-actions">
-                <button type="button" className="inbox-link" onClick={() => onNavigate("git")}>
-                  <Icon name="external-link" /> review Worker in Git
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {detail === undefined && !detailLoading && detailError === undefined && <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard to see its real certifications here." />}
+        {displayError !== undefined && <div className="alert alert-warning" role="alert">{displayError}</div>}
+        {detailLoading && <p>loading worker decisions…</p>}
+        <Approvals
+          items={groups.criticalActions}
+          workerDecisions={groups.workerDecisions}
+          discussions={groups.discussions}
+          {...(selectedGoalId === undefined ? {} : { selectedGoalId })}
+          projectId={config.projectId}
+          {...(fullAccessSession === undefined ? {} : { fullAccessSession })}
+          onApprove={approve}
+          onDeny={deny}
+          onDiscuss={discuss}
+          onRequest={async (input) => {
+            await requestCriticalAction(window.maestro.api, input);
+            refresh();
+          }}
+          onSelectFullAccess={async (input) => {
+            const session = await selectFullAccessMode(window.maestro.api, input, true);
+            setFullAccessSession(session);
+          }}
+        />
       </div>
     </div>
   );

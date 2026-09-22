@@ -1,81 +1,93 @@
 import type { ApiClient, InboxRead, CriticalActionApprovalInput } from "@maestro/api-client";
+import type { ConversationTurnResult } from "@maestro/contracts";
+import { newCommandId } from "./command-id.js";
 
 export function loadInbox(api: Pick<ApiClient, "listInbox">, projectId: string): Promise<InboxRead> {
   return api.listInbox(projectId);
 }
 
-interface ApprovalExpiryStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
+function assertFutureExpiry(expiresAt: string, now = Date.now): string {
+  const timestamp = Date.parse(expiresAt);
+  if (!Number.isFinite(timestamp) || timestamp <= now()) throw new Error("Approval expiry must be in the future");
+  return new Date(timestamp).toISOString();
 }
 
-function browserApprovalExpiryStorage(): ApprovalExpiryStorage | undefined {
-  try {
-    return (globalThis as typeof globalThis & { localStorage?: ApprovalExpiryStorage }).localStorage;
-  } catch {
-    return undefined;
-  }
+function assertApprovalCommand(item: InboxRead["items"][number], commandId: string): void {
+  if (commandId !== item.commandId) throw new Error("Approval command ID does not match the pending decision");
 }
 
-export function createInboxApprovalExpiry(
-  now: () => number = Date.now,
-  storage: ApprovalExpiryStorage | undefined = browserApprovalExpiryStorage(),
-): (item: Pick<InboxRead["items"][number], "commandId">) => string {
-  const expiries = new Map<string, string>();
-  return (item) => {
-    const key = `maestro:inbox-approval-expiry:${item.commandId}`;
-    const existing = expiries.get(key) ?? storage?.getItem(key) ?? undefined;
-    if (existing !== undefined) {
-      expiries.set(key, existing);
-      return existing;
-    }
-    const value = new Date(now() + 60 * 60 * 1000).toISOString();
-    expiries.set(key, value);
-    try { storage?.setItem(key, value); } catch { /* Storage may be unavailable or full. */ }
-    return value;
-  };
-}
-
-export function approveInboxItem(
+export async function approveInboxItem(
   api: Pick<ApiClient, "approveAndRunCriticalAction">,
   item: InboxRead["items"][number],
   expiresAt: string,
-  commandId: string,
+  commandId = item.commandId,
+  now = Date.now,
 ): Promise<Awaited<ReturnType<ApiClient["approveAndRunCriticalAction"]>>> {
+  assertApprovalCommand(item, commandId);
   const input: CriticalActionApprovalInput = {
     projectId: item.projectId,
     action: item.action,
     target: item.target,
     policyVersion: item.policyVersion,
     budgetEffectCents: item.budgetEffectCents,
-    expiresAt,
+    expiresAt: assertFutureExpiry(expiresAt, now),
   };
   return api.approveAndRunCriticalAction(item.goalId, input, commandId);
 }
 
+export async function denyInboxItem(
+  api: Pick<ApiClient, "denyCriticalAction">,
+  item: InboxRead["items"][number],
+  commandId = item.commandId,
+): Promise<Awaited<ReturnType<ApiClient["denyCriticalAction"]>>> {
+  assertApprovalCommand(item, commandId);
+  return api.denyCriticalAction(item.goalId, {
+    projectId: item.projectId,
+    action: item.action,
+    target: item.target,
+    policyVersion: item.policyVersion,
+    budgetEffectCents: item.budgetEffectCents,
+  }, commandId);
+}
+
+export type InboxDiscussionApi = Pick<ApiClient, "listModels" | "createConversation" | "sendConversationTurn">;
+
+/**
+ * Discusses the pending decision through the scoped Concertmaster conversation.
+ * The server response is returned to the renderer; no local answer is fabricated.
+ */
 export async function discussWithConcertmaster(
-  api: Pick<ApiClient, "listModels" | "createConversation" | "sendConversationTurn">,
-  input: { projectId: string; goalId: string; text: string },
-): Promise<void> {
-  const models = await api.listModels();
-  const selected = models[0];
-  if (selected === undefined) throw new Error("No Concertmaster model is available");
-  const model = `${selected.identity.provider}/${selected.identity.id}`;
-  const conversation = await api.createConversation({ projectId: input.projectId, goalId: input.goalId, model });
-  await api.sendConversationTurn(conversation.conversationId, { projectId: input.projectId, text: input.text });
+  api: InboxDiscussionApi,
+  input: { projectId: string; goalId: string; text: string; conversationId?: string },
+): Promise<ConversationTurnResult> {
+  const text = input.text.trim();
+  if (text === "") throw new Error("Discussion text cannot be empty");
+  let conversationId = input.conversationId;
+  if (conversationId === undefined) {
+    const models = await api.listModels();
+    const selected = models[0];
+    if (selected === undefined) throw new Error("No Concertmaster model is available");
+    const model = `${selected.identity.provider}/${selected.identity.id}`;
+    const conversation = await api.createConversation(
+      { projectId: input.projectId, goalId: input.goalId, model },
+      { idempotencyKey: newCommandId() },
+    );
+    if (conversation.projectId !== input.projectId || conversation.goalId !== input.goalId) {
+      throw new Error("Concertmaster conversation scope does not match the pending approval");
+    }
+    conversationId = conversation.conversationId;
+  }
+  const result = await api.sendConversationTurn(
+    conversationId,
+    { projectId: input.projectId, text },
+    { idempotencyKey: newCommandId() },
+  );
+  if (result.conversation.projectId !== input.projectId || result.conversation.goalId !== input.goalId) {
+    throw new Error("Concertmaster response scope does not match the pending approval");
+  }
+  return result;
 }
 
 export async function loadPendingApprovalCount(api: Pick<ApiClient, "listInbox">, projectId: string): Promise<number> {
   return (await api.listInbox(projectId)).items.length;
-}
-
-export function denyInboxItem(
-  api: Pick<ApiClient, "denyCriticalAction">,
-  item: InboxRead["items"][number],
-  commandId: string,
-): Promise<Awaited<ReturnType<ApiClient["denyCriticalAction"]>>> {
-  return api.denyCriticalAction(item.goalId, {
-    projectId: item.projectId, action: item.action, target: item.target,
-    policyVersion: item.policyVersion, budgetEffectCents: item.budgetEffectCents,
-  }, commandId);
 }

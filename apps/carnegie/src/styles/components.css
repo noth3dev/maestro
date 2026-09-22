@@ -368,6 +368,27 @@
 .evlog-item { display:flex; align-items:center; gap:14px; padding:16px 0; border-bottom:1px solid var(--border); }
 .evlog-time { margin-left:auto; font-size:11px; color:var(--text-muted); }
 
+/* ── approvals projection ── */
+.approvals-projection { display:flex; flex-direction:column; gap:26px; }
+.approval-group { display:flex; flex-direction:column; gap:10px; }
+.approval-group-head { display:flex; align-items:center; gap:8px; }
+.approval-group-head h2 { margin:0; color:var(--text-secondary); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.approval-item { margin:0; }
+.approval-facts { display:flex; flex-direction:column; gap:3px; margin-top:8px; color:var(--text-muted); font-size:11px; line-height:1.45; }
+.approval-facts strong { color:var(--text-secondary); font-weight:600; }
+.approval-expiry-field { display:flex; flex-direction:column; gap:5px; margin-top:11px; color:var(--text-secondary); font-size:11px; font-weight:600; }
+.approval-expiry-field input { width:min(100%, 280px); padding:7px 9px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-3); color:var(--text-primary); font:inherit; }
+.approval-discussion { display:flex; flex-direction:column; gap:4px; margin-top:10px; padding:10px 12px; border-left:3px solid var(--accent); background:var(--surface-3); color:var(--text-secondary); font-size:11px; }
+.approval-discussion span { color:var(--text-muted); }
+.approval-discussion p { margin:0; white-space:pre-wrap; }
+.approval-form { padding:16px 18px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface-3); }
+.approval-form h2 { margin:0; font-size:13px; font-weight:600; }
+.approval-form form { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.approval-form form .input { flex:1 1 170px; min-width:150px; }
+.approval-form .form-label { flex:0 0 100%; margin-top:2px; }
+.approval-confirm-check { display:flex; align-items:flex-start; gap:7px; flex:1 1 100%; color:var(--text-secondary); font-size:11px; line-height:1.4; }
+.approval-confirm-check input { margin-top:2px; }
+
 /* ── billing chart ── */
 .dept-bar-row { display:flex; align-items:center; gap:10px; padding:7px 0; }
 .dept-bar-row svg { width:14px; height:14px; color:var(--text-secondary); flex-shrink:0; }

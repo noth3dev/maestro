@@ -5,6 +5,7 @@ import { Inbox } from "./Inbox.js";
 
 vi.mock("../icons.js", () => ({ Icon: () => null }));
 vi.mock("../components/EmptyState.js", () => ({ EmptyState: ({ title }: { title?: string }) => <div>{title ?? "empty"}</div> }));
+vi.mock("../goals.js", () => ({ useGoals: () => ({ selectedGoalId: undefined, goals: undefined, selectGoal: vi.fn() }) }));
 vi.mock("../connection.js", () => ({
   useConnection: () => ({ config: { apiUrl: "https://control-plane.test", token: "credential.secret", projectId: "11111111-1111-4111-8111-111111111111" }, loading: false, connect: vi.fn(), disconnect: vi.fn() }),
 }));
