@@ -110,3 +110,8 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 ## Bridge duplication risk (flagged during this session's plan review, still unresolved)
 
 `exposedApiMethods` lives twice — `apiBridge.ts` (ESM, used by `main.ts`'s IPC dispatch and `isExposedMethod`) and `preload.cts` (CJS, used by `contextBridge.exposeInMainWorld`) — kept in sync only by a code comment and a test that checks every method's exact quoted string appears in `preload.cts`'s source text. This test now covers the full list (this session), which closes the immediate risk, but the structural fragility (two hand-maintained lists across module systems) remains. Not fixed this session; flagging for whoever next touches Task 1.
+
+
+## Task 14 live verification update (2026-09-23)
+
+Task 14 was attempted against the real Electron window at commit `e6dc7db8`. Carnegie built and exposed CDP `9222`, but local bootstrap stopped at the existing PGlite database: `bootstrap.status()` returned `setup-required` after a mutex timeout. No Control Plane, Model Gateway, or database listener became available. A fresh disposable PGlite directory passed, while a copied existing-data probe failed with `RuntimeError: Aborted()`. The live matrix therefore remains `backend-blocked`; no project, conversation, contract, Goal, Worker, evidence, certification, report, or provider response was created. See `execution/e5-live-evidence/README.md`.
