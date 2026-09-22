@@ -52,3 +52,11 @@ Task 14 is **backend-blocked at provider/model availability**. The fresh rerun p
 - No conversation ID, Task Contract ID/version/hash, Goal ID, Worker/evidence/certification/report record, provider response, or external effect exists. The selected project label was visible as `e236ddca`, but no full project ID was copied from secure renderer state after the provider failed.
 - The exact blocker is now the configured model/provider catalog, not local database bootstrap or Control Plane reachability. Evidence: `/tmp/e5-live-rerun22-home-after-turn.png`, `/tmp/e5-live-rerun22-turn.log`, `/tmp/e5-live-rerun22-playwright-live.log`.
 - The fresh Electron, Control Plane, Model Gateway, and disposable PostgreSQL processes were stopped/removed after capture.
+## Fresh live provider-binding retry (2026-09-23)
+
+- Docker-backed local bootstrap recovered with PostgreSQL `55432`, Control Plane `4310`, Model Gateway `4321`, and Carnegie CDP `9225`; the bounded live-window Playwright test passed **1/1**.
+- Carnegie Settings completed the real ChatGPT/Codex managed-account binding. Authenticated Model Gateway `GET /v1/models` then returned five real `openai-codex` catalog entries.
+- A documentation-only request was entered through the visible Home composer. It created conversation `a352ec21-72fe-4e14-9f23-d35f54fa0f67`; the provider turn completed and returned a real assistant response.
+- No Task Contract draft/ID/version/hash, Goal, Worker, evidence, certification, report, or external effect was produced. The current Home intake returns the completed conversation response but does not create a Task Contract draft, so Task 14 Steps 3–6 remain unverified.
+- Evidence: `/tmp/e5-live-final2-after-turn.png`, `/tmp/e5-live-final2-terminal.png`, `/tmp/e5-live-final2-turn.log`, `/tmp/e5-live-final2-terminal.log`.
+- Correct status: **provider live / Task Contract flow still open**; do not claim E5 or start E6.

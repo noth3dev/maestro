@@ -118,3 +118,10 @@ Task 14 was attempted against the real Electron window at commit `e6dc7db8`. Car
 ## Task 14 live verification rerun (2026-09-23)
 
 A fresh Electron profile with no explicit `MAESTRO_API_URL` used Docker-backed local auto-bootstrap. The visible Carnegie window reached the authenticated Home UI with PostgreSQL on `55432`, Control Plane on `4310`, and Model Gateway on `4321`; the bounded window capture passed. A documentation-only request was submitted through the visible composer and the UI returned `conversation not started`, `turn failed`, and `No Concertmaster model is available`. No conversation, Task Contract, Goal, Worker, evidence, certification, report, provider response, or external effect was produced. This is a provider/model-catalog blocker at the exact boundary, not a fabricated success. Evidence: `/tmp/e5-live-rerun22-home-after-turn.png`, `/tmp/e5-live-rerun22-turn.log`.
+
+## Latest live retry (2026-09-23)
+
+- Docker-backed local bootstrap and bounded Electron window capture passed with PostgreSQL `55432`, Control Plane `4310`, Model Gateway `4321`, and CDP `9225`.
+- In-app ChatGPT/Codex managed binding completed; the authenticated Gateway catalog exposed five real Codex models.
+- The visible documentation-only Home composer created conversation `a352ec21-72fe-4e14-9f23-d35f54fa0f67` and received a completed real assistant response.
+- No Task Contract draft or durable contract identity was returned by the current Home intake, so no Goal, Worker, evidence, certification, or report evidence exists. Task 14 Steps 3–6 remain backend/UI-flow open; E5 is not closed.
