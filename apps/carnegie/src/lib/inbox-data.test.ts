@@ -1,51 +1,54 @@
 import { describe, expect, it, vi } from "vitest";
-import { approveInboxItem, createInboxApprovalExpiry, denyInboxItem, discussWithConcertmaster, loadPendingApprovalCount } from "./inbox-data.js";
+import { approveInboxItem, denyInboxItem, discussWithConcertmaster, loadPendingApprovalCount } from "./inbox-data.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
-const item = { decisionId: "33333333-3333-4333-8333-333333333333", commandId: "44444444-4444-4444-8444-444444444444", projectId, goalId, actorId: "operator-1", action: "deployment.release", target: "production", policyVersion: 1, budgetEffectCents: 0, classification: "critical" as const, reason: "critical_action", decidedAt: "2025-01-01T00:00:00.000Z" };
+const commandId = "44444444-4444-4444-8444-444444444444";
+const item = { decisionId: "33333333-3333-4333-8333-333333333333", commandId, projectId, goalId, actorId: "operator-1", action: "deployment.release", target: "production", policyVersion: 1, budgetEffectCents: 0, classification: "critical" as const, reason: "critical_action", decidedAt: "2025-01-01T00:00:00.000Z" };
 
 describe("Inbox durable actions", () => {
   it("derives the sidebar badge from the aggregated durable response", async () => {
     await expect(loadPendingApprovalCount({ listInbox: vi.fn(async () => ({ projectId, items: [item, { ...item, decisionId: "66666666-6666-4666-8666-666666666666" }] })) }, projectId)).resolves.toBe(2);
   });
 
-  it("keeps approval expiry stable by command identity across decision changes and renderer reload", () => {
-    let now = 1_000;
-    const values = new Map<string, string>();
-    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
-    const expiry = createInboxApprovalExpiry(() => now, storage);
-    const first = expiry(item);
-    now = 2_000;
-    const changedDecision = { ...item, decisionId: "66666666-6666-4666-8666-666666666666" };
-    expect(expiry(changedDecision)).toBe(first);
-    const reloadedExpiry = createInboxApprovalExpiry(() => now, storage);
-    expect(reloadedExpiry(changedDecision)).toBe(first);
-  });
-
-  it("approves through the existing Goal-scoped approval route", async () => {
+  it("approves with the exact pending command identity and server-supplied expiry input", async () => {
     const approveAndRunCriticalAction = vi.fn(async () => ({ goalId, effect: "allow" as const, reason: "exact_approval", classification: "critical" as const }));
-    await approveInboxItem({ approveAndRunCriticalAction }, item, "2025-01-01T01:00:00.000Z", "55555555-5555-4555-8555-555555555555");
-    expect(approveAndRunCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: item.action, target: item.target, policyVersion: 1, budgetEffectCents: 0, expiresAt: "2025-01-01T01:00:00.000Z" }, "55555555-5555-4555-8555-555555555555");
+    await approveInboxItem({ approveAndRunCriticalAction }, item, "2099-01-01T01:00:00.000Z");
+    expect(approveAndRunCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: item.action, target: item.target, policyVersion: 1, budgetEffectCents: 0, expiresAt: "2099-01-01T01:00:00.000Z" }, commandId);
   });
 
-  it("denies through the existing Goal-scoped critical-action route", async () => {
-    const denyCriticalAction = vi.fn(async () => ({ goalId, effect: "deny" as const, reason: "operator_rejected", classification: "critical" as const }));
-    await denyInboxItem({ denyCriticalAction }, item, "55555555-5555-4555-8555-555555555555");
-    expect(denyCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: item.action, target: item.target, policyVersion: 1, budgetEffectCents: 0 }, "55555555-5555-4555-8555-555555555555");
+  it("rejects expired approval input before contacting the server", async () => {
+    const approveAndRunCriticalAction = vi.fn();
+    await expect(approveInboxItem({ approveAndRunCriticalAction }, item, "2020-01-01T01:00:00.000Z", commandId)).rejects.toThrow("future");
+    expect(approveAndRunCriticalAction).not.toHaveBeenCalled();
   });
 
-  it("uses sendConversationTurn for Discuss with Concertmaster, never the channel system", async () => {
-    const sendConversationTurn = vi.fn(async () => ({ conversation: { conversationId: "66666666-6666-4666-8666-666666666666" }, turn: {} }));
-    const postChannelMessage = vi.fn();
+  it("rejects a command identity that does not match the pending approval", async () => {
+    const approveAndRunCriticalAction = vi.fn();
+    await expect(approveInboxItem({ approveAndRunCriticalAction }, item, "2099-01-01T01:00:00.000Z", "55555555-5555-4555-8555-555555555555")).rejects.toThrow("command ID");
+    expect(approveAndRunCriticalAction).not.toHaveBeenCalled();
+  });
+
+  it("denies through the exact pending command identity", async () => {
+    const denyCriticalAction = vi.fn(async () => undefined);
+    await denyInboxItem({ denyCriticalAction }, item);
+    expect(denyCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: item.action, target: item.target, policyVersion: 1, budgetEffectCents: 0 }, commandId);
+  });
+
+  it("returns the real scoped Concertmaster response and can resume the same conversation", async () => {
+    const conversationId = "66666666-6666-4666-8666-666666666666";
+    const sendConversationTurn = vi.fn(async () => ({ conversation: { conversationId, projectId, goalId, model: "openai-codex/gpt-5.6-luna", status: "active" as const, version: 1 }, turn: { turnId: "77777777-7777-4777-8777-777777777777", conversationId, role: "assistant" as const, content: "The action needs approval because it changes production.", status: "completed" as const, cursor: "1", createdAt: "2025-01-01T00:00:00.000Z" } }));
     const api = {
-      listModels: vi.fn(async () => [{ identity: { provider: "openai-codex", id: "gpt-5.6-luna" }, capabilities: [], authModes: ["managed-subscription"], dataPolicy: { allowedDataClasses: ["public", "workspace"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } }]),
-      createConversation: vi.fn(async () => ({ conversationId: "66666666-6666-4666-8666-666666666666", projectId, goalId, model: "openai-codex/gpt-5.6-luna", status: "active" as const, version: 1 })),
+      listModels: vi.fn(async () => [{ identity: { provider: "openai-codex", id: "gpt-5.6-luna" }, capabilities: [], authModes: ["managed-subscription" as const], dataPolicy: { allowedDataClasses: ["public", "workspace"], retention: "provider-policy" as const, trainsOnCustomerData: false, regions: [] } }]),
+      createConversation: vi.fn(async () => ({ conversationId, projectId, goalId, model: "openai-codex/gpt-5.6-luna", status: "active" as const, version: 1 })),
       sendConversationTurn,
-      postChannelMessage,
     };
-    await discussWithConcertmaster(api, { projectId, goalId, text: "Why is this approval needed?" });
-    expect(sendConversationTurn).toHaveBeenCalledOnce();
-    expect(postChannelMessage).not.toHaveBeenCalled();
+    const first = await discussWithConcertmaster(api, { projectId, goalId, text: "Why is this approval needed?" });
+    expect(first.turn.content).toContain("changes production");
+    expect(api.createConversation).toHaveBeenCalledWith({ projectId, goalId, model: "openai-codex/gpt-5.6-luna" }, { idempotencyKey: expect.any(String) });
+    expect(sendConversationTurn).toHaveBeenCalledWith(conversationId, { projectId, text: "Why is this approval needed?" }, { idempotencyKey: expect.any(String) });
+    await discussWithConcertmaster(api, { projectId, goalId, conversationId, text: "What is the safer alternative?" });
+    expect(api.createConversation).toHaveBeenCalledOnce();
+    expect(sendConversationTurn).toHaveBeenLastCalledWith(conversationId, { projectId, text: "What is the safer alternative?" }, { idempotencyKey: expect.any(String) });
   });
 });
