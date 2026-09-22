@@ -2,9 +2,9 @@
 
 > **For agentic workers:** Execute this plan task-by-task. Use the project's existing worktree, TDD, independent review, live Electron verification, and `execution/PENDING_LIVE_CHECKS.md` rules. Every unchecked item is an explicit implementation or verification task.
 
-**Goal:** Make Carnegie a real operator console that can converse with the Concertmaster, create and confirm a Task Contract, launch it, and drive a real project through planning, workers, Git, approvals, evidence, certification, and final reporting.
+**Goal:** Make Carnegie a real operator console where Concertmaster can awaken an interactive, multi-role Overture Crew; the Crew can converse with the operator, investigate the project, research, review security, produce design options, and maintain a complete execution plan; the operator can confirm one exact Task Contract; and the launched Goal can progress through planning, workers, Git, approvals, evidence, certification, and final reporting.
 
-**Architecture:** Keep the Control Plane, contracts, authority gateway, leases/fencing, and durable PostgreSQL state as the source of truth. Carnegie is a renderer over a narrowly allow-listed Electron bridge; every write uses the existing API client's command/idempotency and version/hash fields. Build the GUI as a sequence of real vertical slices, not as disconnected mock screens. A capability is complete only when the real API, success state, rejection state, and live Electron path work.
+**Architecture:** Keep the Control Plane, contracts, authority gateway, leases/fencing, and durable PostgreSQL state as the source of truth. Carnegie is a renderer over a narrowly allow-listed Electron bridge; every write uses the existing API client's command/idempotency and version/hash fields. Concertmaster owns the operator conversation and awakens a project-scoped Overture Run when planning is required. Overture roles participate in that same durable channel with explicit identity, role-specific prompts, model policies, and tool grants. The Task Editor incrementally maintains `plan00.md` for the project-wide blueprint, `plan01.md`/`plan02.md` for phases, and multiple slice documents under each phase. Only after the plan set and Task Contract are reviewed and exactly confirmed may Launch create or attach a Goal and start automatic orchestration. Build the whole path as real vertical slices, not disconnected mock screens. A capability is complete only when the real API, success state, rejection state, durable evidence, and live Electron path work.
 
 **Tech Stack:** Electron 33, React 19, TypeScript, Vite, `@maestro/api-client`, `@maestro/contracts`, Vitest, Playwright, axe-core, the existing local backend, PostgreSQL, and the existing durable event stream.
 
@@ -12,10 +12,10 @@
 
 ## Current execution status — 2026-09-23
 
-- E5 Tasks 1–13 have code-level evidence recorded in `execution/e5-capability-matrix.md` and `roadmap/act-1-foundation/active/operations/progress.md`; this does not close the live gate.
-- The latest managed-provider retry reached a real Carnegie conversation and received a real assistant response, but the current Home intake returned no Task Contract draft or durable contract identity. E5 Task 14 Steps 3–6 and the final E5 gate remain open.
-- Do not add a second one-shot client-side or conversation-only Task Contract producer to force this gate closed. E6 owns the authoritative interactive Overture Crew and Task Editor flow; E5 must consume a real server-returned contract when that boundary exists.
-- E6 remains phase-gated until E5 closes.
+- E5 Tasks 1–13 have code-level evidence recorded in `execution/e5-capability-matrix.md` and `roadmap/act-1-foundation/active/operations/progress.md`; this does not close the integrated live gate.
+- The latest managed-provider retry reached a real Carnegie conversation and received a real assistant response, but the current Home intake returned no Task Contract draft or durable contract identity. Integrated Tasks 14–16 must provide the real Overture-to-Contract boundary before live Task 17 can close.
+- The former E6 work is now part of this E5 plan. There is one authoritative interactive Overture Crew and Task Editor path; no one-shot client-side or conversation-only producer may be added.
+- `execution/plan-E6-overture-crew-autonomous-planning.md` is now an archival pointer only. Do not execute it separately.
 
 ## Global Constraints
 
@@ -39,17 +39,20 @@ E5 covers the full operator path for implemented Act 1 capabilities:
 1. Connection and local bootstrap.
 2. Project and Goal selection.
 3. Goal-less natural-language conversation with the Concertmaster.
-4. Task Contract drafting, review, edit, confirmation, and launch.
-5. Overture role selection and Head/Council planning.
-6. Department Plan and Mission Bundle inspection.
-7. Worker spawn, observation, messaging, cancellation, worktree, integration, acceptance, and certification.
-8. Goal lifecycle controls and durable event/projection updates.
-9. Critical-action request, approval, denial, and full-access selection.
-10. Inbox and Concertmaster discussion.
-11. Channel messaging and roster state.
-12. Git integration state and evidence/certification/report views.
-13. Metronome, Encore Council, budget, billing, persona, and arrangements reads/actions that have real backend contracts.
-14. Accessibility, loading/error/empty states, reconnect behavior, responsive layouts, and live Electron acceptance.
+4. Project-scoped Concertmaster conversation and interactive Overture Crew activation.
+5. Multi-role Crew dialogue, project investigation, external research, security review, design/mock exploration, and clarification.
+6. Durable `plan00.md` project blueprint, phase plans, and multiple slice plans with versioned hashes.
+7. Task Contract drafting, review, edit, exact confirmation, and launch.
+8. Overture-to-Goal automatic orchestration through Head/Council planning.
+9. Department Plan and Mission Bundle inspection.
+10. Worker spawn, observation, messaging, cancellation, worktree, integration, acceptance, and certification.
+11. Goal lifecycle controls and durable event/projection updates.
+12. Critical-action request, approval, denial, and full-access selection.
+13. Inbox and Concertmaster discussion.
+14. Channel messaging and roster state.
+15. Git integration state and evidence/certification/report views.
+16. Metronome, Encore Council, budget, billing, persona, and arrangements reads/actions that have real backend contracts.
+17. Accessibility, loading/error/empty states, reconnect behavior, responsive layouts, and live Electron acceptance.
 
 E5 does not silently invent a durable Luthiery registry or Flashmob backend. Those screens must become honest, useful blocked/dependency states until their contracts exist.
 
@@ -68,8 +71,11 @@ The primary E5 acceptance scenario is:
 open Carnegie
 → connect to the real project
 → speak to the Concertmaster without selecting a Goal
-→ receive a real response and Task Contract draft
-→ edit the draft
+→ Concertmaster awakens the required Overture Crew roles in the same conversation
+→ exchange user/role messages, clarifications, research, security findings, and design options
+→ receive `plan00.md`, phase plans, and multiple slice plans with durable hashes
+→ receive the Task Editor's Task Contract draft bound to the exact plan-set manifest
+→ edit the plan/contract through the conversation and review projection
 → confirm the exact version and content hash
 → explicitly launch
 → observe Goal/Plan/Council/Department/Mission state
@@ -1024,7 +1030,136 @@ export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovemen
 
 ---
 
-## Task 14: Run the real end-to-end project progression
+## Integrated Overture Crew and automatic orchestration tasks
+
+The following tasks absorb the former E6 plan into E5. They are part of the same acceptance path and must be completed before the live project progression task below. The operator-facing channel remains primary throughout; artifact and plan panels are projections of the same durable Overture Run.
+
+### Task 14: Define and persist the interactive Overture Crew and plan set
+
+**Purpose:** Replace the missing conversation-to-Task-Contract boundary with one durable, project-scoped Overture Run.
+
+**Required contracts:**
+
+- Canonical roles: `conversation-lead`, `architecture-analyst`, `external-research-scout`, `security-evaluator`, `design-mock-specialist`, and `task-editor`.
+- Run states: `collecting`, `waiting_for_operator`, `synthesizing`, `review`, `blocked`, `launched`, and `cancelled`.
+- Explicit execution phase: `overture`; do not use a fake `missionBundleId` for pre-Goal work.
+- Durable role messages with role identity, conversation cursor, turn identity, and bounded content.
+- Durable artifacts with content hashes and source references.
+- Durable clarifications with answer state and command identity.
+- Durable plan documents:
+  - `plan00.md`: project-wide blueprint, stack, architecture, global invariants, phase map, and overall acceptance gates.
+  - `plan01.md`, `plan02.md`, …: phase plans with phase objectives, boundaries, dependencies, and exit conditions.
+  - `plan01-slice01.md`, `plan01-slice02.md`, …: multiple bounded slices under each phase, each with file boundaries, tests, evidence, retry rules, and stop conditions.
+- A plan manifest containing document IDs, versions, content hashes, dependency edges, and a manifest hash.
+- `TaskContract` reference `{ planId, version, manifestHash }`, included in canonical content hashing and exact confirmation.
+
+**TDD gates:**
+
+- Add RED tests for role selection, state transitions, project scoping, message ordering, clarification resumability, plan00/phase/slice document relationships, append-only revisions, idempotency, hash integrity, and cross-project denial.
+- Add RED tests proving `overture` context has no Goal or Worker authority and cannot be accepted as a Worker context.
+- Implement the domain/Zod contracts and PostgreSQL store only after the intended RED tests execute.
+- Add transactional events/outbox rows for run creation, role activation, role message, clarification, artifact revision, plan revision, synthesis, review readiness, and launch readiness.
+- Run focused unit and real-PostgreSQL persistence tests, then record RED/GREEN evidence in progress documentation.
+
+**Acceptance:** A project-scoped conversation can own one resumable Overture Run. A phase may contain any number of ordered or safely parallel slices. Every current document and artifact is hash-bound, project-bound, and recoverable.
+
+### Task 15: Implement role-specific Crew runtime and interactive Task Editor
+
+**Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.
+
+**Role runtime requirements:**
+
+- Each role receives a distinct system prompt, model policy, output budget, tool allowlist, context boundary, and project binding.
+- The model router selects a provider-qualified model per role/task requirement; actual provider/model identity is recorded before admission.
+- `conversation-lead` asks focused questions and keeps the dialogue coherent.
+- `architecture-analyst` uses authorized project and Git read evidence.
+- `external-research-scout` uses only permitted public evidence and records citations.
+- `security-evaluator` reviews authority, data, budget, critical actions, and stop conditions.
+- `design-mock-specialist` creates disposable design artifacts and never mutates production UI.
+- `task-editor` reads accepted role artifacts and the conversation, then revises plan00, phase plans, slice plans, and the Task Contract.
+- No Overture role may spawn a Worker, create a Mission Bundle, modify the repository, approve itself, or launch a Goal.
+
+**Conversation behavior:**
+
+- Concertmaster remains the channel owner and invokes or pauses Overture.
+- Role messages and operator answers appear in the same durable conversation with explicit role labels.
+- A role may request clarification; the run enters `waiting_for_operator` and resumes the same run after the answer.
+- Roles may challenge one another, request evidence, and revise their findings. The Task Editor records the material decision and affected plan documents.
+- The system never fills missing facts with placeholders merely to reach a valid schema.
+- The UI shows the evolving conversation, role activity, open questions, plan00/phase/slice revisions, material diffs, blockers, and exact hashes. It does not expose raw provider execution IDs as operator workflow inputs.
+
+**TDD gates:**
+
+- Add RED tests proving distinct role prompts and grants.
+- Add RED tests proving role boundaries, public-research limits, project read scope, secret rejection, and no Worker/repository/critical-action access.
+- Add RED tests for a clarification round, same-run resume, role-message ordering, and plan revision after user feedback.
+- Add RED tests proving Task Editor writes plan documents before creating an awaiting-confirmation Task Contract.
+- Route the existing E1 drafting tool through Task Editor or remove it; do not leave two authoritative producers.
+- Add Control Plane routes and typed API/Electron methods for start, answer, read run, read messages, list artifacts, read plan set, and read linked Task Contract.
+- Add Carnegie tests for the complete channel-first journey and stale/cross-project protection.
+
+**Acceptance:** Concertmaster can awaken the required Crew, the operator can continue the same conversation, and Task Editor can produce a complete versioned plan set and Task Contract without any Goal or execution-side state advancing.
+
+### Task 16: Connect exact Launch to automatic Goal orchestration
+
+**Purpose:** Remove manual downstream identity entry and start the existing hierarchy automatically after exact launch.
+
+**Required sequence:**
+
+1. Exact confirmation and Launch validate the current Task Contract hash and exact approved plan manifest.
+2. Launch records or attaches the durable Goal and enqueues the first orchestration command.
+3. The controller activates the smallest valid Head set through existing leases and native admission.
+4. Heads produce sealed independent briefs.
+5. Council reveal and decision occur through existing durable contracts.
+6. Department Plans and Mission Bundles bind to the launched contract and exact plan version.
+7. Workers are dispatched through existing capacity, authority, routing, lease, fencing, Git, and evidence boundaries.
+8. Metronome, Encore, certification, and final reporting continue through existing services.
+
+**TDD gates:**
+
+- Before Launch, prove no Goal, Head, Council, Department Plan, Mission Bundle, Worker, or provider effect advances.
+- After Launch, prove the first durable orchestration command exists without a second operator action.
+- Replay Launch and every outbox command across process restart; prove no duplicate Goal, role, provider admission, or external effect.
+- Missing artifacts, stale plan manifests, Council timeouts, provider uncertainty, and authority failures must produce durable blocked/unknown states, never fabricated progress.
+- The Launch HTTP response returns a scheduling acknowledgement and does not wait for the whole Goal.
+
+**Acceptance:** One exact Launch starts resumable automatic orchestration. All downstream identities are server-derived and all transitions are durable, idempotent, and recoverable.
+
+### Task 17: Run the integrated live Overture-to-Goal scenario
+
+This task is the former Task 14 live progression gate, extended to cover the integrated Crew and plan-set flow. Use a bounded non-destructive request and real PostgreSQL/provider infrastructure.
+
+The evidence must include:
+
+- Conversation ID and durable cursors.
+- Selected Crew roles and role-message records.
+- Clarification round, if required.
+- `plan00.md`, phase plan, and at least two slices under one phase.
+- Document hashes and plan manifest hash.
+- Task Contract ID, version, content hash, and plan reference.
+- Exact confirmation and Launch result.
+- Goal, Head, Council, Department Plan, Mission Bundle, and first Worker IDs.
+- Provider/model bindings, evidence, certification, and report state, or the exact blocker at the first failing boundary.
+
+Negative cases must prove no execution before Launch, no placeholder completion, no cross-project artifact access, no plan hash tampering, no duplicate Launch effect, and no critical-action bypass.
+
+### Task 18: Final integrated E5 verification and completion gate
+
+The final gate now covers both Carnegie and Overture. It requires:
+
+- Root build and Carnegie build.
+- Focused unit/integration tests for Tasks 14–16.
+- Full real-PostgreSQL verification.
+- Live Electron/provider scenario or a precise backend/provider blocker.
+- Independent no-edit review of the Crew, plan hierarchy, Task Editor, exact Launch, orchestration, authority, and evidence boundaries.
+- Secret and generated-artifact scans.
+- Updated capability matrix and progress records.
+
+E5 may be marked complete only when the operator can see the Crew conversation, plan00, phase/slice plans, Task Contract hashes, Launch state, and post-launch progress without fabricated state.
+
+---
+
+## Task 19: Run the real end-to-end project progression
 
 **Files:**
 - Modify: `execution/e5-capability-matrix.md`
@@ -1052,7 +1187,7 @@ export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovemen
 
 - [ ] **Step 2: Execute the real assistant-to-Task flow.**
 
-  In the visible window, send a bounded project request. Save: screenshot of the assistant response, conversation ID, Task Contract ID, contract version, and content hash. Verify the response is not a fixture.
+  In the visible window, send a bounded project request. Verify that Concertmaster awakens the required Overture Crew in the same conversation, then save role-message evidence, plan00/phase/slice document IDs and hashes, the Task Contract ID/version/content hash, and a screenshot of the real exchange. Verify the response and plan artifacts are not fixtures.
 
 - [ ] **Step 3: Edit, confirm, and launch the real contract.**
 
@@ -1060,7 +1195,7 @@ export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovemen
 
 - [ ] **Step 4: Execute the real planning path.**
 
-  Select Overture roles, activate a permitted Head, create/inspect Council, submit a brief, reveal/decide only when permitted, read Department Plan, and read Mission Bundle. Save IDs and screenshots for each durable transition.
+  Use the server-selected Crew and the plan-set output; do not require manual role or downstream identity entry. Activate a permitted Head, create/inspect Council, submit a brief, reveal/decide only when permitted, read Department Plan, and read Mission Bundle. Save IDs and screenshots for each durable transition.
 
 - [ ] **Step 5: Execute the real Worker path.**
 
@@ -1090,7 +1225,7 @@ export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovemen
 
 ---
 
-## Task 15: Final verification and E5 completion gate
+## Task 20: Final verification and E5 completion gate
 
 **Files:**
 - Modify: `execution/e5-capability-matrix.md`
@@ -1163,16 +1298,21 @@ Run tasks in this order:
 → 11 Persona/Arrangements
 → 12 blocked/deferred surfaces
 → 13 accessibility/layout/live browser checks
-→ 14 real project progression
-→ 15 final gate
+→ 14 Overture Run, plan00/phase/slice persistence
+→ 15 role-specific Crew runtime and interactive Task Editor
+→ 16 exact Launch and automatic Goal orchestration
+→ 17 integrated live Overture-to-Goal progression
+→ 18 integrated verification gate
+→ 19 full real project progression
+→ 20 final E5 completion gate
 ```
 
-Do not start Tasks 5–8 as isolated UI mockups. Task 3 and Task 4 must first prove that a real request becomes a real durable Goal. If Task 14 is blocked by `Durable store is unavailable`, provider behavior, or another external dependency, stop at the failing boundary, preserve the evidence, and update `PENDING_LIVE_CHECKS.md` rather than bypassing the dependency.
+Do not start Tasks 5–8 or Tasks 14–16 as isolated UI mockups. Task 3 and Task 4 must first prove the existing conversation and Goal boundaries; Tasks 14–16 then provide the authoritative interactive Overture path rather than a second producer. If Task 17 or Task 19 is blocked by `Durable store is unavailable`, provider behavior, or another external dependency, stop at the failing boundary, preserve the evidence, and update `PENDING_LIVE_CHECKS.md` rather than bypassing the dependency.
 
 **Task 1.5 should land before any later task attempts a live check.** Every live-run step from Task 3 Step 8 onward assumes a reachable Control Plane; until Task 1.5 lands, those steps keep re-discovering the same "no Control Plane/provider" blocker Task 1.5 exists to remove. Re-attempt any live step recorded as blocked in `PENDING_LIVE_CHECKS.md` once Task 1.5 is closed, before assuming it's still blocked.
 
 
-## Task 15 verification update (2026-09-23)
+## Task 20 verification update (2026-09-23)
 
 The final gate is **not closed**. Evidence at commit `2c767e29` / current verification: root `npm run build` passed; `apps/carnegie npm run build` passed; exact Carnegie Playwright command passed 4 tests with 5 designed skips; `git diff --check` passed. The first unrestricted `npm test` exited 1 because the configured `127.0.0.1:55432` PostgreSQL endpoint was unavailable (336 tests passed before database-backed setup failures). A second run against a disposable PGlite socket on `55432` was stopped after repeated 30-second timeouts; an isolated Improvement Candidate run passed 7/9 but exposed the PGlite socket `Received unexpected parseComplete message from backend` protocol error. No code regression is attributed without a real PostgreSQL run. The live Task 14 blocker remains authoritative; see `execution/e5-live-evidence/README.md`.
 
