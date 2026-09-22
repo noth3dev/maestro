@@ -21,7 +21,16 @@ function hasConnectionEnvironmentOverride(env: ConnectionEnvironment): boolean {
 }
 
 export async function initializeCarnegieConnection(options: CarnegieBootstrapOptions): Promise<CarnegieBootstrapResult> {
-  const saved = options.load();
+  let saved: ConnectionConfig | undefined;
+  try {
+    saved = options.load();
+  } catch {
+    // An interrupted local bootstrap can leave the public connection record
+    // behind after its secret was never persisted. Treat that record as stale
+    // and let the normal local bootstrap repair it. Explicit environment
+    // configuration still takes the manual setup path.
+    if (hasConnectionEnvironmentOverride(options.env)) return {};
+  }
   if (saved !== undefined) return { config: saved };
   if (hasConnectionEnvironmentOverride(options.env)) return {};
 

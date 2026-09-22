@@ -45,6 +45,25 @@ describe("initializeCarnegieConnection", () => {
     ]);
   });
 
+  it("recovers from an incomplete saved local connection", async () => {
+    const resolveLocalConnection = vi.fn(async () => ({
+      kind: "configured" as const,
+      apiUrl: bootstrapped.apiUrl,
+      token: bootstrapped.token,
+      projectId: bootstrapped.projectId,
+    }));
+    const save = vi.fn();
+
+    await expect(initializeCarnegieConnection({
+      env: {},
+      load: () => { throw new Error("Stored control-plane token is unavailable"); },
+      save,
+      resolveLocalConnection,
+    })).resolves.toEqual({ config: bootstrapped });
+    expect(resolveLocalConnection).toHaveBeenCalledOnce();
+    expect(save).toHaveBeenCalledWith(bootstrapped);
+  });
+
   it("does not bootstrap over an existing saved connection", async () => {
     const load = vi.fn(() => bootstrapped);
     const resolveLocalConnection = vi.fn();
