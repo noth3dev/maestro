@@ -745,6 +745,8 @@ export type ApprovalApi = Pick<ApiClient,
 
 ## Task 9: Make Channel, durable events, and live refresh useful for project progress
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `7953a180` (RED tests) and `0f722726` (GREEN). Focused coverage passed 3 files / 16 tests; changed-file ESLint and `git diff --check` passed. The full Carnegie build remains blocked by the documented baseline dependency/type errors; this does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/views/Channel.tsx`
 - Modify: `apps/carnegie/src/useDurableEvents.ts`
