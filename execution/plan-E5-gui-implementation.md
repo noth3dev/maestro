@@ -683,6 +683,8 @@ export type IntegrationApi = Pick<ApiClient,
 
 ## Task 8: Complete approval, authority, Inbox, and Concertmaster discussion
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `e3f5645a` (RED tests) and `9cdf98ae` (GREEN). Focused coverage passed 4 files / 12 tests; changed-file ESLint passed. The full Carnegie build remains blocked by the documented baseline dependency/type errors; this does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/views/Inbox.tsx`
 - Create: `apps/carnegie/src/views/Approvals.tsx`
