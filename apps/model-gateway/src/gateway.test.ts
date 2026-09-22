@@ -159,6 +159,32 @@ describe("managed account login", () => {
     expect(binding).toMatchObject({ providerId: "openai-codex", authMode: "managed-subscription" });
     await expect(credentials.resolveForGateway("openai-codex-operator-1")).rejects.toThrow("no gateway secret");
   });
+
+  it("persists the real token pair for a native-OAuth login exactly once, not on every status poll", async () => {
+    const registry = new ProviderRegistry();
+    const credentials = new InMemoryCredentialStore();
+    const bindSpy = vi.spyOn(credentials, "bind");
+    const codexCredentials = { accessToken: "access-1", refreshToken: "refresh-1", expiresAt: Date.now() + 3_600_000, accountId: "acct-1" };
+    const codex = {
+      startChatGptLogin: async () => ({ providerId: "openai-codex" as const, loginId: "login-1", authUrl: "https://auth.openai.com/oauth/authorize" }),
+      loginStatus: async () => ({ loginId: "login-1", state: "succeeded" as const }),
+      cancelLogin: async () => {},
+      getCredentials: (loginId: string) => (loginId === "login-1" ? codexCredentials : undefined),
+    };
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1", codex });
+    await gateway.startAccountLogin?.({ requestId: "r1", operatorId: "operator-1", providerId: "openai-codex" });
+
+    await gateway.accountLoginStatus?.({ requestId: "r2", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" });
+    await gateway.accountLoginStatus?.({ requestId: "r3", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" });
+    await gateway.accountLoginStatus?.({ requestId: "r4", operatorId: "operator-1", providerId: "openai-codex", loginId: "login-1" });
+
+    expect(bindSpy).toHaveBeenCalledOnce();
+    expect(bindSpy).toHaveBeenCalledWith(
+      { operatorId: "operator-1", providerId: "openai-codex", authMode: "managed-subscription", accountRef: "openai-codex-operator-1" },
+      JSON.stringify(codexCredentials),
+    );
+    await expect(credentials.resolveForGateway("openai-codex-operator-1")).resolves.toBe(JSON.stringify(codexCredentials));
+  });
 });
 
 

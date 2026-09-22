@@ -1,6 +1,7 @@
-import { CodexAppServerClient, createCodexAppServerPlugin, createOpenAiPlugin } from "@maestro/model-provider-openai";
+import { CodexAppServerClient, CodexOAuthClient, createCodexAppServerPlugin, createCodexResponsesPlugin, createOpenAiPlugin } from "@maestro/model-provider-openai";
 import { createAnthropicPlugin } from "@maestro/model-provider-anthropic";
 import { ProviderRegistry } from "@maestro/agent-runtime";
+import { createCodexAccessTokenResolver } from "./codex-token-resolver.js";
 import { KeychainCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 import { buildModelGatewayServer } from "./rpc.js";
@@ -37,12 +38,31 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   const anthropicAccountRef = `anthropic-${operatorId}`;
   accountRefs.openai = openAiAccountRef;
   accountRefs.anthropic = anthropicAccountRef;
+  // ChatGPT Codex support defaults to the native OAuth + Responses API path
+  // (no external `codex` executable required, and real tool-bearing turns
+  // work, unlike the app-server JSON-RPC bridge below). Set
+  // MAESTRO_CODEX_APP_SERVER_COMMAND to explicitly opt into the legacy
+  // subprocess bridge instead, or MAESTRO_CODEX_DISABLE=true to disable
+  // Codex support entirely.
   const codexCommand = env.MAESTRO_CODEX_APP_SERVER_COMMAND?.trim();
-  const codex = codexCommand === undefined || codexCommand === "" ? undefined : new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: positiveMilliseconds(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS, 30000) });
-  if (codex !== undefined) {
-    accountRefs["openai-codex"] = `openai-codex-${operatorId}`;
-    const codexModels = optionalModelsFromEnv(env.MAESTRO_CODEX_MODELS);
-    registry.register(createCodexAppServerPlugin({ client: codex, ...(codexModels === undefined ? {} : { models: codexModels }) }));
+  const codexAccountRef = `openai-codex-${operatorId}`;
+  const codexModels = optionalModelsFromEnv(env.MAESTRO_CODEX_MODELS);
+  let codex: CodexAppServerClient | CodexOAuthClient | undefined;
+  if (env.MAESTRO_CODEX_DISABLE !== "true") {
+    if (codexCommand !== undefined && codexCommand !== "") {
+      const client = new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: positiveMilliseconds(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS, 30000) });
+      codex = client;
+      accountRefs["openai-codex"] = codexAccountRef;
+      registry.register(createCodexAppServerPlugin({ client, ...(codexModels === undefined ? {} : { models: codexModels }) }));
+    } else {
+      const oauth = new CodexOAuthClient();
+      codex = oauth;
+      accountRefs["openai-codex"] = codexAccountRef;
+      registry.register(createCodexResponsesPlugin({
+        resolveAccessToken: createCodexAccessTokenResolver({ credentials, operatorId, refresh: (refreshToken) => oauth.refresh(refreshToken) }),
+        ...(codexModels === undefined ? {} : { models: codexModels }),
+      }));
+    }
   }
   // Register provider adapters independently from credentials. The gateway
   // filters discovery and admission by the active operator-owned binding.

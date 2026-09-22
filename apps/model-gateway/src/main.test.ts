@@ -14,7 +14,7 @@ describe("model gateway environment composition", () => {
     const response = await runtime.app.inject({ method: "GET", url: "/v1/models", headers: { authorization: "Bearer gateway-secret" } });
     expect(response.statusCode).toBe(200);
     expect(response.json().map((model: { identity: { provider: string; id: string } }) => `${model.identity.provider}/${model.identity.id}`)).toEqual(["openai/gpt-test", "openai/gpt-small", "anthropic/claude-test"]);
-    expect(runtime.accountRefs).toEqual({ openai: "openai-operator-1", anthropic: "anthropic-operator-1" });
+    expect(runtime.accountRefs).toEqual({ openai: "openai-operator-1", anthropic: "anthropic-operator-1", "openai-codex": "openai-codex-operator-1" });
     await runtime.app.close();
   });
 
