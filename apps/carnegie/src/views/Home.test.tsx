@@ -12,6 +12,8 @@ describe("Home Concertmaster conversation", () => {
   it("keeps the initial composer focused before a conversation exists", () => {
     const html = renderToStaticMarkup(<Home onNavigate={vi.fn()} mode="maestro" onModeChange={vi.fn()} />);
     expect(html).toContain("Brief the Concertmaster");
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain('aria-pressed="false"');
     expect(html).not.toContain("conversation not started");
     expect(html).not.toContain("continue conversation");
     expect(html).not.toContain("retry turn");
