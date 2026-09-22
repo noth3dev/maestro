@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { RouterConfigInputSchema, type RouterCatalogEntry, type RouterCatalogRead, type RouterConfigInput, type RouterConfigValidation } from "@maestro/contracts";
+import {
+  RouterConfigInputSchema,
+  type ProviderAccountLoginStartResult,
+  type ProviderAccountLoginStatus,
+  type RouterCatalogEntry,
+  type RouterCatalogRead,
+  type RouterConfigInput,
+  type RouterConfigValidation,
+} from "@maestro/contracts";
 import { Icon } from "../icons.js";
 import { useTheme } from "../theme.js";
 import { useConnection } from "../connection.js";
@@ -7,6 +15,133 @@ import { ToggleSwitch } from "../components/ToggleSwitch.js";
 import { isProviderAuthUrlAllowed, waitForProviderAccountLogin } from "../lib/provider-account-login.js";
 
 type Panel = "profile" | "appearance" | "connection" | "notifications" | "providers" | "models" | "authority" | "danger";
+
+export type AccountLoginProviderId = "openai-codex" | "anthropic-claude";
+
+export type AccountLoginPanelState = {
+  loginState: "idle" | "opening" | "waiting" | "connected" | "error";
+  message?: string;
+  url?: string;
+  linkCopied: boolean;
+};
+
+export const initialAccountLoginPanelState: AccountLoginPanelState = { loginState: "idle", linkCopied: false };
+
+type AccountLoginRef = { loginId?: string; abort?: AbortController };
+
+type AccountLoginApi = {
+  startAccountLogin(providerId: AccountLoginProviderId): Promise<ProviderAccountLoginStartResult>;
+  accountLoginStatus(providerId: AccountLoginProviderId, loginId: string): Promise<ProviderAccountLoginStatus>;
+  cancelAccountLogin(providerId: AccountLoginProviderId, loginId: string): Promise<void>;
+  logoutAccount(providerId: AccountLoginProviderId): Promise<void>;
+};
+
+export function createAccountLoginController(deps: {
+  providerId: AccountLoginProviderId;
+  label: string;
+  ref: AccountLoginRef;
+  api: AccountLoginApi;
+  openExternal: (url: string) => Promise<void>;
+  refreshProviderSettings: () => Promise<void>;
+  getBusy: () => string | undefined;
+  setBusy: (value: string | undefined) => void;
+  setPanelState: (patch: Partial<AccountLoginPanelState>) => void;
+  setConnected: (connected: boolean) => void;
+}) {
+  const { providerId, label, ref, api, openExternal, refreshProviderSettings, getBusy, setBusy, setPanelState, setConnected } = deps;
+
+  const start = async () => {
+    if (getBusy() !== undefined) return;
+    const controller = new AbortController();
+    ref.abort = controller;
+    ref.loginId = undefined;
+    setBusy(providerId);
+    setPanelState({ loginState: "opening", message: undefined });
+    try {
+      const started = await api.startAccountLogin(providerId);
+      if (!isProviderAuthUrlAllowed(started.authUrl)) throw new Error("The provider returned an unsafe authentication URL.");
+      ref.loginId = started.loginId;
+      setPanelState({ url: started.authUrl });
+      let browserOpened = true;
+      try {
+        await openExternal(started.authUrl);
+      } catch {
+        browserOpened = false;
+      }
+      setPanelState({ loginState: "waiting" });
+      if (!browserOpened) setPanelState({ message: "The browser did not open. Use the sign-in link below." });
+      await waitForProviderAccountLogin((loginId) => api.accountLoginStatus(providerId, loginId), started.loginId, {
+        signal: controller.signal,
+      });
+      setConnected(true);
+      setPanelState({ loginState: "connected" });
+      try {
+        await refreshProviderSettings();
+        setPanelState({ message: `${label} is ready for Maestro.` });
+      } catch {
+        setPanelState({ message: `${label} is connected. Settings will refresh on the next load.` });
+      }
+    } catch (cause: unknown) {
+      if (controller.signal.aborted) return;
+      const loginId = ref.loginId;
+      if (loginId !== undefined) {
+        try {
+          await api.cancelAccountLogin(providerId, loginId);
+        } catch {
+          /* preserve the original sign-in error */
+        }
+      }
+      setPanelState({ loginState: "error", message: cause instanceof Error ? cause.message : `Could not complete ${label} login.` });
+    } finally {
+      if (ref.abort === controller) ref.abort = undefined;
+      ref.loginId = undefined;
+      setBusy(undefined);
+    }
+  };
+
+  const cancel = async () => {
+    const loginId = ref.loginId;
+    ref.abort?.abort();
+    if (loginId !== undefined) {
+      try {
+        await api.cancelAccountLogin(providerId, loginId);
+      } catch {
+        /* the local cancellation still stops polling */
+      }
+    }
+    ref.loginId = undefined;
+    ref.abort = undefined;
+    setBusy(undefined);
+    setPanelState({ loginState: "idle", message: undefined, url: undefined, linkCopied: false });
+  };
+
+  const logout = async () => {
+    setBusy(providerId);
+    try {
+      await api.logoutAccount(providerId);
+      setConnected(false);
+      setPanelState({ loginState: "idle", message: undefined, url: undefined, linkCopied: false });
+      await refreshProviderSettings();
+    } catch (cause: unknown) {
+      setPanelState({ loginState: "error", message: cause instanceof Error ? cause.message : `Could not disconnect ${label}.` });
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const copyLink = async (url: string | undefined) => {
+    if (url === undefined) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setPanelState({ linkCopied: true });
+      window.setTimeout(() => setPanelState({ linkCopied: false }), 1800);
+    } catch {
+      setPanelState({ message: "Copy was blocked. Select the sign-in link manually." });
+    }
+  };
+
+  return { start, cancel, logout, copyLink };
+}
 
 type RouterCatalogPanelProps = {
   catalog?: RouterCatalogRead | undefined;
@@ -371,13 +506,18 @@ export function Settings() {
   const [routerCatalogLoading, setRouterCatalogLoading] = useState(false);
   const [providerSecret, setProviderSecret] = useState("");
   const [providerBusy, setProviderBusy] = useState<string | undefined>();
-  const [accountLoginState, setAccountLoginState] = useState<"idle" | "opening" | "waiting" | "connected" | "error">("idle");
-  const [accountLoginMessage, setAccountLoginMessage] = useState<string | undefined>();
-  const [accountLoginUrl, setAccountLoginUrl] = useState<string | undefined>();
-  const [accountLinkCopied, setAccountLinkCopied] = useState(false);
-  const [accountConnected, setAccountConnected] = useState(false);
-  const accountLoginId = useRef<string | undefined>(undefined);
-  const accountLoginAbort = useRef<AbortController | undefined>(undefined);
+  const [accountLoginPanels, setAccountLoginPanels] = useState<Record<AccountLoginProviderId, AccountLoginPanelState>>({
+    "openai-codex": initialAccountLoginPanelState,
+    "anthropic-claude": initialAccountLoginPanelState,
+  });
+  const [connectedAccounts, setConnectedAccounts] = useState<Record<AccountLoginProviderId, boolean>>({
+    "openai-codex": false,
+    "anthropic-claude": false,
+  });
+  const accountLoginRefs = useRef<Record<AccountLoginProviderId, { loginId?: string; abort?: AbortController }>>({
+    "openai-codex": {},
+    "anthropic-claude": {},
+  });
   const isDark = theme === "dark";
 
   const loadSettings = () => {
@@ -396,9 +536,19 @@ export function Settings() {
   useEffect(() => {
     loadSettings();
     void window.maestro.api.listProviderConnections().then((connections) => {
-      setAccountConnected(connections.some((provider) => provider.providerId === "openai-codex" && provider.connected));
+      setConnectedAccounts((current) => ({
+        "openai-codex":
+          current["openai-codex"] ||
+          connections.some((provider) => provider.providerId === "openai-codex" && provider.connected),
+        "anthropic-claude":
+          current["anthropic-claude"] ||
+          connections.some((provider) => provider.providerId === "anthropic-claude" && provider.connected),
+      }));
     }).catch(() => { /* durable settings remains the source of truth when this optional refresh is unavailable */ });
-    return () => accountLoginAbort.current?.abort();
+    return () => {
+      accountLoginRefs.current["openai-codex"].abort?.abort();
+      accountLoginRefs.current["anthropic-claude"].abort?.abort();
+    };
   }, []);
   useEffect(() => {
     if (panel === "models") loadRouterCatalog();
@@ -419,15 +569,22 @@ export function Settings() {
     return next;
   };
   const providers = settings?.providers ?? [];
-  const codexConnected = accountConnected || providers.some((provider) => provider.providerId === "openai-codex" && provider.connected);
+  const isAccountProviderConnected = (providerId: AccountLoginProviderId) =>
+    connectedAccounts[providerId] || providers.some((provider) => provider.providerId === providerId && provider.connected);
   const refreshProviderSettings = async () => {
     const nextSettings = await window.maestro.api.getSettings();
     setSettings(nextSettings);
     setSettingsError(undefined);
     try {
       const connections = await window.maestro.api.listProviderConnections();
-      const connected = connections.some((provider) => provider.providerId === "openai-codex" && provider.connected);
-      setAccountConnected((current) => current || connected);
+      setConnectedAccounts((current) => ({
+        "openai-codex":
+          current["openai-codex"] ||
+          connections.some((provider) => provider.providerId === "openai-codex" && provider.connected),
+        "anthropic-claude":
+          current["anthropic-claude"] ||
+          connections.some((provider) => provider.providerId === "anthropic-claude" && provider.connected),
+      }));
     } catch {
       // The completed login is still reflected locally while the gateway catalog catches up.
     }
@@ -436,90 +593,37 @@ export function Settings() {
     setProviderBusy(providerId);
     try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); await refreshProviderSettings(); } catch { setSettingsError("Provider status is unavailable; no connection state was changed."); } finally { setProviderBusy(undefined); }
   };
-  const startCodexLogin = async () => {
-    if (providerBusy !== undefined) return;
-    const controller = new AbortController();
-    accountLoginAbort.current = controller;
-    accountLoginId.current = undefined;
-    setProviderBusy("openai-codex");
-    setAccountLoginState("opening");
-    setAccountLoginMessage(undefined);
-    try {
-      const started = await window.maestro.api.startAccountLogin();
-      if (!isProviderAuthUrlAllowed(started.authUrl)) throw new Error("The provider returned an unsafe authentication URL.");
-      accountLoginId.current = started.loginId;
-      setAccountLoginUrl(started.authUrl);
-      let browserOpened = true;
-      try {
-        await window.maestro.external.openProviderAuth(started.authUrl);
-      } catch {
-        browserOpened = false;
-      }
-      setAccountLoginState("waiting");
-      if (!browserOpened) setAccountLoginMessage("The browser did not open. Use the sign-in link below.");
-      await waitForProviderAccountLogin((loginId) => window.maestro.api.accountLoginStatus(loginId), started.loginId, { signal: controller.signal });
-      setAccountConnected(true);
-      setAccountLoginState("connected");
-      try {
-        await refreshProviderSettings();
-        setAccountLoginMessage("ChatGPT / Codex is ready for Maestro.");
-      } catch {
-        setAccountLoginMessage("ChatGPT / Codex is connected. Settings will refresh on the next load.");
-      }
-    } catch (cause: unknown) {
-      if (controller.signal.aborted) return;
-      const loginId = accountLoginId.current;
-      if (loginId !== undefined) {
-        try { await window.maestro.api.cancelAccountLogin(loginId); } catch { /* preserve the original sign-in error */ }
-      }
-      setAccountLoginState("error");
-      setAccountLoginMessage(cause instanceof Error ? cause.message : "Could not complete ChatGPT / Codex login.");
-    } finally {
-      if (accountLoginAbort.current === controller) accountLoginAbort.current = undefined;
-      accountLoginId.current = undefined;
-      setProviderBusy(undefined);
-    }
+  const setAccountPanelState = (providerId: AccountLoginProviderId, patch: Partial<AccountLoginPanelState>) => {
+    setAccountLoginPanels((current) => ({ ...current, [providerId]: { ...current[providerId], ...patch } }));
   };
-  const copyAccountLoginUrl = async () => {
-    if (accountLoginUrl === undefined) return;
-    try {
-      await navigator.clipboard.writeText(accountLoginUrl);
-      setAccountLinkCopied(true);
-      window.setTimeout(() => setAccountLinkCopied(false), 1800);
-    } catch {
-      setAccountLoginMessage("Copy was blocked. Select the sign-in link manually.");
-    }
+  const setAccountConnectedFor = (providerId: AccountLoginProviderId, connected: boolean) => {
+    setConnectedAccounts((current) => ({ ...current, [providerId]: connected }));
   };
-  const cancelCodexLogin = async () => {
-    const loginId = accountLoginId.current;
-    accountLoginAbort.current?.abort();
-    if (loginId !== undefined) {
-      try { await window.maestro.api.cancelAccountLogin(loginId); } catch { /* the local cancellation still stops polling */ }
-    }
-    accountLoginId.current = undefined;
-    accountLoginAbort.current = undefined;
-    setProviderBusy(undefined);
-    setAccountLoginState("idle");
-    setAccountLoginMessage(undefined);
-    setAccountLoginUrl(undefined);
-    setAccountLinkCopied(false);
-  };
-  const logoutCodex = async () => {
-    setProviderBusy("openai-codex");
-    try {
-      await window.maestro.api.logoutAccount();
-      setAccountConnected(false);
-      setAccountLoginState("idle");
-      setAccountLoginMessage(undefined);
-      setAccountLoginUrl(undefined);
-      setAccountLinkCopied(false);
-      await refreshProviderSettings();
-    } catch (cause: unknown) {
-      setAccountLoginState("error");
-      setAccountLoginMessage(cause instanceof Error ? cause.message : "Could not disconnect ChatGPT / Codex.");
-    } finally {
-      setProviderBusy(undefined);
-    }
+  const accountLoginControllers: Record<AccountLoginProviderId, ReturnType<typeof createAccountLoginController>> = {
+    "openai-codex": createAccountLoginController({
+      providerId: "openai-codex",
+      label: "ChatGPT / Codex",
+      ref: accountLoginRefs.current["openai-codex"],
+      api: window.maestro.api,
+      openExternal: window.maestro.external.openProviderAuth,
+      refreshProviderSettings,
+      getBusy: () => providerBusy,
+      setBusy: setProviderBusy,
+      setPanelState: (patch) => setAccountPanelState("openai-codex", patch),
+      setConnected: (connected) => setAccountConnectedFor("openai-codex", connected),
+    }),
+    "anthropic-claude": createAccountLoginController({
+      providerId: "anthropic-claude",
+      label: "Claude Pro/Max",
+      ref: accountLoginRefs.current["anthropic-claude"],
+      api: window.maestro.api,
+      openExternal: window.maestro.external.openProviderAuth,
+      refreshProviderSettings,
+      getBusy: () => providerBusy,
+      setBusy: setProviderBusy,
+      setPanelState: (patch) => setAccountPanelState("anthropic-claude", patch),
+      setConnected: (connected) => setAccountConnectedFor("anthropic-claude", connected),
+    }),
   };
 
   const navItem = (id: Panel, icon: string, label: string) => (
@@ -649,41 +753,92 @@ export function Settings() {
           <div className="settings-section-title">providers</div>
           <div className="settings-section-sub">Connect a model provider once. Credentials stay behind the authenticated Model Gateway.</div>
           {settingsReady ? <>
-            <section className="provider-account-card" aria-labelledby="codex-provider-title">
-              <div className="provider-account-head">
-                <div className="provider-account-icon"><Icon name="message-circle" /></div>
-                <div className="provider-account-copy">
-                  <h2 id="codex-provider-title">ChatGPT / Codex</h2>
-                  <p>Use your existing ChatGPT account for Maestro. Carnegie opens the secure sign-in in your browser.</p>
-                </div>
-                <span className={`badge ${codexConnected ? "badge-olive" : accountLoginState === "error" ? "badge-rust" : "badge-slate"}`}>
-                  {codexConnected ? "connected" : accountLoginState === "waiting" ? "waiting for sign-in" : accountLoginState === "opening" ? "opening browser" : accountLoginState === "error" ? "needs attention" : "not connected"}
-                </span>
-              </div>
-              <div className="provider-account-actions">
-                {codexConnected ? (
-                  <button className="btn btn-sm" disabled={providerBusy === "openai-codex"} onClick={() => void logoutCodex()}>
-                    {providerBusy === "openai-codex" ? "disconnecting…" : "disconnect"}
-                  </button>
-                ) : accountLoginState === "waiting" || accountLoginState === "opening" ? (
-                  <button className="btn btn-sm" disabled={providerBusy !== undefined} onClick={() => void cancelCodexLogin()}>cancel sign-in</button>
-                ) : (
-                  <button className="btn btn-primary btn-sm" disabled={providerBusy !== undefined} onClick={() => void startCodexLogin()}>
-                    {accountLoginState === "error" ? "try again" : "sign in with ChatGPT"}
-                  </button>
-                )}
-                {accountLoginMessage !== undefined && <span className={`provider-account-message ${accountLoginState === "error" ? "is-error" : accountLoginState === "connected" ? "is-success" : ""}`} role={accountLoginState === "error" ? "alert" : "status"}>{accountLoginMessage}</span>}
-              </div>
-              {accountLoginUrl !== undefined && accountLoginState !== "connected" && (
-                <div className="provider-account-link-box">
-                  <span>Sign-in link</span>
-                  <div className="provider-account-link-row">
-                    <a href={accountLoginUrl} target="_blank" rel="noreferrer">{accountLoginUrl}</a>
-                    <button type="button" className="btn btn-sm" onClick={() => void copyAccountLoginUrl()}>{accountLinkCopied ? "copied" : "copy link"}</button>
+            {(
+              [
+                {
+                  providerId: "openai-codex" as const,
+                  icon: "message-circle",
+                  title: "ChatGPT / Codex",
+                  description: "Use your existing ChatGPT account for Maestro. Carnegie opens the secure sign-in in your browser.",
+                  connectLabel: "sign in with ChatGPT",
+                },
+                {
+                  providerId: "anthropic-claude" as const,
+                  icon: "message-circle",
+                  title: "Claude Pro/Max",
+                  description: "Use your existing Claude Pro/Max account for Maestro. Carnegie opens the secure sign-in in your browser.",
+                  connectLabel: "sign in with Claude",
+                },
+              ] as const
+            ).map(({ providerId, icon, title, description, connectLabel }) => {
+              const connected = isAccountProviderConnected(providerId);
+              const panelState = accountLoginPanels[providerId];
+              const controller = accountLoginControllers[providerId];
+              return (
+                <section className="provider-account-card" aria-labelledby={`${providerId}-provider-title`} key={providerId}>
+                  <div className="provider-account-head">
+                    <div className="provider-account-icon"><Icon name={icon} /></div>
+                    <div className="provider-account-copy">
+                      <h2 id={`${providerId}-provider-title`}>{title}</h2>
+                      <p>{description}</p>
+                    </div>
+                    <span
+                      className={`badge ${connected ? "badge-olive" : panelState.loginState === "error" ? "badge-rust" : "badge-slate"}`}
+                    >
+                      {connected
+                        ? "connected"
+                        : panelState.loginState === "waiting"
+                          ? "waiting for sign-in"
+                          : panelState.loginState === "opening"
+                            ? "opening browser"
+                            : panelState.loginState === "error"
+                              ? "needs attention"
+                              : "not connected"}
+                    </span>
                   </div>
-                </div>
-              )}
-            </section>
+                  <div className="provider-account-actions">
+                    {connected ? (
+                      <button className="btn btn-sm" disabled={providerBusy === providerId} onClick={() => void controller.logout()}>
+                        {providerBusy === providerId ? "disconnecting…" : "disconnect"}
+                      </button>
+                    ) : panelState.loginState === "waiting" || panelState.loginState === "opening" ? (
+                      <button className="btn btn-sm" disabled={providerBusy !== undefined} onClick={() => void controller.cancel()}>
+                        cancel sign-in
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        disabled={providerBusy !== undefined}
+                        onClick={() => void controller.start()}
+                      >
+                        {panelState.loginState === "error" ? "try again" : connectLabel}
+                      </button>
+                    )}
+                    {panelState.message !== undefined && (
+                      <span
+                        className={`provider-account-message ${
+                          panelState.loginState === "error" ? "is-error" : panelState.loginState === "connected" ? "is-success" : ""
+                        }`}
+                        role={panelState.loginState === "error" ? "alert" : "status"}
+                      >
+                        {panelState.message}
+                      </span>
+                    )}
+                  </div>
+                  {panelState.url !== undefined && panelState.loginState !== "connected" && (
+                    <div className="provider-account-link-box">
+                      <span>Sign-in link</span>
+                      <div className="provider-account-link-row">
+                        <a href={panelState.url} target="_blank" rel="noreferrer">{panelState.url}</a>
+                        <button type="button" className="btn btn-sm" onClick={() => void controller.copyLink(panelState.url)}>
+                          {panelState.linkCopied ? "copied" : "copy link"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              );
+            })}
 
             <div className="provider-api-section">
               <div className="provider-api-heading">API key connections</div>

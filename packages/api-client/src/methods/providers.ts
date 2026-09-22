@@ -59,8 +59,8 @@ export function createProvidersMethods(
         { parse: () => undefined },
       );
     },
-    startAccountLogin() {
-      const input = ProviderAccountLoginStartInputSchema.parse({ providerId: "openai-codex" });
+    startAccountLogin(providerId) {
+      const input = ProviderAccountLoginStartInputSchema.parse({ providerId });
       return request(
         "v1/provider-account-logins/start",
         {
@@ -71,37 +71,37 @@ export function createProvidersMethods(
         ProviderAccountLoginStartResultSchema,
       );
     },
-    accountLoginStatus(loginId) {
+    accountLoginStatus(providerId, loginId) {
       if (typeof loginId !== "string" || loginId.trim() === "") throw new Error("Invalid login session");
       return request(
         "v1/provider-account-logins/status",
         {
           method: "POST",
           headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() },
-          body: JSON.stringify({ providerId: "openai-codex", loginId }),
+          body: JSON.stringify({ providerId, loginId }),
         },
         ProviderAccountLoginStatusSchema,
       );
     },
-    cancelAccountLogin(loginId) {
+    cancelAccountLogin(providerId, loginId) {
       if (typeof loginId !== "string" || loginId.trim() === "") throw new Error("Invalid login session");
       return request(
         "v1/provider-account-logins/cancel",
         {
           method: "POST",
           headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() },
-          body: JSON.stringify({ providerId: "openai-codex", loginId }),
+          body: JSON.stringify({ providerId, loginId }),
         },
         { parse: () => undefined },
       );
     },
-    logoutAccount() {
+    logoutAccount(providerId) {
       return request(
         "v1/provider-account-logins/logout",
         {
           method: "POST",
           headers: { ...headers, "content-type": "application/json", "idempotency-key": cryptoRandomUuid() },
-          body: JSON.stringify({ providerId: "openai-codex" }),
+          body: JSON.stringify({ providerId }),
         },
         {
           parse(value) {
