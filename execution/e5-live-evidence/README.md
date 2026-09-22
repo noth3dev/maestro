@@ -25,6 +25,7 @@
 7. Browser evidence was run against the real Electron CDP target with `MAESTRO_CARNEGIE_CDP_URL=http://127.0.0.1:9222`: all four `tests/e5-a11y.spec.ts` cases reached the renderer but failed/blocked at the unavailable backend boundary (first failure: missing `Primary navigation`; remaining cases timed out while the recovery screen was displayed). No browser success is claimed.
 8. The same Playwright command without `MAESTRO_CARNEGIE_CDP_URL` skipped all four tests by design; this is not live evidence.
 9. Final Carnegie Playwright command (`npx playwright test --reporter=line`) passed 4 tests and skipped 5 designed CDP-gated tests. The independent Electron radial smoke passed: `RADIAL_SMOKE:{"pass":true,"graph":true,"taskContract":true,"controls":3,"sourceNodes":5}`. Secret-pattern scans over committed E5 evidence/spec files returned zero matches; generated Playwright artifacts were removed.
+10. Full-scope secret/artifact scan covered 28 changed/evidence/log files (including Task 14/15 logs): zero high-confidence Bearer/provider-key patterns, zero credential-header assignments, and zero matches against secret-like environment values. `apps/carnegie/test-results` and `playwright-report` were absent after cleanup.
 
 ## Result
 
