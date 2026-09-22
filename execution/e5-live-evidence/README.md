@@ -32,3 +32,14 @@
 ## Result
 
 Task 14 is **backend-blocked at local database bootstrap**. It did not produce a project ID, conversation ID, Task Contract ID, Goal ID, Worker/evidence/certification/report records, or provider response. The correct status is `backend-blocked`, not `Live`.
+
+## Fresh Task 15 verification (2026-09-23)
+
+- Real PostgreSQL full suite: `/tmp/e5-heartbeat19-full-real-pg.log`; **432 test files passed, 2,874 tests passed, exit code 0**, duration 956.94s.
+- Root `npm run build`: exit 0 (`/tmp/e5-final-root-build.log`).
+- `npm run --workspace @maestro/carnegie build`: exit 0 (`/tmp/e5-final-carnegie-build.log`).
+- Exact Carnegie Playwright: **4 passed, 5 designed CDP-gated skips**, exit 0 (`/tmp/e5-final-playwright.log`).
+- Changed-file ESLint and `git diff --check`: exit 0.
+- Secret/artifact scan: zero Bearer/provider-key patterns, credential-header assignments, or token-field matches; generated Playwright directories removed.
+- These results close the automated verification gap but do not close E5: Task 14 still has no usable Control Plane, embedded database, Model Gateway, or provider listener, and produced no live project/Goal records.
+- Independent no-edit review: **PASS** for the current patch with no P0/P1 findings. It confirmed the Playwright-owned exclusion is required because removing it makes Vitest collect Playwright specs and fail. A pre-existing P2 remains: `router-runtime.integration.test.ts` imports constants from `native-worker-acceptance.integration.test.ts`, registering that suite during focused runs; move shared constants to a non-test fixture module in a later cleanup.

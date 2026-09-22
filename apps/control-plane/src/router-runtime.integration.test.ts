@@ -5,20 +5,21 @@ import { join } from "node:path";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { ProviderRegistry, type ModelProviderPort, type ProviderPlugin } from "@maestro/agent-runtime";
-import { MODEL_CAPABILITY_AXES, type ModelMap } from "@maestro/domain";
+import { MODEL_CAPABILITY_AXES, taskContractContentHash, type ModelMap } from "@maestro/domain";
 import {
   acquireGoalLease,
   applyAllMigrations,
   bootstrapLocalOperator,
+  bootstrapPermanentOrganization,
   createDepartmentPlan,
   createHeadCouncil,
   createMissionBundle,
   recordCouncilDecisionPacket,
   recordOperationalOverlay,
+  releaseGoalLease,
   revealCouncilBriefs,
   snapshotOperationalOverlayForGoalDurably,
   submitIndependentBrief,
-  taskContractContentHash,
 } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import type {
@@ -131,13 +132,13 @@ function buildTestModelMap(): ModelMap {
         modelRef: MODEL_A,
         capability: scoredCapability(150),
         providerFacts: fixtureProviderFacts(),
-        provenance: { owner: "human", sourceRefs: ["router-runtime-wiring-test"], reviewedAt: "2026-09-22" },
+        provenance: { owner: "human", sourceRefs: ["router-runtime-wiring-test"], reviewedAt: "2026-09-22T00:00:00.000Z" },
       },
       {
         modelRef: MODEL_B,
         capability: scoredCapability(140),
         providerFacts: fixtureProviderFacts(),
-        provenance: { owner: "human", sourceRefs: ["router-runtime-wiring-test"], reviewedAt: "2026-09-22" },
+        provenance: { owner: "human", sourceRefs: ["router-runtime-wiring-test"], reviewedAt: "2026-09-22T00:00:00.000Z" },
       },
     ],
   };
@@ -236,6 +237,20 @@ function bundleSubstance(): MissionBundleSubstance {
       ) as never,
       provenance: { taskContractRef: "task-contract:router-runtime-wiring", headDecisionRef: "head-decision:router-runtime-wiring" },
     },
+    routingWorkInput: {
+      schemaVersion: 1,
+      workCharacter: {
+        schemaVersion: 1,
+        risk: 100,
+        reversibility: 80,
+        verificationAttachment: 120,
+        materialScale: 50,
+        timePressure: 40,
+        budgetHeadroom: 100,
+        provenance: { taskContractRef: "task-contract:router-runtime-wiring", headDecisionRef: "head-decision:router-runtime-wiring" },
+      },
+      explicitHeadUplift: 130,
+    },
     approvedModels: [MODEL_A, MODEL_B],
     allowedSkills: ["testing"],
     allowedTools: [],
@@ -252,7 +267,6 @@ function bundleSubstance(): MissionBundleSubstance {
     evidenceRequirements: ["provider response"],
     validationCriteria: ["bound result returned"],
     terminationConditions: ["done"],
-    repairHold: { approvalId: randomUUID(), window: "1 minute", repetitionScope: { kind: "bounded_count", count: 1 } },
   } satisfies MissionBundleSubstance;
 }
 
@@ -303,6 +317,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway router pool ac
     await pool.query(
       "TRUNCATE goals, native_execution_bindings, ensemble_router_routing_evidence, ensemble_router_goal_overlay_snapshots, ensemble_router_operational_overlays, workers, mission_bundles, department_plan_revisions, department_plans, council_protocol_events, council_round_contributions, council_rounds, independent_briefs, council_participants, head_councils, goal_head_participations, task_contract_confirmations, task_contract_decisions, task_contracts, evidence_records, goal_leases, outbox, goal_events, command_receipts, goal_controls, operator_settings, local_operator_credentials, local_operators, operator_project_memberships CASCADE",
     );
+    await bootstrapPermanentOrganization(pool);
     tempDir = mkdtempSync(join(tmpdir(), "maestro-router-runtime-wiring-"));
     modelMapPath = join(tempDir, "model_map.json");
     writeFileSync(modelMapPath, JSON.stringify(buildTestModelMap()));
@@ -438,6 +453,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway router pool ac
     };
     await recordOperationalOverlay(pool, overlay);
     await snapshotOperationalOverlayForGoalDurably(pool, overlay, goalId);
+    await releaseGoalLease(pool, proof);
 
     const config: MaestroConfig = {
       databaseUrl: scopedUrl,

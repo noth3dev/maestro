@@ -28,6 +28,7 @@ export default defineConfig({
     // execute every other worktree's test files against this process's
     // module graph. Exclude them explicitly; each worktree runs its own
     // tests independently from its own directory.
-    exclude: ["**/node_modules/**", "**/dist/**", ".git/**", ".worktrees/**", "testbed/**"],
+    // Carnegie browser specs are owned by Playwright, not Vitest.
+    exclude: ["**/node_modules/**", "**/dist/**", ".git/**", ".worktrees/**", "testbed/**", "apps/carnegie/tests/**"],
   },
 });
