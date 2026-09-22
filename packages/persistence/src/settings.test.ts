@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import { createPostgresSettingsService } from "./settings.js";
+import { createPostgresSettingsService, readEnabledModelRefs } from "./settings.js";
 
 const models = [
   { modelRef: "model-a", score: 120 },
@@ -25,6 +25,10 @@ function fakePool(
     if (sql.startsWith("UPDATE operator_settings")) {
       if (sql.includes("SET model_pool") && values?.[1] !== undefined) modelPool = JSON.parse(String(values[1]));
       return { rowCount: 1, rows: [] };
+    }
+    if (sql.startsWith("SELECT model_pool FROM operator_settings")) {
+      if (options.emptySelect === true) return { rowCount: 0, rows: [] };
+      return { rowCount: 1, rows: [{ model_pool: modelPool }] };
     }
     if (sql.startsWith("SELECT preferences, model_pool")) {
       if (options.emptySelect === true) return { rowCount: 0, rows: [] };
@@ -118,6 +122,26 @@ describe("createPostgresSettingsService", () => {
     expect(read.models.filter((model) => model.inUse).map((model) => model.modelRef)).toEqual(["model-b"]);
     const update = pool.queries.find((entry) => entry.sql.startsWith("UPDATE operator_settings SET model_pool"));
     expect(JSON.parse(String(update?.values?.[1]))).toEqual({ enabledModelRefs: ["model-b"] });
+  });
+
+  it("reads the raw empty pool as unrestricted", async () => {
+    const pool = fakePool({ modelPool: { enabledModelRefs: [] } });
+    await expect(readEnabledModelRefs(pool, "operator-1")).resolves.toEqual([]);
+  });
+
+  it("replaces the model pool atomically and sorts refs", async () => {
+    const pool = fakePool();
+    const service = createPostgresSettingsService({ pool, models: { list: async () => models } });
+    await service.replaceModelPool("operator-1", { schemaVersion: 1, enabledModelRefs: ["model-b", "model-a"] });
+    const update = pool.queries.find((entry) => entry.sql.startsWith("UPDATE operator_settings SET model_pool"));
+    expect(JSON.parse(String(update?.values?.[1]))).toEqual({ enabledModelRefs: ["model-a", "model-b"] });
+  });
+
+  it("rejects atomic replacement refs outside the human-owned model map", async () => {
+    const service = createPostgresSettingsService({ pool: fakePool(), models: { list: async () => models } });
+    await expect(service.replaceModelPool("operator-1", { schemaVersion: 1, enabledModelRefs: ["model-zzz"] })).rejects.toThrow(
+      "model is not present in the human-owned model_map",
+    );
   });
 
   it("coerces authority defaults from stored text", async () => {

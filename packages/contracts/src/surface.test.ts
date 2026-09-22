@@ -136,6 +136,7 @@ describe("contracts surface", () => {
         "RoutingWorkInputSchema",
         "SettingsAuthorityDefaultsSchema",
         "SettingsAuthorityDefaultsUpdateSchema",
+        "SettingsModelPoolConfigSchema",
         "SettingsModelPoolUpdateSchema",
         "SettingsModelSchema",
         "SettingsPreferencesSchema",

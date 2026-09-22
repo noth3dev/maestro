@@ -43,3 +43,6 @@ export const SettingsModelPoolUpdateSchema = z.object({ modelRef: z.string().min
 export type SettingsModelPoolUpdate = z.infer<typeof SettingsModelPoolUpdateSchema>;
 export const SettingsAuthorityDefaultsUpdateSchema = SettingsAuthorityDefaultsSchema.partial().strict();
 export type SettingsAuthorityDefaultsUpdate = z.infer<typeof SettingsAuthorityDefaultsUpdateSchema>;
+
+export const SettingsModelPoolConfigSchema = z.object({ schemaVersion: z.literal(1), enabledModelRefs: z.array(z.string().min(3)).superRefine((refs, ctx) => { if (new Set(refs).size !== refs.length) ctx.addIssue({ code: "custom", message: "enabledModelRefs must not contain duplicates" }); }) }).strict();
+export type SettingsModelPoolConfig = z.infer<typeof SettingsModelPoolConfigSchema>;
