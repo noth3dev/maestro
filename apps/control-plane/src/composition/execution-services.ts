@@ -14,6 +14,7 @@ import {
   ensureCapacityInventory,
   getGoalControl,
   readRoutingWorkSnapshot,
+  readEnabledModelRefs,
   readWorkerBySpawnCommand,
   releaseCapacityReservation,
   requeueCapacityReservation,
@@ -115,7 +116,14 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
             projectRef: input.base.context.projectId,
           });
           const catalog = readRoutingCandidateCatalog({ modelMapPath: resolve(process.cwd(), "config/model_map.json"), catalogPath });
-          return createEnsembleNativeAdmission(config, { snapshot, ...catalog, routeRef: input.routeRef, base: input.base });
+          const operatorEnabledModelRefs = await readEnabledModelRefs(pool, input.operatorId);
+          return createEnsembleNativeAdmission(config, {
+            snapshot,
+            ...catalog,
+            operatorEnabledModelRefs,
+            routeRef: input.routeRef,
+            base: input.base,
+          });
         }
       : undefined;
   const workerService = createWorkerService({

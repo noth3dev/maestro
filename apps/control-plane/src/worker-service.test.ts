@@ -2,20 +2,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { SpawnWorkerInputSchema } from "@maestro/contracts";
 import type { Pool } from "pg";
+import type { MaestroConfig } from "./config.js";
+import type { WorkerAdmissionFactoryInput } from "@maestro/persistence";
 
 const persistenceMocks = vi.hoisted(() => ({
   assertProjectRole: vi.fn(),
   readDepartmentPlan: vi.fn(),
   readHeadCouncil: vi.fn(),
+  readRoutingWorkSnapshot: vi.fn(),
   spawnWorker: vi.fn(),
+}));
+const compositionMocks = vi.hoisted(() => ({
+  createEnsembleNativeAdmission: vi.fn(),
+  readRoutingCandidateCatalog: vi.fn(),
 }));
 
 vi.mock("@maestro/persistence", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@maestro/persistence")>()),
   ...persistenceMocks,
 }));
+vi.mock("./ensemble-admission.js", () => ({ createEnsembleNativeAdmission: compositionMocks.createEnsembleNativeAdmission }));
+vi.mock("./ensemble-candidate-catalog.js", () => ({ readRoutingCandidateCatalog: compositionMocks.readRoutingCandidateCatalog }));
 
 import { assertProjectRole, readDepartmentPlan, readHeadCouncil, spawnWorker } from "@maestro/persistence";
+import { composeExecutionServices } from "./composition/execution-services.js";
 import {
   EnsembleRoutingUnavailableError,
   assertWorkerRoutingMode,
@@ -104,6 +114,70 @@ describe("worker admission identity seam", () => {
       expect.objectContaining({ operatorId: "authenticated-operator", createAdmission: admission }),
       proof,
       expect.objectContaining({ actorId: "head:product", sessionRef: "session:product" }),
+    );
+  });
+
+  it("reads the operator model pool for every composed ensemble admission", async () => {
+    let poolRead = 0;
+    const pool = {
+      query: vi.fn(async (sql: string) => {
+        if (sql.startsWith("SELECT model_pool FROM operator_settings")) {
+          const enabledModelRefs = poolRead++ === 0 ? ["openai/model-strong"] : ["openai/model-fast"];
+          return { rowCount: 1, rows: [{ model_pool: { enabledModelRefs } }] };
+        }
+        return { rowCount: 0, rows: [] };
+      }),
+    } as unknown as Pool;
+    const config = {
+      modelRoutingMode: "ensemble",
+      ensembleCandidateCatalogPath: "/tmp/candidates.json",
+      worktreeRoot: "/workspace",
+    } as unknown as MaestroConfig;
+    const admissionDecision = {} as never;
+    persistenceMocks.readRoutingWorkSnapshot.mockResolvedValue({} as never);
+    compositionMocks.readRoutingCandidateCatalog.mockReturnValue({ modelMap: {}, candidates: [] });
+    compositionMocks.createEnsembleNativeAdmission.mockReturnValue(admissionDecision);
+
+    const services = composeExecutionServices({
+      pool,
+      config,
+      overrides: {},
+      withGoalLease: vi.fn(async (_goal, operation) => operation(proof)),
+      executionKernel: { spawn: vi.fn() } as unknown as ExecutionKernelPort,
+      authorityExecutor: {} as never,
+    });
+    await services.workerService.spawn(
+      "council-1",
+      "product",
+      { projectId, planVersion: 1, itemId: "item-1" },
+      "command-1",
+      { operatorId: "authenticated-operator" },
+    );
+
+    const request = vi.mocked(spawnWorker).mock.calls[0]?.[2];
+    expect(request?.createAdmission).toBeTypeOf("function");
+    const admissionInput = {
+      operatorId: "authenticated-operator",
+      workerId: "worker-1",
+      routeRef: "worker:worker-1:1",
+      bundle: { councilId: "council-1", departmentId: "product", planVersion: 1, itemId: "item-1" },
+      base: { context: { goalId: proof.goalId, projectId, missionBundleId: "bundle-1" } },
+    } as unknown as WorkerAdmissionFactoryInput;
+    await request!.createAdmission!(admissionInput);
+    await request!.createAdmission!(admissionInput);
+
+    expect(pool.query).toHaveBeenCalledTimes(2);
+    expect(pool.query).toHaveBeenNthCalledWith(1, expect.stringContaining("SELECT model_pool FROM operator_settings"), ["authenticated-operator"]);
+    expect(pool.query).toHaveBeenNthCalledWith(2, expect.stringContaining("SELECT model_pool FROM operator_settings"), ["authenticated-operator"]);
+    expect(compositionMocks.createEnsembleNativeAdmission).toHaveBeenNthCalledWith(
+      1,
+      config,
+      expect.objectContaining({ operatorEnabledModelRefs: ["openai/model-strong"] }),
+    );
+    expect(compositionMocks.createEnsembleNativeAdmission).toHaveBeenNthCalledWith(
+      2,
+      config,
+      expect.objectContaining({ operatorEnabledModelRefs: ["openai/model-fast"] }),
     );
   });
 });
