@@ -97,6 +97,31 @@ describe("A/B/C routing selection", () => {
     expect(selected.pressure.band).toBe("high");
     expect(selected.rationale).toContain("does not alter TaskDemand or authority");
   });
+  it("rejects candidates outside a non-empty operator model pool", () => {
+    const selected = selectRoutedModel(request({ operatorEnabledModelRefs: ["provider/fast"] }));
+    expect(selected.selectedModelRef).toBe("provider/fast");
+    expect(selected.rejected).toContainEqual({
+      candidateRef: "strong",
+      reason: "operator model pool excludes candidate",
+    });
+  });
+
+  it("treats an empty operator model pool as unrestricted", () => {
+    expect(selectRoutedModel(request({ operatorEnabledModelRefs: [] })).selectedModelRef).toBe("provider/strong");
+  });
+
+  it("rejects malformed and duplicate operator pool identities", () => {
+    expect(() => selectRoutedModel(request({ operatorEnabledModelRefs: ["model-without-provider"] }))).toThrow(RoutingSelectionError);
+    expect(() => selectRoutedModel(request({ operatorEnabledModelRefs: ["provider/fast", "provider/fast"] }))).toThrow(
+      RoutingSelectionError,
+    );
+    expect(() => selectRoutedModel(request({ operatorEnabledModelRefs: null as never }))).toThrow(RoutingSelectionError);
+  });
+
+  it("fails closed when the operator pool removes every eligible candidate", () => {
+    expect(() => selectRoutedModel(request({ operatorEnabledModelRefs: ["provider/not-in-catalog"] }))).toThrow(/No candidate satisfies/);
+  });
+
   it("fails closed for absent model-map entries and unavailable or mismatched account observations", () => {
     expect(() => selectRoutedModel(request({ modelMap: modelMap(["provider/other"]), approvedModels: ["provider/other"] }))).toThrow(
       RoutingSelectionError,

@@ -16,6 +16,7 @@ export interface RoutingSelectionRequest {
   readonly mode: "ensemble" | "pin";
   readonly goalRef: string;
   readonly approvedModels: readonly string[];
+  readonly operatorEnabledModelRefs?: readonly string[];
   readonly pinModelRef?: string;
   readonly taskDemand: TaskDemand;
   readonly modelMap: ModelMap;
@@ -144,6 +145,7 @@ function assertSelectionRequest(value: unknown): asserts value is RoutingSelecti
     "mode",
     "goalRef",
     "approvedModels",
+    "operatorEnabledModelRefs",
     "pinModelRef",
     "taskDemand",
     "modelMap",
@@ -178,6 +180,11 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
   const approvedModels = approvedModelValues as readonly string[];
   uniqueStrings(approvedModels, "approvedModels");
   approvedModels.forEach((value) => modelRef(value, "approvedModels entry"));
+  const operatorEnabledModelValues =
+    input.operatorEnabledModelRefs === undefined ? [] : standardArray(input.operatorEnabledModelRefs, "operatorEnabledModelRefs");
+  const operatorEnabledModelRefs = operatorEnabledModelValues as readonly string[];
+  uniqueStrings(operatorEnabledModelRefs, "operatorEnabledModelRefs");
+  operatorEnabledModelRefs.forEach((value) => modelRef(value, "operatorEnabledModelRefs entry"));
   if (input.mode === "pin") {
     modelRef(input.pinModelRef, "pinModelRef");
     if (!approvedModels.includes(input.pinModelRef)) throw new RoutingSelectionError("pinModelRef must be approved by the Mission Bundle");
@@ -231,6 +238,10 @@ export function selectRoutedModel(input: RoutingSelectionRequest): RoutingSelect
     }
     if (input.mode === "pin" && candidate.modelRef !== input.pinModelRef) {
       rejected.push({ candidateRef: candidate.candidateRef, reason: "candidate is outside the explicit pin identity" });
+      continue;
+    }
+    if (operatorEnabledModelRefs.length > 0 && !operatorEnabledModelRefs.includes(candidate.modelRef)) {
+      rejected.push({ candidateRef: candidate.candidateRef, reason: "operator model pool excludes candidate" });
       continue;
     }
     const entry = map.get(candidate.modelRef);
