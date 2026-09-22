@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import type { Pool } from "pg";
 import type { ExecutionAdmission, ExecutionKernelPort } from "@maestro/domain";
 import type { AuthorizedEffectExecutor } from "@maestro/authority";
@@ -9,6 +8,7 @@ import type { composeFoundationServices } from "./foundation-services.js";
 import { createPinnedNativeAdmission, type NativeAdmissionInput } from "../native-admission.js";
 import { createEnsembleNativeAdmission } from "../ensemble-admission.js";
 import { readRoutingCandidateCatalog } from "../ensemble-candidate-catalog.js";
+import { readModelMapSource } from "./model-map-source.js";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import {
   ensureCapacityInventory,
@@ -115,7 +115,7 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
             goalRef: goalId,
             projectRef: input.base.context.projectId,
           });
-          const catalog = readRoutingCandidateCatalog({ modelMapPath: resolve(process.cwd(), "config/model_map.json"), catalogPath });
+          const catalog = readRoutingCandidateCatalog({ modelMapPath: readModelMapSource().path, catalogPath });
           const operatorEnabledModelRefs = await readEnabledModelRefs(pool, input.operatorId);
           return createEnsembleNativeAdmission(config, {
             snapshot,

@@ -170,6 +170,15 @@ function buildRead(deps: RouterCatalogDeps, pool: readonly string[], sources: Ca
   };
 }
 
+export class RouterConfigInvalidError extends Error {
+  readonly unknownModelRefs: readonly string[];
+  constructor(message: string, unknownModelRefs: readonly string[]) {
+    super(message);
+    this.name = "RouterConfigInvalidError";
+    this.unknownModelRefs = unknownModelRefs;
+  }
+}
+
 export function composeRouterCatalogService(deps: RouterCatalogDeps): RouterCatalogService {
   async function get(operatorId: string): Promise<RouterCatalogRead> {
     let sources: CatalogSources;
@@ -210,7 +219,8 @@ export function composeRouterCatalogService(deps: RouterCatalogDeps): RouterCata
     validate,
     async replace(operatorId: string, input: RouterConfigInput): Promise<RouterCatalogRead> {
       const validation = await validate(operatorId, input);
-      if (!validation.valid) throw new Error("model is not present in the human-owned model_map");
+      if (!validation.valid)
+        throw new RouterConfigInvalidError("model is not present in the human-owned model_map", validation.unknownModelRefs);
       const parsed = RouterConfigInputSchema.parse(input);
       await deps.settingsService.replaceModelPool(operatorId, parsed);
       return get(operatorId);

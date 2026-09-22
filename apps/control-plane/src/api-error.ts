@@ -1,58 +1,104 @@
 import { GitOperationError } from "@maestro/domain";
 import {
-  CapabilityApprovalConflictError, EvidenceMetadataConflictError,
-  HeadActivationCycleError, HeadActivationBindingConflictError, HeadActivationRuntimeConflictError,
-  HeadCouncilNotFoundError, CouncilBriefsSealedError, CouncilProtocolError,
-  DepartmentPlanError, DepartmentPlanNotFoundError, MissionBundleError, MissionBundleNotFoundError,
-  GitIntegrationError, GitIntegrationNotFoundError, CertificationError, CertificationNotFoundError,
-  MetronomeChallengeError, MetronomeChallengeNotFoundError, MetronomeAuthorizationError,
-  EncoreCouncilError, StaleGoalLeaseError, HeadActivationRequesterInactiveError, DiscordPersistenceError,
-  WorkerError, WorkerNotFoundError, CapacityReservationError,
-  ProjectAccessAdminRequiredError, ProjectAccessRoleNotFoundError, ProjectAccessTargetNotFoundError,
-  ProjectMembershipRequiredError, ProjectRoleRequiredError,
-  ChannelError, ChannelNotFoundError, ChannelConflictError, ChannelClosedError,
+  CapabilityApprovalConflictError,
+  EvidenceMetadataConflictError,
+  HeadActivationCycleError,
+  HeadActivationBindingConflictError,
+  HeadActivationRuntimeConflictError,
+  HeadCouncilNotFoundError,
+  CouncilBriefsSealedError,
+  CouncilProtocolError,
+  DepartmentPlanError,
+  DepartmentPlanNotFoundError,
+  MissionBundleError,
+  MissionBundleNotFoundError,
+  GitIntegrationError,
+  GitIntegrationNotFoundError,
+  CertificationError,
+  CertificationNotFoundError,
+  MetronomeChallengeError,
+  MetronomeChallengeNotFoundError,
+  MetronomeAuthorizationError,
+  EncoreCouncilError,
+  StaleGoalLeaseError,
+  HeadActivationRequesterInactiveError,
+  DiscordPersistenceError,
+  WorkerError,
+  WorkerNotFoundError,
+  CapacityReservationError,
+  ProjectAccessAdminRequiredError,
+  ProjectAccessRoleNotFoundError,
+  ProjectAccessTargetNotFoundError,
+  ProjectMembershipRequiredError,
+  ProjectRoleRequiredError,
+  ChannelError,
+  ChannelNotFoundError,
+  ChannelConflictError,
+  ChannelClosedError,
 } from "@maestro/persistence";
+import { StableApiErrorSchema, type StableApiError } from "@maestro/contracts";
 import {
-  StableApiErrorSchema,
-  type StableApiError,
-} from "@maestro/contracts";
-import {
-  CommandIdReuseError, DurableStoreUnavailableError, GoalNotFoundError, InvalidTransitionError,
-  LeaseUnavailableError, StaleLeaseError, VersionConflictError,
+  CommandIdReuseError,
+  DurableStoreUnavailableError,
+  GoalNotFoundError,
+  InvalidTransitionError,
+  LeaseUnavailableError,
+  StaleLeaseError,
+  VersionConflictError,
   TaskContractIntegrityError as GoalTaskContractIntegrityError,
 } from "./goal-service.js";
 import {
-  CriticalActionApprovalConflictError, CriticalActionApprovalExpiredError,
+  CriticalActionApprovalConflictError,
+  CriticalActionApprovalExpiredError,
   CriticalActionApprovalForbiddenError,
-  CriticalActionUnavailableError, CriticalActionGoalNotFoundError,
+  CriticalActionUnavailableError,
+  CriticalActionGoalNotFoundError,
   CriticalActionProjectMismatchError,
 } from "./critical-action-service.js";
 import { ReadStateGoalNotFoundError } from "./read-state-service.js";
 import {
-  ExactConfirmationRequiredError, TaskContractConflictError, TaskContractIntegrityError,
-  TaskContractNotFoundError, TaskContractProjectBoundaryError, TaskContractProjectMismatchError,
+  ExactConfirmationRequiredError,
+  TaskContractConflictError,
+  TaskContractIntegrityError,
+  TaskContractNotFoundError,
+  TaskContractProjectBoundaryError,
+  TaskContractProjectMismatchError,
   TaskContractVersionConflictError,
 } from "./task-contract-service.js";
-import {
-  HeadGoalNotFoundError, HeadProjectMismatchError, HeadContractMismatchError,
-} from "./head-participation-service.js";
-import {
-  CouncilContractMismatchError, CouncilGoalNotFoundError, CouncilProjectMismatchError,
-} from "./council-service.js";
+import { HeadGoalNotFoundError, HeadProjectMismatchError, HeadContractMismatchError } from "./head-participation-service.js";
+import { CouncilContractMismatchError, CouncilGoalNotFoundError, CouncilProjectMismatchError } from "./council-service.js";
 import { DepartmentPlanProjectMismatchError } from "./department-plan-service.js";
 import { MissionBundleProjectMismatchError } from "./mission-bundle-service.js";
 import { WorkerMessageRejectedError, WorkerProjectMismatchError, WorkerCapacityExceededError } from "./worker-service.js";
-import { ConversationConflictError, ConversationModelNotAllowedError, ConversationNotFoundError, ConversationUnavailableError } from "./conversation-service.js";
+import {
+  ConversationConflictError,
+  ConversationModelNotAllowedError,
+  ConversationNotFoundError,
+  ConversationUnavailableError,
+} from "./conversation-service.js";
 import { ModelGatewayClientError } from "./model-gateway-client.js";
 import { EncoreProjectMismatchError } from "./encore-service.js";
 import { EvidenceCaptureError, EvidenceCaptureGoalBindingError } from "./evidence-capture-service.js";
 import { CapabilityApprovalUnauthorizedError, CapabilityApprovalInvalidRequestError } from "./capability-approval-service.js";
 import { GitProjectMismatchError } from "./git-integration-service.js";
-import { ConcertmasterReportCommandReuseError, ConcertmasterReportGoalNotFoundError, ConcertmasterReportProjectMismatchError } from "./concertmaster-report-service.js";
+import {
+  ConcertmasterReportCommandReuseError,
+  ConcertmasterReportGoalNotFoundError,
+  ConcertmasterReportProjectMismatchError,
+} from "./concertmaster-report-service.js";
 import { GitAuthorizationError } from "@maestro/git-adapter";
 import { PersonaInspectionError } from "./persona-inspection-service.js";
 import { EnsembleRoutingShortfallError } from "./ensemble-admission.js";
-import { AuthenticationRequiredError, AuthenticationUnavailableError, CredentialForbiddenError, CriticalActionDeniedError, CriticalActionRequiresApprovalError, RequestValidationError, isMalformedJsonError } from "./server-input.js";
+import { RouterConfigInvalidError } from "./composition/router-catalog.js";
+import {
+  AuthenticationRequiredError,
+  AuthenticationUnavailableError,
+  CredentialForbiddenError,
+  CriticalActionDeniedError,
+  CriticalActionRequiresApprovalError,
+  RequestValidationError,
+  isMalformedJsonError,
+} from "./server-input.js";
 
 export function mapError(error: unknown): { status: number; body: StableApiError } {
   if (isMalformedJsonError(error) || error instanceof RequestValidationError) return apiError(400, "validation_error", "Invalid request");
@@ -60,23 +106,44 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof CredentialForbiddenError) return apiError(403, "credential_forbidden", "Credential is not active");
   if (error instanceof CapabilityApprovalUnauthorizedError) return apiError(403, "capability_unauthorized", error.message);
   if (error instanceof PersonaInspectionError) return apiError(409, "encore_conflict", error.message);
-  if (error instanceof CapabilityApprovalInvalidRequestError || error instanceof EvidenceCaptureError || error instanceof EvidenceCaptureGoalBindingError) return apiError(400, "validation_error", error.message);
-  if (error instanceof CapabilityApprovalConflictError || error instanceof EvidenceMetadataConflictError) return apiError(409, "replay_conflict", error.message);
-  if (error instanceof EnsembleRoutingShortfallError) return apiError(409, "routing_shortfall", error.message, undefined, {
-    pressure: error.shortfall.pressure.pressure,
-    pressureBand: error.shortfall.pressure.band,
-    decisionLayer: error.shortfall.pressure.decisionLayer,
-    rejected: [...error.shortfall.rejected],
-  });
-  if (error instanceof AuthenticationUnavailableError) return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
-  if (error instanceof TaskContractProjectMismatchError || error instanceof TaskContractProjectBoundaryError || error instanceof CriticalActionProjectMismatchError) return apiError(400, "validation_error", error.message);
+  if (
+    error instanceof CapabilityApprovalInvalidRequestError ||
+    error instanceof EvidenceCaptureError ||
+    error instanceof EvidenceCaptureGoalBindingError
+  )
+    return apiError(400, "validation_error", error.message);
+  if (error instanceof CapabilityApprovalConflictError || error instanceof EvidenceMetadataConflictError)
+    return apiError(409, "replay_conflict", error.message);
+  if (error instanceof RouterConfigInvalidError) return apiError(400, "validation_error", error.message);
+  if (error instanceof EnsembleRoutingShortfallError)
+    return apiError(409, "routing_shortfall", error.message, undefined, {
+      pressure: error.shortfall.pressure.pressure,
+      pressureBand: error.shortfall.pressure.band,
+      decisionLayer: error.shortfall.pressure.decisionLayer,
+      rejected: [...error.shortfall.rejected],
+    });
+  if (error instanceof AuthenticationUnavailableError)
+    return apiError(429, "authentication_unavailable", "Authentication is temporarily unavailable");
+  if (
+    error instanceof TaskContractProjectMismatchError ||
+    error instanceof TaskContractProjectBoundaryError ||
+    error instanceof CriticalActionProjectMismatchError
+  )
+    return apiError(400, "validation_error", error.message);
   if (error instanceof CriticalActionGoalNotFoundError) return apiError(404, "goal_not_found", error.message);
   if (error instanceof HeadGoalNotFoundError) return apiError(404, "goal_not_found", "Goal was not found");
-  if (error instanceof HeadProjectMismatchError || error instanceof HeadContractMismatchError) return apiError(400, "validation_error", error.message);
+  if (error instanceof HeadProjectMismatchError || error instanceof HeadContractMismatchError)
+    return apiError(400, "validation_error", error.message);
   if (error instanceof HeadActivationCycleError) return apiError(409, "head_activation_cycle", error.message);
-  if (error instanceof HeadActivationBindingConflictError || error instanceof HeadActivationRuntimeConflictError || error instanceof HeadActivationRequesterInactiveError) return apiError(409, "head_activation_conflict", error.message);
+  if (
+    error instanceof HeadActivationBindingConflictError ||
+    error instanceof HeadActivationRuntimeConflictError ||
+    error instanceof HeadActivationRequesterInactiveError
+  )
+    return apiError(409, "head_activation_conflict", error.message);
   if (error instanceof CouncilGoalNotFoundError) return apiError(404, "goal_not_found", error.message);
-  if (error instanceof CouncilProjectMismatchError || error instanceof CouncilContractMismatchError) return apiError(400, "validation_error", error.message);
+  if (error instanceof CouncilProjectMismatchError || error instanceof CouncilContractMismatchError)
+    return apiError(400, "validation_error", error.message);
   if (error instanceof HeadCouncilNotFoundError) return apiError(404, "council_not_found", error.message);
   if (error instanceof CouncilBriefsSealedError) return apiError(409, "council_briefs_sealed", error.message);
   if (error instanceof CouncilProtocolError) return apiError(409, "council_conflict", error.message);
@@ -110,21 +177,24 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof DiscordPersistenceError) return apiError(400, "discord_signal_rejected", error.message);
   if (error instanceof ModelGatewayClientError) {
     if (error.code === "model_not_allowed") return apiError(400, "model_not_allowed", "Requested model is not allowed");
-    if (error.code === "account_login_session_unknown") return apiError(409, "account_login_session_unknown", "Account login session is unknown");
+    if (error.code === "account_login_session_unknown")
+      return apiError(409, "account_login_session_unknown", "Account login session is unknown");
     return apiError(503, "provider_unavailable", "Provider is currently unavailable", error.detail);
   }
   if (error instanceof ConversationNotFoundError) return apiError(404, "conversation_not_found", "Conversation was not found");
   if (error instanceof ConversationConflictError) return apiError(409, "conversation_conflict", error.message);
   if (error instanceof ConversationModelNotAllowedError) return apiError(400, "model_not_allowed", "Requested model is not allowed");
   if (error instanceof ConversationUnavailableError) return apiError(503, "conversation_unavailable", error.message);
-  if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError) return apiError(503, "task_contract_integrity_error", error.message);
+  if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError)
+    return apiError(503, "task_contract_integrity_error", error.message);
   if (error instanceof TaskContractNotFoundError) return apiError(404, "task_contract_not_found", "Task Contract was not found");
   if (error instanceof TaskContractConflictError) return apiError(409, "task_contract_conflict", error.message);
   if (error instanceof TaskContractVersionConflictError) return apiError(409, "task_contract_version_conflict", error.message);
   if (error instanceof ExactConfirmationRequiredError) return apiError(409, "exact_confirmation_required", error.message);
   if (error instanceof VersionConflictError) return apiError(409, "version_conflict", error.message);
   if (error instanceof InvalidTransitionError) return apiError(422, "invalid_transition", error.message);
-  if (error instanceof GoalNotFoundError || error instanceof ReadStateGoalNotFoundError) return apiError(404, "goal_not_found", "Goal was not found");
+  if (error instanceof GoalNotFoundError || error instanceof ReadStateGoalNotFoundError)
+    return apiError(404, "goal_not_found", "Goal was not found");
   if (error instanceof StaleLeaseError || error instanceof StaleGoalLeaseError) return apiError(409, "stale_lease", error.message);
   if (error instanceof LeaseUnavailableError) return apiError(423, "lease_unavailable", error.message);
   if (error instanceof CommandIdReuseError) return apiError(409, "command_id_reused", error.message);
@@ -136,8 +206,10 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof CriticalActionUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof DurableStoreUnavailableError) return apiError(503, "durable_store_unavailable", error.message);
   if (error instanceof ProjectAccessAdminRequiredError) return apiError(403, "authority_denied", error.message);
-  if (error instanceof ProjectAccessTargetNotFoundError || error instanceof ProjectAccessRoleNotFoundError) return apiError(400, "validation_error", "Invalid project access request");
-  if (error instanceof ProjectMembershipRequiredError || error instanceof ProjectRoleRequiredError) return apiError(403, "project_access_forbidden", error.message);
+  if (error instanceof ProjectAccessTargetNotFoundError || error instanceof ProjectAccessRoleNotFoundError)
+    return apiError(400, "validation_error", "Invalid project access request");
+  if (error instanceof ProjectMembershipRequiredError || error instanceof ProjectRoleRequiredError)
+    return apiError(403, "project_access_forbidden", error.message);
   if (error instanceof ChannelNotFoundError) return apiError(404, "channel_not_found", error.message);
   if (error instanceof ChannelClosedError) return apiError(409, "channel_closed", error.message);
   if (error instanceof ChannelConflictError) return apiError(409, "channel_conflict", error.message);
@@ -145,6 +217,17 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   return apiError(503, "durable_store_unavailable", "Durable store is unavailable");
 }
 
-function apiError(status: number, code: StableApiError["error"]["code"], message: string, detail?: string, routing?: StableApiError["error"]["routing"]) {
-  return { status, body: StableApiErrorSchema.parse({ error: { code, message, ...(detail === undefined ? {} : { detail }), ...(routing === undefined ? {} : { routing }) } }) };
+function apiError(
+  status: number,
+  code: StableApiError["error"]["code"],
+  message: string,
+  detail?: string,
+  routing?: StableApiError["error"]["routing"],
+) {
+  return {
+    status,
+    body: StableApiErrorSchema.parse({
+      error: { code, message, ...(detail === undefined ? {} : { detail }), ...(routing === undefined ? {} : { routing }) },
+    }),
+  };
 }

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "candidateRef": "test-model-a",
+      "modelRef": "test/model-a",
+      "accountBinding": "acceptance-account-1"
+    }
+  ]
+}
