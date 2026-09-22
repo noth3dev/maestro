@@ -10,9 +10,10 @@ import {
 } from "@maestro/contracts";
 import { Icon } from "../icons.js";
 import { useTheme } from "../theme.js";
-import { useConnection } from "../connection.js";
+import { isSessionFailure, useConnection } from "../connection.js";
 import { ToggleSwitch } from "../components/ToggleSwitch.js";
 import { isProviderAuthUrlAllowed, waitForProviderAccountLogin } from "../lib/provider-account-login.js";
+import { createSettingsStore, raisesAuthority, redactSecret, type SettingsApi } from "../lib/settings-data.js";
 
 type Panel = "profile" | "appearance" | "connection" | "notifications" | "providers" | "models" | "authority" | "danger";
 
@@ -495,11 +496,14 @@ export function RouterCatalogPanel({
 
 export function Settings() {
   const { theme, setTheme } = useTheme();
-  const { config, disconnect } = useConnection();
+  const { config, disconnect, reportSessionFailure } = useConnection();
   const [disconnecting, setDisconnecting] = useState(false);
   const [panel, setPanel] = useState<Panel>("profile");
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof window.maestro.api.getSettings>> | undefined>();
+  const settingsStore = useRef<ReturnType<typeof createSettingsStore> | undefined>(undefined);
+  if (settingsStore.current === undefined) settingsStore.current = createSettingsStore(window.maestro.api as SettingsApi);
   const [settingsError, setSettingsError] = useState<string | undefined>();
+  const [pendingAuthority, setPendingAuthority] = useState<Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0] | undefined>();
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [routerCatalog, setRouterCatalog] = useState<RouterCatalogRead | undefined>();
   const [routerCatalogError, setRouterCatalogError] = useState<string | undefined>();
@@ -523,7 +527,10 @@ export function Settings() {
   const loadSettings = () => {
     setSettingsLoading(true);
     setSettingsError(undefined);
-    void window.maestro.api.getSettings().then((value) => { setSettings(value); }).catch(() => { setSettings(undefined); setSettingsError("Durable settings are unavailable. No settings were loaded."); }).finally(() => setSettingsLoading(false));
+    void settingsStore.current!.load()
+      .then((value) => { setSettings(value); })
+      .catch((cause: unknown) => { if (isSessionFailure(cause)) reportSessionFailure(cause); setSettings(undefined); setSettingsError("Durable settings are unavailable. No settings were loaded."); })
+      .finally(() => setSettingsLoading(false));
   };
   const loadRouterCatalog = useCallback(() => {
     setRouterCatalogLoading(true);
@@ -535,7 +542,7 @@ export function Settings() {
   }, []);
   useEffect(() => {
     loadSettings();
-    void window.maestro.api.listProviderConnections().then((connections) => {
+    void settingsStore.current!.listProviderConnections().then((connections) => {
       setConnectedAccounts((current) => ({
         "openai-codex":
           current["openai-codex"] ||
@@ -553,9 +560,23 @@ export function Settings() {
   useEffect(() => {
     if (panel === "models") loadRouterCatalog();
   }, [loadRouterCatalog, panel]);
-  const settingsReady = settings !== undefined && settingsError === undefined;
-  const updatePreferences = (patch: Parameters<typeof window.maestro.api.updateSettingsPreferences>[0]) => { void window.maestro.api.updateSettingsPreferences(patch).then(setSettings).catch(() => setSettingsError("Durable settings update failed; displayed values may be stale.")); };
-  const updateDefaults = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => { void window.maestro.api.updateSettingsAuthorityDefaults(patch).then(setSettings).catch(() => setSettingsError("Durable settings update failed; displayed values may be stale.")); };
+  // A failed write must not hide the last server-confirmed snapshot.
+  const settingsReady = settings !== undefined;
+  const updatePreferences = (patch: Parameters<typeof window.maestro.api.updateSettingsPreferences>[0]) => {
+    void settingsStore.current!.updatePreferences(patch)
+      .then((value) => { setSettings(value); setSettingsError(undefined); })
+      .catch(() => setSettingsError("Durable settings update failed; saved values remain unchanged."));
+  };
+  const updateDefaults = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => {
+    void settingsStore.current!.updateAuthorityDefaults(patch)
+      .then((value) => { setSettings(value); setSettingsError(undefined); setPendingAuthority(undefined); })
+      .catch(() => setSettingsError("Durable settings update failed; saved values remain unchanged."));
+  };
+  const requestAuthorityUpdate = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => {
+    if (settings === undefined) return;
+    if (raisesAuthority(settings.authorityDefaults, patch)) setPendingAuthority(patch);
+    else updateDefaults(patch);
+  };
   const toggleRouterModel = async (modelRef: string, inUse: boolean) => {
     if (routerCatalog === undefined) throw new Error("Router Catalog is not loaded");
     const input: RouterConfigInput = { schemaVersion: 1, enabledModelRefs: nextRouterPool(routerCatalog, modelRef, inUse) };
@@ -572,11 +593,11 @@ export function Settings() {
   const isAccountProviderConnected = (providerId: AccountLoginProviderId) =>
     connectedAccounts[providerId] || providers.some((provider) => provider.providerId === providerId && provider.connected);
   const refreshProviderSettings = async () => {
-    const nextSettings = await window.maestro.api.getSettings();
+    const nextSettings = await settingsStore.current!.load();
     setSettings(nextSettings);
     setSettingsError(undefined);
     try {
-      const connections = await window.maestro.api.listProviderConnections();
+      const connections = await settingsStore.current!.listProviderConnections();
       setConnectedAccounts((current) => ({
         "openai-codex":
           current["openai-codex"] ||
@@ -591,7 +612,24 @@ export function Settings() {
   };
   const providerAction = async (providerId: "openai" | "anthropic") => {
     setProviderBusy(providerId);
-    try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); await refreshProviderSettings(); } catch { setSettingsError("Provider status is unavailable; no connection state was changed."); } finally { setProviderBusy(undefined); }
+    try {
+      if (providers.some((provider) => provider.providerId === providerId && provider.connected)) {
+        await settingsStore.current!.logoutProvider(providerId);
+      } else if (providerSecret.trim() !== "") {
+        await settingsStore.current!.loginProvider({ providerId, authMode: "api-key", secret: providerSecret });
+      } else {
+        return;
+      }
+      await refreshProviderSettings();
+    } catch (cause: unknown) {
+      if (isSessionFailure(cause)) reportSessionFailure(cause);
+      const message = cause instanceof Error ? cause.message : "Provider status is unavailable; no connection state was changed.";
+      setSettingsError(redactSecret(message, providerSecret));
+    } finally {
+      // Never retain or render a provider credential after the request settles.
+      setProviderSecret("");
+      setProviderBusy(undefined);
+    }
   };
   const setAccountPanelState = (providerId: AccountLoginProviderId, patch: Partial<AccountLoginPanelState>) => {
     setAccountLoginPanels((current) => ({ ...current, [providerId]: { ...current[providerId], ...patch } }));
@@ -852,17 +890,26 @@ export function Settings() {
         <div className="settings-panel">
           <div className="settings-section-title">approvals &amp; authority</div>
           <div className="settings-section-sub">durable defaults applied when new Goals are created</div>
+          {pendingAuthority !== undefined && (
+            <div className="alert alert-warning" role="alert">
+              <strong>This change raises default authority.</strong> New Goals may spend more or skip an approval gate.
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => updateDefaults(pendingAuthority)}>confirm and save</button>
+                <button type="button" className="btn btn-sm" onClick={() => setPendingAuthority(undefined)}>cancel</button>
+              </div>
+            </div>
+          )}
           <div className="form-field" style={{ marginBottom: 14 }}>
             <label className="form-label">default spend ceiling per goal</label>
-            <input className="input" type="number" min="0" value={settingsReady ? settings.authorityDefaults.spendCeilingCents / 100 : ""} placeholder={settingsReady ? undefined : "unavailable"} disabled={!settingsReady} onChange={(event) => updateDefaults({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
+            <input className="input" type="number" min="0" value={settingsReady ? settings.authorityDefaults.spendCeilingCents / 100 : ""} placeholder={settingsReady ? undefined : "unavailable"} disabled={!settingsReady} onChange={(event) => requestAuthorityUpdate({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">critical actions always require approval</div><div className="settings-row-hint">deletes, deploys, credential changes</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.criticalActionsRequireApproval} onToggle={() => updateDefaults({ criticalActionsRequireApproval: !settings.authorityDefaults.criticalActionsRequireApproval })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.criticalActionsRequireApproval} onToggle={() => requestAuthorityUpdate({ criticalActionsRequireApproval: !settings.authorityDefaults.criticalActionsRequireApproval })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">allow flashmob by default</div><div className="settings-row-hint">light tasks skip full council deliberation</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.allowFlashmob} onToggle={() => updateDefaults({ allowFlashmob: !settings.authorityDefaults.allowFlashmob })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.allowFlashmob} onToggle={() => requestAuthorityUpdate({ allowFlashmob: !settings.authorityDefaults.allowFlashmob })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ConnectionProvider, useConnection } from "./connection.js";
+import { ConnectionProvider, SessionRecoveryNotice, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
 import { ThemeProvider } from "./theme.js";
 import { I18nProvider, localeFromPreferences, type Locale } from "./i18n/index.js";
@@ -84,7 +84,7 @@ function ConnectedWorkspace({ projectId }: { projectId: string }) {
 }
 
 function Connected() {
-  const { config, loading, bootstrap } = useConnection();
+  const { config, loading, bootstrap, recovery, retryConnection, disconnect } = useConnection();
   if (loading) {
     return (
       <div className="app" aria-busy="true" aria-live="polite">
@@ -94,6 +94,10 @@ function Connected() {
         </div>
       </div>
     );
+  }
+  if (recovery !== undefined) {
+    const clearSavedSession = recovery.action === "sign-in-again" || recovery.action === "repair-storage";
+    return <SessionRecoveryNotice recovery={recovery} onAction={() => { if (clearSavedSession) void disconnect(); else retryConnection(); }} />;
   }
   if (config === undefined) return <Setup />;
   return <ConnectedWorkspace projectId={config.projectId} />;

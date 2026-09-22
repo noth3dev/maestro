@@ -1,36 +1,120 @@
-import React, { useEffect, useState } from "react";
-import type { BillingReadModel } from "@maestro/api-client";
+import React, { useEffect, useRef, useState } from "react";
+import type { BillingReadModel, GoalBudgetSummary } from "@maestro/api-client";
 import { EmptyState } from "../components/EmptyState.js";
-import { useConnection } from "../connection.js";
-import { useGoalDetail } from "../useGoalDetail.js";
+import { isSessionFailure, useConnection } from "../connection.js";
+import { useGoals } from "../goals.js";
+import { formatCents, safeErrorMessage } from "../lib/settings-data.js";
 
-function formatCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+export function BillingStateNotice({
+  goalSelected,
+  budgetLoading,
+  budgetError,
+  budgetStale,
+  budget,
+  billing,
+  billingLoading,
+  billingError,
+  billingStale,
+}: {
+  goalSelected: boolean;
+  budgetLoading: boolean;
+  budgetError: string | undefined;
+  budgetStale: boolean;
+  budget: GoalBudgetSummary | undefined;
+  billing: BillingReadModel | undefined;
+  billingLoading: boolean;
+  billingError: string | undefined;
+  billingStale: boolean;
+}) {
+  return (
+    <>
+      {budgetLoading && <p role="status" aria-busy="true">loading Goal budget…</p>}
+      {budgetError !== undefined && <div className="alert alert-warning" role="alert">{budgetError}</div>}
+      {budgetStale && budget !== undefined && <div className="alert alert-warning" role="status">Showing the last saved budget; refresh failed.</div>}
+      {billingError !== undefined && <div className="alert alert-warning" role="alert">{billingError}</div>}
+      {billingStale && billing !== undefined && <div className="alert alert-warning" role="status">Showing the last saved billing record; refresh failed.</div>}
+      {!goalSelected && !budgetLoading && budgetError === undefined && <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard to see its real budget here." />}
+      {billingLoading && <p role="status" aria-busy="true">loading billing history…</p>}
+      {billing === undefined && !billingLoading && billingError === undefined && <EmptyState title="No billing record" hint="The server has not returned a billing record for this project yet." />}
+    </>
+  );
 }
 
 export function Billing() {
-  const { config } = useConnection();
-  const { detail, loading, error } = useGoalDetail();
+  const { config, reportSessionFailure } = useConnection();
+  const { selectedGoalId } = useGoals();
+  const [budget, setBudget] = useState<GoalBudgetSummary | undefined>(undefined);
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const [budgetError, setBudgetError] = useState<string | undefined>(undefined);
+  const [budgetStale, setBudgetStale] = useState(false);
+  const budgetRef = useRef<GoalBudgetSummary | undefined>(undefined);
+  const budgetScopeRef = useRef<{ projectId: string; goalId: string } | undefined>(undefined);
   const [billing, setBilling] = useState<BillingReadModel | undefined>(undefined);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState<string | undefined>(undefined);
+  const [billingStale, setBillingStale] = useState(false);
+  const billingRef = useRef<BillingReadModel | undefined>(undefined);
 
   useEffect(() => {
-    if (config === undefined) {
-      setBilling(undefined);
+    if (config === undefined || selectedGoalId === undefined) {
+      budgetRef.current = undefined;
+      budgetScopeRef.current = undefined;
+      setBudget(undefined);
+      setBudgetError(undefined);
+      setBudgetStale(false);
+      setBudgetLoading(false);
       return;
     }
     let cancelled = false;
-    setBilling(undefined);
-    setBillingError(undefined);
-    void window.maestro.api.getBillingSummary(config.projectId)
-      .then((loaded) => { if (!cancelled) setBilling(loaded); })
-      .catch((cause: unknown) => { if (!cancelled) setBillingError(cause instanceof Error ? cause.message : "Could not load billing history"); });
+    const sameScope = budgetScopeRef.current?.projectId === config.projectId && budgetScopeRef.current.goalId === selectedGoalId;
+    if (!sameScope) {
+      budgetRef.current = undefined;
+      setBudget(undefined);
+    }
+    setBudgetLoading(true);
+    setBudgetError(undefined);
+    setBudgetStale(false);
+    void window.maestro.api.getBudgetSummary(selectedGoalId, { projectId: config.projectId })
+      .then((loaded) => { if (!cancelled) { budgetScopeRef.current = { projectId: config.projectId, goalId: selectedGoalId }; budgetRef.current = loaded; setBudget(loaded); setBudgetStale(false); } })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          if (isSessionFailure(cause)) reportSessionFailure(cause);
+          setBudgetError(safeErrorMessage(cause, "Could not load Goal budget"));
+          setBudgetStale(budgetRef.current !== undefined);
+        }
+      })
+      .finally(() => { if (!cancelled) setBudgetLoading(false); });
     return () => { cancelled = true; };
-  }, [config]);
+  }, [config, selectedGoalId, reportSessionFailure]);
+
+  useEffect(() => {
+    if (config === undefined) {
+      billingRef.current = undefined;
+      setBilling(undefined);
+      setBillingLoading(false);
+      setBillingError(undefined);
+      setBillingStale(false);
+      return;
+    }
+    let cancelled = false;
+    setBillingLoading(true);
+    setBillingError(undefined);
+    setBillingStale(false);
+    void window.maestro.api.getBillingSummary(config.projectId)
+      .then((loaded) => { if (!cancelled) { billingRef.current = loaded; setBilling(loaded); setBillingStale(false); } })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          if (isSessionFailure(cause)) reportSessionFailure(cause);
+          setBillingError(safeErrorMessage(cause, "Could not load billing history"));
+          setBillingStale(billingRef.current !== undefined);
+        }
+      })
+      .finally(() => { if (!cancelled) setBillingLoading(false); });
+    return () => { cancelled = true; };
+  }, [config, reportSessionFailure]);
 
   if (config === undefined) return <EmptyState />;
 
-  const budget = detail?.budget;
   const remainingCents = budget === undefined ? undefined : budget.budgetCents - budget.reservedCents;
   const usedPct = budget === undefined || budget.budgetCents <= 0 ? undefined : Math.min(100, Math.round((budget.reservedCents / budget.budgetCents) * 100));
 
@@ -39,9 +123,17 @@ export function Billing() {
       <div className="dash-head"><div className="dash-title">billing</div></div>
       <div className="dash-sub">budget for the selected Goal · durable project billing rollup</div>
 
-      {loading && <p>loading…</p>}
-      {error !== undefined && <div className="alert alert-warning">{error}</div>}
-      {billingError !== undefined && <div className="alert alert-warning">{billingError}</div>}
+      <BillingStateNotice
+        goalSelected={selectedGoalId !== undefined}
+        budgetLoading={budgetLoading}
+        budgetError={budgetError}
+        budgetStale={budgetStale}
+        budget={budget}
+        billing={billing}
+        billingLoading={billingLoading}
+        billingError={billingError}
+        billingStale={billingStale}
+      />
 
       {budget !== undefined && (
         <>
@@ -59,10 +151,6 @@ export function Billing() {
             </div>
           )}
         </>
-      )}
-
-      {detail === undefined && !loading && error === undefined && (
-        <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard to see its real budget here." />
       )}
 
       <div className="dash-section-title" style={{ marginTop: 20 }}>daily spend and cross-Goal totals</div>
