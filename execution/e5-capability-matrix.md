@@ -61,11 +61,11 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Worker execution (Task 6)
 
-**Status: Not started.** No `views/Workers.tsx` or `lib/worker-data.ts` exists. Dashboard shows worker existence/status read-only (kanban + office panel); there is no spawn/observe/message/cancel UI anywhere. This is blocked on Task 5's Mission Bundle question above — `spawnWorker` needs a real `councilId`/`departmentId`/`SpawnWorkerInput`, and the plan explicitly forbids sample IDs here.
+**Status: Partial, code-level implementation exists.** `views/Workers.tsx`, `lib/worker-data.ts`, `useGoalWorkers.ts`, `Channel.tsx`, and `Planning.tsx` expose server-scoped Worker roster, Mission Bundle-shaped spawn, observe, message, and cancel paths. `Workers.tsx` refuses actions unless the selected Worker exactly matches the durable Goal/Mission Bundle scope. No live Worker execution is claimed because Task 14 could not reach a Control Plane/provider; the real `councilId`/`departmentId`/`planVersion`/`itemId` must still come from a live Mission Bundle.
 
 ## Git / evidence / certification / review (Task 7)
 
-**Status: Partial, read-only.** `views/Git.tsx` (via `useGitIntegrationState`) renders the real integration branch/base revision/frozen revision read-only. No write actions exist: `createGoalIntegrationBranch`, `createDepartmentBranch`, `createWorkerWorktree`, `advanceWorkerIntegration`, `freezeGoalIntegrationRevision`, `acceptWorker`, `certifyWorker`, `certifyConditionalWorker`, `captureEvidence` are all bridged (Task 1, this session) but unused. No `views/WorkerReview.tsx` or `lib/integration-data.ts` exists. `views/EvidenceLog.tsx` exists (41 lines, not inspected in depth this session).
+**Status: Partial, code-level implementation exists.** `views/Git.tsx` wires real branch/worktree/integration/review actions through `lib/integration-data.ts`; `WorkerReview.tsx` requires server-issued integration/evidence/acceptance state before enabling accept/certify; and `EvidenceLog.tsx` reads/captures durable evidence bundles, certifications, reports, and event records. No live Git/evidence/certification result is claimed because the Control Plane/provider boundary was unavailable; all actions remain dependent on real IDs and backend authority.
 
 ## Approvals / Inbox / critical actions (Task 8)
 
