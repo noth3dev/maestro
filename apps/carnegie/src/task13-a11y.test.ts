@@ -14,8 +14,11 @@ const main = read("../electron/main.ts");
 describe("Task 13 Carnegie accessibility and scale contract", () => {
   it("uses semantic navigation and controls for the sidebar and Home shortcuts", () => {
     expect(sidebar).toContain("<nav");
+    expect(sidebar).toContain('aria-current={view === name ? "page" : undefined}');
     expect(home).not.toContain('<div className="home-card" onClick=');
     expect(home).toContain('<button type="button" className="home-card"');
+    expect(home).toContain('aria-pressed={mode === "maestro"}');
+    expect(home).toContain('aria-pressed={isFlashmob}');
   });
 
   it("exposes a keyboard-operable switch with an accessible name", () => {

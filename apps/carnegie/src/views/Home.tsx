@@ -283,10 +283,10 @@ export function Home({
         />
         <div className="home-composer-row">
           <div className="pill-toggle" role="group" aria-label="Home mode">
-            <button type="button" className={mode === "maestro" ? "on" : ""} onClick={() => onModeChange("maestro")}>
+            <button type="button" className={mode === "maestro" ? "on" : ""} aria-pressed={mode === "maestro"} onClick={() => onModeChange("maestro")}>
               maestro
             </button>
-            <button type="button" className={isFlashmob ? "on flashmob" : ""} onClick={() => onModeChange("flashmob")}>
+            <button type="button" className={isFlashmob ? "on flashmob" : ""} aria-pressed={isFlashmob} onClick={() => onModeChange("flashmob")}>
               flashmob
             </button>
           </div>

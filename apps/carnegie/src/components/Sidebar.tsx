@@ -35,7 +35,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   const selectedGoal = goals?.find((goal) => goal.goalId === selectedGoalId);
 
   const navItem = (name: ViewName, icon: string, label: string, count?: number) => (
-    <button type="button" className={`sb-item${view === name ? " on" : ""}`} onClick={() => onNavigate(name)}>
+    <button type="button" className={`sb-item${view === name ? " on" : ""}`} aria-current={view === name ? "page" : undefined} onClick={() => onNavigate(name)}>
       <Icon name={icon} /> <span className="lbl">{label}</span>
       {count !== undefined && <span className="sb-count">{count}</span>}
     </button>
