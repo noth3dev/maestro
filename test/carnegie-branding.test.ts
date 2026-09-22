@@ -84,7 +84,7 @@ describe("Maestro product and Carnegie app boundary", () => {
     const env = read(".env.example");
     expect(read(".github/workflows/ci.yml")).toContain("MAESTRO_TEST_DATABASE_URL");
     expect(env).toContain("maestro_test");
-    expect(read("packages/local-backend/src/local-bootstrap.ts")).toContain("maestro_local");
+    expect(read("packages/local-backend/src/bootstrap/constants.ts")).toContain("maestro_local");
     expect(read(".github/workflows/ci.yml")).toContain("POSTGRES_DB: maestro_test");
   });
 });
