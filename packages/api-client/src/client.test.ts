@@ -1101,3 +1101,59 @@ it("streams non-replayable safe conversation activity without a durable cursor",
   );
   expect(fetch.mock.calls[0]![1]).not.toHaveProperty("last-event-id");
 });
+
+
+describe("router catalog client", () => {
+  it("reads the authenticated router catalog", async () => {
+    const catalog = {
+      mode: "ensemble",
+      active: true,
+      status: "ready",
+      poolModelRefs: ["openai/model-a"],
+      entries: [],
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(catalog), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+
+    await expect(client.getRouterCatalog()).resolves.toEqual(catalog);
+    expect(fetch).toHaveBeenCalledWith(
+      "https://maestro.test/v1/router/catalog",
+      expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }),
+    );
+  });
+
+  it("validates and atomically replaces the router config", async () => {
+    const validation = {
+      valid: true,
+      enabledModelRefs: ["openai/model-a"],
+      unknownModelRefs: [],
+      changes: [{ modelRef: "openai/model-a", previousInUse: false, nextInUse: true }],
+    };
+    const catalog = { mode: "ensemble", active: true, status: "ready", poolModelRefs: ["openai/model-a"], entries: [] };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(validation), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(catalog), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    const input = { schemaVersion: 1 as const, enabledModelRefs: ["openai/model-a"] };
+
+    await expect(client.validateRouterConfig(input)).resolves.toEqual(validation);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      "https://maestro.test/v1/router/config/validate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    );
+    await expect(client.replaceRouterConfig(input)).resolves.toEqual(catalog);
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://maestro.test/v1/router/config",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify(input),
+      }),
+    );
+  });
+});

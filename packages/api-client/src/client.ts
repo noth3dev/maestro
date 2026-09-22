@@ -16,6 +16,7 @@ import { createCertificationMethods } from "./methods/certification.js";
 import { createOversightMethods } from "./methods/oversight.js";
 import { createReportingMethods } from "./methods/reporting.js";
 import { createEventsMethods } from "./methods/events.js";
+import { createRouterMethods } from "./methods/router.js";
 import {
   GoalResultSchema,
   type MetronomeChallengeList,
@@ -125,6 +126,9 @@ import {
   type SettingsPreferencesUpdate,
   type SettingsModelPoolUpdate,
   type SettingsAuthorityDefaultsUpdate,
+  type RouterCatalogRead,
+  type RouterConfigInput,
+  type RouterConfigValidation,
 } from "@maestro/contracts";
 
 export interface ApiClient {
@@ -147,6 +151,9 @@ export interface ApiClient {
   updateSettingsPreferences(patch: SettingsPreferencesUpdate): Promise<SettingsRead>;
   updateSettingsModelPool(patch: SettingsModelPoolUpdate): Promise<SettingsRead>;
   updateSettingsAuthorityDefaults(patch: SettingsAuthorityDefaultsUpdate): Promise<SettingsRead>;
+  getRouterCatalog(): Promise<RouterCatalogRead>;
+  validateRouterConfig(input: RouterConfigInput): Promise<RouterConfigValidation>;
+  replaceRouterConfig(input: RouterConfigInput): Promise<RouterCatalogRead>;
   listProviderConnections(): Promise<
     readonly { providerId: string; connected: boolean; authModes: readonly ("api-key" | "managed-subscription")[] }[]
   >;
@@ -342,5 +349,6 @@ export function createApiClient({
     ...createOversightMethods(ctx),
     ...createReportingMethods(ctx),
     ...createEventsMethods(ctx),
+    ...createRouterMethods(ctx),
   };
 }
