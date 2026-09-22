@@ -40,6 +40,7 @@ import { createControlPlaneIpPythonSessions } from "./composition/sessions.js";
 import { composeFoundationServices } from "./composition/foundation-services.js";
 import { composeExecutionServices } from "./composition/execution-services.js";
 import { composeProviderCredentials, composeSettingsService } from "./composition/provider-access.js";
+import { composeRouterCatalogService } from "./composition/router-catalog.js";
 import { inspectIpPythonProcessOutcome } from "./composition/ipython.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
@@ -151,6 +152,13 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     encoreService,
   } = composeExecutionServices({ pool, config, overrides, withGoalLease, executionKernel, authorityExecutor, modelGateway });
   const providerCredentials = composeProviderCredentials({ pool, config, modelGateway });
+  const settingsService = composeSettingsService({ pool, config, modelGateway });
+  const routerCatalogService = composeRouterCatalogService({
+    pool,
+    config,
+    ...(modelGateway === undefined ? {} : { modelGateway }),
+    settingsService,
+  });
   const app = buildServer({
     goalService,
     headParticipationService,
@@ -166,7 +174,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
-    settingsService: composeSettingsService({ pool, config, modelGateway }),
+    settingsService,
+    routerCatalogService,
     ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),
     ...(providerCredentials === undefined ? {} : { providerCredentials }),
     criticalActionService,

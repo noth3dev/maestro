@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { EventCursor } from "@maestro/contracts";
 import type { AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import type { PersonaInspectionService } from "./persona-inspection-service.js";
+import type { RouterCatalogService } from "./composition/router-catalog.js";
 
 import { DurableStoreUnavailableError, type GoalService } from "./goal-service.js";
 import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
@@ -50,6 +51,7 @@ import { registerCapabilityRoutes } from "./routes/capability.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerCatalogRoutes } from "./routes/catalog.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerRouterRoutes } from "./routes/router.js";
 import { registerProviderRoutes } from "./routes/providers.js";
 import { registerPersonaRoutes } from "./routes/persona.js";
 import { registerGoalRoutes } from "./routes/goals.js";
@@ -141,6 +143,10 @@ export interface SettingsService {
     operatorId: string,
     patch: import("@maestro/contracts").SettingsModelPoolUpdate,
   ): Promise<import("@maestro/contracts").SettingsRead>;
+  replaceModelPool(
+    operatorId: string,
+    input: import("@maestro/contracts").SettingsModelPoolConfig,
+  ): Promise<import("@maestro/contracts").SettingsRead>;
   updateAuthorityDefaults(
     operatorId: string,
     patch: import("@maestro/contracts").SettingsAuthorityDefaultsUpdate,
@@ -213,6 +219,7 @@ export interface RouteDeps {
   providerCredentials?: ProviderCredentialService;
   accountLoginStore?: AccountLoginStore;
   settingsService?: SettingsService;
+  routerCatalogService?: RouterCatalogService;
   projectMembership?: ProjectMembershipChecker;
 }
 
@@ -252,6 +259,7 @@ export function buildServer({
   conversationService,
   projectionService,
   settingsService,
+  routerCatalogService,
   personaInspectionService,
 }: {
   goalService: GoalService;
@@ -308,6 +316,7 @@ export function buildServer({
   /** Durable projection composition over existing source tables for Carnegie panels. */
   projectionService?: ProjectionService;
   settingsService?: SettingsService;
+  routerCatalogService?: RouterCatalogService;
   /** Durable learned persona inspection and candidate proposal/edit boundary. */
   personaInspectionService?: PersonaInspectionService;
 }): FastifyInstance {
@@ -709,6 +718,7 @@ export function buildServer({
     ...(providerCredentials === undefined ? {} : { providerCredentials }),
     ...(accountLoginStore === undefined ? {} : { accountLoginStore }),
     ...(settingsService === undefined ? {} : { settingsService }),
+    ...(routerCatalogService === undefined ? {} : { routerCatalogService }),
     ...(projectMembership === undefined ? {} : { projectMembership }),
   };
   registerCapabilityRoutes(app, deps);
@@ -729,6 +739,7 @@ export function buildServer({
   registerAdminRoutes(app, deps);
   registerCatalogRoutes(app, deps);
   registerSettingsRoutes(app, deps);
+  registerRouterRoutes(app, deps);
   registerProviderRoutes(app, deps);
   registerPersonaRoutes(app, deps);
   registerGoalRoutes(app, deps);
