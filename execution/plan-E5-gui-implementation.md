@@ -799,6 +799,8 @@ export async function loadEventPage(api: EventApi, query: EventQuery): Promise<G
 
 ## Task 10: Complete settings, provider/model configuration, billing, budget, and session recovery
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `3b945b89`. Settings/Billing coverage passed 3 files / 22 tests and connection recovery coverage passed 1 file / 5 tests; changed-file ESLint, secret scan, and `git diff --check` passed. The full Carnegie build remains blocked by the documented baseline dependency/type errors; the SettingsRead contract has no version field, so the UI does not invent one. This does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/views/Settings.tsx`
 - Modify: `apps/carnegie/src/views/Billing.tsx`
