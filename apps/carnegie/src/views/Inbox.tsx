@@ -73,12 +73,15 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
   const displayError = error ?? detailError;
   return (
     <div className="inbox-main">
-      <div className="dash-head" style={{ padding: "20px 20px 0" }}><div className="dash-title">inbox</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px 14px" }}>Pending approvals across visible Goals; certifications for the selected Goal.</div>
-      <div className="inbox-list">
-        {loading && <p style={{ padding: "0 20px" }}>loading…</p>}
-        {displayError !== undefined && <div className="alert alert-warning" style={{ margin: "0 20px" }}>{displayError}</div>}
-        {!loading && error === undefined && inbox !== undefined && inbox.items.length === 0 && <p style={{ padding: "0 20px" }}>No pending approvals.</p>}
+      <header className="workspace-view-head">
+        <div className="dash-kicker">operations</div>
+        <h1 className="dash-title">inbox</h1>
+        <p className="dash-sub">Pending approvals across visible Goals; certifications for the selected Goal.</p>
+      </header>
+      <div className="inbox-list workspace-view-body">
+        {loading && <p>loading…</p>}
+        {displayError !== undefined && <div className="alert alert-warning">{displayError}</div>}
+        {!loading && error === undefined && inbox !== undefined && inbox.items.length === 0 && <p>No pending approvals.</p>}
         {inbox?.items.map((item) => (
           <div key={item.decisionId} className="inbox-item pending">
             <div className="inbox-icon" style={{ background: "var(--ochre-bg)", color: "var(--ochre-text)" }}><Icon name="shield" /></div>
@@ -98,7 +101,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
             </div>
           </div>
         ))}
-        {detailLoading && <p style={{ padding: "0 20px" }}>loading certifications…</p>}
+        {detailLoading && <p>loading certifications…</p>}
         {detail?.certifications.map((certification) => (
           <div key={certification.certificationId} className="inbox-item info">
             <div className="inbox-icon" style={{ background: "var(--olive-bg)", color: "var(--olive-text)" }}><Icon name="check" /></div>

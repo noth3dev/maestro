@@ -48,6 +48,14 @@ describe("Carnegie renderer API bridge", () => {
     for (const method of exposedApiMethods) expect(preload).toContain(`"${method}"`);
   });
 
+  it("exposes the provider authentication browser bridge", () => {
+    const preload = readFileSync(new URL("./preload.cts", import.meta.url), "utf8");
+    const main = readFileSync(new URL("./main.ts", import.meta.url), "utf8");
+    expect(preload).toContain('openProviderAuth: (url: string) => ipcRenderer.invoke("maestro:provider-auth:open", url)');
+    expect(main).toContain('ipcMain.handle("maestro:provider-auth:open"');
+    expect(main).toContain("isProviderAuthUrlAllowed(value)");
+  });
+
   it("uses clone-safe callback IPC for streams instead of returning an AsyncIterable through contextBridge", () => {
     const preload = readFileSync(new URL("./preload.cts", import.meta.url), "utf8");
     expect(preload).toContain("subscribeToEventStream");

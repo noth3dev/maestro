@@ -31,7 +31,11 @@ export async function initializeCarnegieConnection(options: CarnegieBootstrapOpt
     // configuration still takes the manual setup path.
     if (hasConnectionEnvironmentOverride(options.env)) return {};
   }
-  if (saved !== undefined) return { config: saved };
+  // Carnegie owns loopback connections. Re-run the local bootstrap even when a
+  // connection record exists so a stopped Control Plane or Model Gateway is
+  // started again before the renderer begins making requests. Explicit
+  // environment overrides remain on the manual setup path.
+  if (saved !== undefined && hasConnectionEnvironmentOverride(options.env)) return { config: saved };
   if (hasConnectionEnvironmentOverride(options.env)) return {};
 
   let local: ConnectionState;

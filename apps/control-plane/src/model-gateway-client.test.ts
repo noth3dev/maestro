@@ -318,6 +318,19 @@ it("starts and polls managed account login through the narrow gateway RPC", asyn
   expect(paths).toEqual(["http://127.0.0.1:4321/v1/account-logins/start", "http://127.0.0.1:4321/v1/account-logins/status"]);
 });
 
+it("logs out a managed account through the narrow gateway RPC", async () => {
+  let requestBody: unknown;
+  const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(String(input)).toBe("http://127.0.0.1:4321/v1/account-logins/logout");
+    expect(init?.headers).toMatchObject({ authorization: "Bearer gateway-secret", "content-type": "application/json" });
+    requestBody = JSON.parse(String(init?.body));
+    return response({ revoked: true });
+  };
+  const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+  await expect(client.logoutAccount?.({ requestId: "request-logout", operatorId: "operator-1", providerId: "openai-codex" })).resolves.toBeUndefined();
+  expect(requestBody).toEqual({ requestId: "request-logout", operatorId: "operator-1", providerId: "openai-codex" });
+});
+
 it("rejects reasoning stream events that carry hidden text", async () => {
   const result: ModelTurnResult = {
     requestId: "request-1",

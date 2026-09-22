@@ -36,6 +36,9 @@ export interface MaestroBridge {
     status(): Promise<BootstrapStatus>;
     onStatus(listener: (status: BootstrapStatus) => void): () => void;
   };
+  external: {
+    openProviderAuth(url: string): Promise<void>;
+  };
   preferences: {
     get(): Promise<Preferences>;
     save(preferences: Preferences): Promise<void>;

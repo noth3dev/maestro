@@ -1,10 +1,11 @@
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import type { ModelCatalogEntry, ModelGatewayPort } from "@maestro/agent-runtime";
 import type { MaestroConfig } from "../config.js";
 import { composeProviderCredentials, composeSettingsService } from "./provider-access.js";
 
-const fsControl = vi.hoisted(() => ({ mode: "ok" as "ok" | "throw" }));
+const fsControl = vi.hoisted(() => ({ mode: "ok" as "ok" | "throw", allowedModelMapPath: undefined as string | undefined }));
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
@@ -14,6 +15,7 @@ vi.mock("node:fs", async (importOriginal) => {
     readFileSync: (path: never, options?: never) => {
       if (isModelMapPath(path)) {
         if (fsControl.mode === "throw") throw new Error("EACCES: permission denied");
+        if (fsControl.allowedModelMapPath !== undefined && String(path).replace(/\\/g, "/") !== fsControl.allowedModelMapPath.replace(/\\/g, "/")) throw new Error("ENOENT: test path is not the repository model map");
         return JSON.stringify({
           schemaVersion: 1,
           entries: [
@@ -116,6 +118,20 @@ describe("composeSettingsService", () => {
       { modelRef: "openai/gpt-5.6-sol", score: 145, inUse: true },
       { modelRef: "anthropic/claude-sonnet-5", score: null, inUse: true },
     ]);
+  });
+
+  it("loads the model map when the Control Plane runs from its dist directory", async () => {
+    const previousDirectory = process.cwd();
+    process.chdir(resolve(previousDirectory, "apps/control-plane/dist"));
+    try {
+      fsControl.mode = "ok";
+      fsControl.allowedModelMapPath = resolve(previousDirectory, "config/model_map.json");
+      const read = await composeSettingsService({ pool: fakePool(), config, modelGateway: fakeGateway() }).get("operator-1");
+      expect(read.models.map((model) => model.modelRef)).toContain("openai/gpt-5.6-sol");
+    } finally {
+      fsControl.allowedModelMapPath = undefined;
+      process.chdir(previousDirectory);
+    }
   });
 
   it("returns no models when the model map cannot be read", async () => {

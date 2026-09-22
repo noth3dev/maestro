@@ -11,7 +11,7 @@ vi.mock("../useGoalArrangements.js", () => ({ useGoalArrangements: () => ({ arra
 describe("Arrangements view", () => {
   it("preserves the user-facing Arrangements title and Act 3 distinction", () => {
     const html = renderToStaticMarkup(<Arrangements />);
-    expect(html).toContain(">Arrangements</div>");
+    expect(html).toContain(">Arrangements</h1>");
     expect(html).toContain("Act 3");
   });
 });

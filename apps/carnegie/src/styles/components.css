@@ -251,6 +251,19 @@
   .dept-grid, .kanban { grid-template-columns:1fr; }
 }
 
+/* ── spacious workspace views ── */
+.workspace-view { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--surface-2); }
+.workspace-view-head { flex:0 0 auto; padding:clamp(28px, 4vw, 44px) clamp(24px, 4vw, 56px) 0; }
+.workspace-view-head .dash-kicker { margin-bottom:7px; }
+.workspace-view-head .dash-title { margin:0; }
+.workspace-view-head .dash-sub { max-width:72ch; margin:9px 0 0; line-height:1.5; }
+.workspace-view-body { flex:1; min-height:0; overflow-y:auto; padding:4px clamp(24px, 4vw, 56px) 40px; }
+.workspace-view-body > .inbox-item { margin:0 0 10px; padding:16px 18px; }
+.workspace-view-body > .evlog-item { padding:16px 0; }
+.workspace-view-body > .fm-session { margin:0 0 10px; padding:16px; }
+.workspace-view .page-tabs { flex:0 0 auto; padding:0 clamp(24px, 4vw, 56px); margin-top:22px; }
+.workspace-view .page-body.workspace-view-body { padding-top:20px; }
+
 /* ── channel view ── */
 .channel-wrap { flex:1; display:flex; overflow:hidden; position:relative; }
 .channel-feed { flex:1; display:flex; flex-direction:column; border-right:1px solid var(--border); min-width:0; }
@@ -343,8 +356,8 @@
 }
 
 /* ── inbox / evidence log ── */
-.inbox-main, .evlog-main { flex:1; display:flex; flex-direction:column; overflow-y:auto; }
-.inbox-item { display:flex; gap:12px; padding:12px 12px; border-radius:var(--radius-lg); margin-bottom:6px; }
+.inbox-main, .evlog-main { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+.inbox-item { display:flex; gap:14px; padding:16px 18px; border-radius:var(--radius-lg); margin-bottom:10px; }
 .inbox-item.pending { background:var(--ochre-bg); }
 .inbox-item.info { background:var(--surface-1); }
 .inbox-icon, .evlog-icon { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -352,7 +365,7 @@
 .inbox-title, .evlog-title { font-size:12.5px; font-weight:500; }
 .inbox-sub, .evlog-sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
 .evlog-sub { font-family: ui-monospace, Menlo, monospace; }
-.evlog-item { display:flex; align-items:center; gap:12px; padding:12px 20px; border-bottom:1px solid var(--border); }
+.evlog-item { display:flex; align-items:center; gap:14px; padding:16px 0; border-bottom:1px solid var(--border); }
 .evlog-time { margin-left:auto; font-size:11px; color:var(--text-muted); }
 
 /* ── billing chart ── */
@@ -364,14 +377,17 @@
 .dept-bar-amt { font-size:11px; color:var(--text-muted); width:38px; text-align:right; flex-shrink:0; }
 
 /* ── settings ── */
-.settings-wrap { flex:1; display:flex; overflow:hidden; }
-.settings-nav { width:180px; border-right:1px solid var(--border); padding:14px 8px; flex-shrink:0; }
+.settings-wrap { flex:1; min-width:0; display:flex; overflow:hidden; background:var(--surface-2); }
+.settings-nav { width:198px; border-right:1px solid var(--border); padding:22px 10px; flex-shrink:0; background:var(--surface-3); }
 .settings-nav-item { display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:var(--radius); font-size:12.5px; color:var(--text-secondary); cursor:pointer; border:none; background:transparent; width:100%; text-align:left; }
 .settings-nav-item svg { width:15px; height:15px; opacity:0.8; }
 .settings-nav-item:hover { background:var(--surface-1); }
 .settings-nav-item.on { background:var(--surface-1); color:var(--text-primary); font-weight:500; }
 .settings-nav-group-label { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.03em; padding:10px 10px 4px; }
-.settings-panel { flex:1; overflow-y:auto; padding:24px 28px; max-width:520px; }
+.settings-content { flex:1; min-width:0; min-height:0; overflow-y:auto; }
+.settings-status { display:flex; align-items:center; gap:10px; min-height:44px; padding:18px clamp(24px, 4vw, 52px) 0; color:var(--text-muted); font-size:11px; }
+.settings-panel { width:min(100%, 680px); padding:28px clamp(24px, 4vw, 52px) 44px; }
+.settings-panel-wide { width:min(100%, 780px); }
 .settings-section-title { font-size:15px; font-weight:600; margin-bottom:4px; }
 .settings-section-sub { font-size:12px; color:var(--text-muted); margin-bottom:18px; }
 .settings-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); gap:16px; }
@@ -381,6 +397,34 @@
 .danger-box { border:1px solid var(--rust); border-radius:var(--radius-lg); padding:14px 16px; margin-top:6px; }
 .danger-box-title { font-size:12.5px; font-weight:600; color:var(--rust-text); }
 .danger-box-hint { font-size:11.5px; color:var(--text-muted); margin:4px 0 10px; }
+.provider-account-card { display:flex; flex-direction:column; gap:18px; margin:24px 0 30px; padding:20px; border:1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius:var(--radius-xl); background:var(--accent-bg); box-shadow:var(--shadow-sm); }
+.provider-account-head { display:flex; align-items:flex-start; gap:13px; }
+.provider-account-icon { display:grid; width:38px; height:38px; flex:0 0 auto; place-items:center; border-radius:11px; background:var(--accent); color:#fff; box-shadow:0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent); }
+.provider-account-icon svg { width:18px; height:18px; }
+.provider-account-copy { min-width:0; flex:1; }
+.provider-account-copy h2 { margin:0; font-size:14px; font-weight:650; letter-spacing:-.01em; }
+.provider-account-copy p { max-width:52ch; margin:5px 0 0; color:var(--text-secondary); font-size:11.5px; line-height:1.5; }
+.provider-account-head > .badge { flex:0 0 auto; margin-top:2px; }
+.provider-account-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding-top:15px; border-top:1px solid color-mix(in srgb, var(--accent) 18%, var(--border)); }
+.provider-account-message { color:var(--text-secondary); font-size:11.5px; line-height:1.4; }
+.provider-account-message.is-success { color:var(--olive-text); }
+.provider-account-message.is-error { color:var(--rust-text); }
+.provider-account-link-box { display:flex; flex-direction:column; gap:5px; padding:10px 12px; border:1px dashed color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius:var(--radius); background:var(--surface-2); }
+.provider-account-link-box > span { color:var(--text-muted); font-size:10.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+.provider-account-link-row { display:flex; align-items:center; gap:10px; min-width:0; }
+.provider-account-link-box a { min-width:0; flex:1; color:var(--accent-text); font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; overflow-wrap:anywhere; text-decoration:underline; text-underline-offset:2px; }
+.provider-account-link-row .btn { flex:0 0 auto; }
+
+.provider-api-section { display:flex; flex-direction:column; gap:12px; }
+.provider-api-heading { margin-bottom:2px; color:var(--text-secondary); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.provider-api-section .form-field { margin-bottom:4px; }
+.provider-api-section .provider-row + .provider-row { margin-top:2px; }
+@media (max-width: 720px) {
+  .settings-nav { width:168px; }
+  .provider-account-head { flex-wrap:wrap; }
+  .provider-account-head > .badge { margin-left:51px; }
+}
+
 
 /* ── chip / registries / tabs ── */
 .chip { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:500; padding:4px 11px; border-radius:var(--radius-full); border:1px solid var(--border-strong); background:var(--surface-2); color:var(--text-secondary); cursor:pointer; }

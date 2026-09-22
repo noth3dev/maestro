@@ -64,14 +64,19 @@ describe("initializeCarnegieConnection", () => {
     expect(save).toHaveBeenCalledWith(bootstrapped);
   });
 
-  it("does not bootstrap over an existing saved connection", async () => {
+  it("revalidates a saved local connection and refreshes its durable services", async () => {
     const load = vi.fn(() => bootstrapped);
-    const resolveLocalConnection = vi.fn();
+    const resolveLocalConnection = vi.fn(async () => ({
+      kind: "configured" as const,
+      apiUrl: bootstrapped.apiUrl,
+      token: bootstrapped.token,
+      projectId: bootstrapped.projectId,
+    }));
     const save = vi.fn();
 
     await expect(initializeCarnegieConnection({ env: {}, load, save, resolveLocalConnection })).resolves.toEqual({ config: bootstrapped });
-    expect(resolveLocalConnection).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    expect(resolveLocalConnection).toHaveBeenCalledWith({ env: {}, includeProjectId: true });
+    expect(save).toHaveBeenCalledWith(bootstrapped);
   });
 
   it("leaves env-overridden connections on the manual setup path", async () => {

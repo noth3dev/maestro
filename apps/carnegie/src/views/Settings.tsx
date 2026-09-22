@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.js";
 import { useTheme } from "../theme.js";
 import { useConnection } from "../connection.js";
 import { ToggleSwitch } from "../components/ToggleSwitch.js";
+import { isProviderAuthUrlAllowed, waitForProviderAccountLogin } from "../lib/provider-account-login.js";
 
 type Panel = "profile" | "appearance" | "connection" | "notifications" | "providers" | "models" | "authority" | "danger";
 
@@ -18,6 +19,13 @@ export function Settings() {
   const [modelSearch, setModelSearch] = useState("");
   const [providerSecret, setProviderSecret] = useState("");
   const [providerBusy, setProviderBusy] = useState<string | undefined>();
+  const [accountLoginState, setAccountLoginState] = useState<"idle" | "opening" | "waiting" | "connected" | "error">("idle");
+  const [accountLoginMessage, setAccountLoginMessage] = useState<string | undefined>();
+  const [accountLoginUrl, setAccountLoginUrl] = useState<string | undefined>();
+  const [accountLinkCopied, setAccountLinkCopied] = useState(false);
+  const [accountConnected, setAccountConnected] = useState(false);
+  const accountLoginId = useRef<string | undefined>(undefined);
+  const accountLoginAbort = useRef<AbortController | undefined>(undefined);
   const isDark = theme === "dark";
 
   const loadSettings = () => {
@@ -25,7 +33,13 @@ export function Settings() {
     setSettingsError(undefined);
     void window.maestro.api.getSettings().then((value) => { setSettings(value); }).catch(() => { setSettings(undefined); setSettingsError("Durable settings are unavailable. No settings were loaded."); }).finally(() => setSettingsLoading(false));
   };
-  useEffect(() => { loadSettings(); }, []);
+  useEffect(() => {
+    loadSettings();
+    void window.maestro.api.listProviderConnections().then((connections) => {
+      setAccountConnected(connections.some((provider) => provider.providerId === "openai-codex" && provider.connected));
+    }).catch(() => { /* durable settings remains the source of truth when this optional refresh is unavailable */ });
+    return () => accountLoginAbort.current?.abort();
+  }, []);
   const settingsReady = settings !== undefined && settingsError === undefined;
   const updatePreferences = (patch: Parameters<typeof window.maestro.api.updateSettingsPreferences>[0]) => { void window.maestro.api.updateSettingsPreferences(patch).then(setSettings).catch(() => setSettingsError("Durable settings update failed; displayed values may be stale.")); };
   const updateDefaults = (patch: Parameters<typeof window.maestro.api.updateSettingsAuthorityDefaults>[0]) => { void window.maestro.api.updateSettingsAuthorityDefaults(patch).then(setSettings).catch(() => setSettingsError("Durable settings update failed; displayed values may be stale.")); };
@@ -33,9 +47,107 @@ export function Settings() {
   const filteredAvailable = models.filter((model) => !model.inUse && model.modelRef.toLowerCase().includes(modelSearch.toLowerCase()));
   const inUseModels = models.filter((model) => model.inUse);
   const providers = settings?.providers ?? [];
+  const codexConnected = accountConnected || providers.some((provider) => provider.providerId === "openai-codex" && provider.connected);
+  const refreshProviderSettings = async () => {
+    const nextSettings = await window.maestro.api.getSettings();
+    setSettings(nextSettings);
+    setSettingsError(undefined);
+    try {
+      const connections = await window.maestro.api.listProviderConnections();
+      const connected = connections.some((provider) => provider.providerId === "openai-codex" && provider.connected);
+      setAccountConnected((current) => current || connected);
+    } catch {
+      // The completed login is still reflected locally while the gateway catalog catches up.
+    }
+  };
   const providerAction = async (providerId: "openai" | "anthropic") => {
     setProviderBusy(providerId);
-    try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); setSettings(await window.maestro.api.getSettings()); setSettingsError(undefined); } catch { setSettingsError("Provider status is unavailable; no connection state was changed."); } finally { setProviderBusy(undefined); }
+    try { if (providers.some((provider) => provider.providerId === providerId && provider.connected)) await window.maestro.api.logoutProvider(providerId); else if (providerSecret.trim() !== "") await window.maestro.api.loginProvider({ providerId, authMode: "api-key", secret: providerSecret }); else return; setProviderSecret(""); await refreshProviderSettings(); } catch { setSettingsError("Provider status is unavailable; no connection state was changed."); } finally { setProviderBusy(undefined); }
+  };
+  const startCodexLogin = async () => {
+    if (providerBusy !== undefined) return;
+    const controller = new AbortController();
+    accountLoginAbort.current = controller;
+    accountLoginId.current = undefined;
+    setProviderBusy("openai-codex");
+    setAccountLoginState("opening");
+    setAccountLoginMessage(undefined);
+    try {
+      const started = await window.maestro.api.startAccountLogin();
+      if (!isProviderAuthUrlAllowed(started.authUrl)) throw new Error("The provider returned an unsafe authentication URL.");
+      accountLoginId.current = started.loginId;
+      setAccountLoginUrl(started.authUrl);
+      let browserOpened = true;
+      try {
+        await window.maestro.external.openProviderAuth(started.authUrl);
+      } catch {
+        browserOpened = false;
+      }
+      setAccountLoginState("waiting");
+      if (!browserOpened) setAccountLoginMessage("The browser did not open. Use the sign-in link below.");
+      await waitForProviderAccountLogin((loginId) => window.maestro.api.accountLoginStatus(loginId), started.loginId, { signal: controller.signal });
+      setAccountConnected(true);
+      setAccountLoginState("connected");
+      try {
+        await refreshProviderSettings();
+        setAccountLoginMessage("ChatGPT / Codex is ready for Maestro.");
+      } catch {
+        setAccountLoginMessage("ChatGPT / Codex is connected. Settings will refresh on the next load.");
+      }
+    } catch (cause: unknown) {
+      if (controller.signal.aborted) return;
+      const loginId = accountLoginId.current;
+      if (loginId !== undefined) {
+        try { await window.maestro.api.cancelAccountLogin(loginId); } catch { /* preserve the original sign-in error */ }
+      }
+      setAccountLoginState("error");
+      setAccountLoginMessage(cause instanceof Error ? cause.message : "Could not complete ChatGPT / Codex login.");
+    } finally {
+      if (accountLoginAbort.current === controller) accountLoginAbort.current = undefined;
+      accountLoginId.current = undefined;
+      setProviderBusy(undefined);
+    }
+  };
+  const copyAccountLoginUrl = async () => {
+    if (accountLoginUrl === undefined) return;
+    try {
+      await navigator.clipboard.writeText(accountLoginUrl);
+      setAccountLinkCopied(true);
+      window.setTimeout(() => setAccountLinkCopied(false), 1800);
+    } catch {
+      setAccountLoginMessage("Copy was blocked. Select the sign-in link manually.");
+    }
+  };
+  const cancelCodexLogin = async () => {
+    const loginId = accountLoginId.current;
+    accountLoginAbort.current?.abort();
+    if (loginId !== undefined) {
+      try { await window.maestro.api.cancelAccountLogin(loginId); } catch { /* the local cancellation still stops polling */ }
+    }
+    accountLoginId.current = undefined;
+    accountLoginAbort.current = undefined;
+    setProviderBusy(undefined);
+    setAccountLoginState("idle");
+    setAccountLoginMessage(undefined);
+    setAccountLoginUrl(undefined);
+    setAccountLinkCopied(false);
+  };
+  const logoutCodex = async () => {
+    setProviderBusy("openai-codex");
+    try {
+      await window.maestro.api.logoutAccount();
+      setAccountConnected(false);
+      setAccountLoginState("idle");
+      setAccountLoginMessage(undefined);
+      setAccountLoginUrl(undefined);
+      setAccountLinkCopied(false);
+      await refreshProviderSettings();
+    } catch (cause: unknown) {
+      setAccountLoginState("error");
+      setAccountLoginMessage(cause instanceof Error ? cause.message : "Could not disconnect ChatGPT / Codex.");
+    } finally {
+      setProviderBusy(undefined);
+    }
   };
 
   const navItem = (id: Panel, icon: string, label: string) => (
@@ -69,7 +181,8 @@ export function Settings() {
         {navItem("danger", "triangle-alert", "danger zone")}
       </div>
 
-      <div className="settings-panel" role="status" style={{ marginBottom: 12 }}>
+      <main className="settings-content">
+      <div className="settings-status" role="status">
         {settingsLoading ? <span>Loading durable settings…</span> : settingsError ? <><span role="alert">{settingsError}</span> <button className="btn btn-sm" onClick={loadSettings}>retry</button></> : <span>Durable settings loaded.</span>}
       </div>
 
@@ -160,12 +273,51 @@ export function Settings() {
       )}
 
       {panel === "providers" && (
-        <div className="settings-panel">
+        <div className="settings-panel settings-panel-wide">
           <div className="settings-section-title">providers</div>
-          <div className="settings-section-sub">provider credentials are stored by the authenticated Model Gateway</div>
+          <div className="settings-section-sub">Connect a model provider once. Credentials stay behind the authenticated Model Gateway.</div>
           {settingsReady ? <>
-            <div className="form-field" style={{ marginBottom: 14 }}><label className="form-label">API key</label><input className="input" type="password" value={providerSecret} onChange={(event) => setProviderSecret(event.target.value)} placeholder="enter only when connecting" /></div>
-            {(["openai", "anthropic"] as const).map((providerId) => { const connected = providers.some((provider) => provider.providerId === providerId && provider.connected); return <div key={providerId} className="provider-row"><Icon name="server" /><span className="provider-row-name">{providerId}</span><span className="badge">{connected ? "connected" : "not connected"}</span><button className="btn btn-sm" disabled={providerBusy === providerId || (!connected && providerSecret.trim() === "")} onClick={() => void providerAction(providerId)}>{providerBusy === providerId ? "working…" : connected ? "disconnect" : "connect"}</button></div>; })}
+            <section className="provider-account-card" aria-labelledby="codex-provider-title">
+              <div className="provider-account-head">
+                <div className="provider-account-icon"><Icon name="message-circle" /></div>
+                <div className="provider-account-copy">
+                  <h2 id="codex-provider-title">ChatGPT / Codex</h2>
+                  <p>Use your existing ChatGPT account for Maestro. Carnegie opens the secure sign-in in your browser.</p>
+                </div>
+                <span className={`badge ${codexConnected ? "badge-olive" : accountLoginState === "error" ? "badge-rust" : "badge-slate"}`}>
+                  {codexConnected ? "connected" : accountLoginState === "waiting" ? "waiting for sign-in" : accountLoginState === "opening" ? "opening browser" : accountLoginState === "error" ? "needs attention" : "not connected"}
+                </span>
+              </div>
+              <div className="provider-account-actions">
+                {codexConnected ? (
+                  <button className="btn btn-sm" disabled={providerBusy === "openai-codex"} onClick={() => void logoutCodex()}>
+                    {providerBusy === "openai-codex" ? "disconnecting…" : "disconnect"}
+                  </button>
+                ) : accountLoginState === "waiting" || accountLoginState === "opening" ? (
+                  <button className="btn btn-sm" disabled={providerBusy !== undefined} onClick={() => void cancelCodexLogin()}>cancel sign-in</button>
+                ) : (
+                  <button className="btn btn-primary btn-sm" disabled={providerBusy !== undefined} onClick={() => void startCodexLogin()}>
+                    {accountLoginState === "error" ? "try again" : "sign in with ChatGPT"}
+                  </button>
+                )}
+                {accountLoginMessage !== undefined && <span className={`provider-account-message ${accountLoginState === "error" ? "is-error" : accountLoginState === "connected" ? "is-success" : ""}`} role={accountLoginState === "error" ? "alert" : "status"}>{accountLoginMessage}</span>}
+              </div>
+              {accountLoginUrl !== undefined && accountLoginState !== "connected" && (
+                <div className="provider-account-link-box">
+                  <span>Sign-in link</span>
+                  <div className="provider-account-link-row">
+                    <a href={accountLoginUrl} target="_blank" rel="noreferrer">{accountLoginUrl}</a>
+                    <button type="button" className="btn btn-sm" onClick={() => void copyAccountLoginUrl()}>{accountLinkCopied ? "copied" : "copy link"}</button>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <div className="provider-api-section">
+              <div className="provider-api-heading">API key connections</div>
+              <div className="form-field"><label className="form-label" htmlFor="provider-secret">API key</label><input id="provider-secret" className="input" type="password" value={providerSecret} onChange={(event) => setProviderSecret(event.target.value)} placeholder="enter only when connecting" /></div>
+              {(["openai", "anthropic"] as const).map((providerId) => { const connected = providers.some((provider) => provider.providerId === providerId && provider.connected); return <div key={providerId} className="provider-row"><Icon name="server" /><span className="provider-row-name">{providerId}</span><span className={`badge ${connected ? "badge-olive" : "badge-slate"}`}>{connected ? "connected" : "not connected"}</span><button className="btn btn-sm" disabled={providerBusy === providerId || (!connected && providerSecret.trim() === "")} onClick={() => void providerAction(providerId)}>{providerBusy === providerId ? "working…" : connected ? "disconnect" : "connect"}</button></div>; })}
+            </div>
           </> : <p role="status">Provider status unavailable until durable settings load successfully.</p>}
         </div>
       )}
@@ -195,8 +347,7 @@ export function Settings() {
           {!settingsReady && <p role="status">Model pool unavailable until durable settings load successfully.</p>}
 
           <div className="settings-row" style={{ marginBottom: 6 }}>
-            <div><div className="settings-row-label">auto-select models</div><div className="settings-row-hint">orchestrator swaps models on the fly to fit each task. off · strictly uses the assignments below</div></div>
-            <span className="badge">human-managed pool</span>
+            <div><div className="settings-row-label">auto-select models</div><div className="settings-row-hint">orchestrator swaps models on the fly to fit each task. off · strictly uses the assignments below</div></div>d
           </div>
 
           <div className="page-tabs" style={{ padding: 0, margin: "14px 0 0" }}>
@@ -246,6 +397,7 @@ export function Settings() {
           </div>
         </div>
       )}
+      </main>
     </div>
   );
 }

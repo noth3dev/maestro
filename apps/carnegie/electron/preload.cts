@@ -100,6 +100,9 @@ contextBridge.exposeInMainWorld("maestro", {
       return () => ipcRenderer.removeListener("maestro:bootstrap-status", handler);
     },
   },
+  external: {
+    openProviderAuth: (url: string) => ipcRenderer.invoke("maestro:provider-auth:open", url),
+  },
   preferences: {
     get: () => ipcRenderer.invoke("maestro:preferences:get"),
     save: (preferences: { theme: string; locale: string }) => ipcRenderer.invoke("maestro:preferences:save", preferences),

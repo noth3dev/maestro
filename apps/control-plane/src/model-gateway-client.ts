@@ -1,6 +1,7 @@
 import type {
   GatewayAccountLoginStartRequest,
   GatewayAccountLoginStartResult,
+  GatewayAccountLogoutRequest,
   GatewayAccountLoginStatusRequest,
   GatewayAccountLoginStatusResult,
   GatewayAdmissionRequest,
@@ -492,6 +493,16 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
         (value) => {
           if (!value || typeof value !== "object" || (value as { cancelled?: unknown }).cancelled !== true)
             throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account login cancellation");
+        },
+      );
+    },
+    async logoutAccount(input: GatewayAccountLogoutRequest): Promise<void> {
+      await request(
+        "v1/account-logins/logout",
+        { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) },
+        (value) => {
+          if (!value || typeof value !== "object" || (value as { revoked?: unknown }).revoked !== true)
+            throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed account logout");
         },
       );
     },

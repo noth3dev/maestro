@@ -9,12 +9,12 @@ vi.mock("../icons.js", () => ({ Icon: () => null }));
 vi.stubGlobal("React", React);
 
 describe("Home Concertmaster conversation", () => {
-  it("makes the real conversation identity, turn state, and continuation path visible", () => {
+  it("keeps the initial composer focused before a conversation exists", () => {
     const html = renderToStaticMarkup(<Home onNavigate={vi.fn()} mode="maestro" onModeChange={vi.fn()} />);
-    expect(html).toContain("conversation");
-    expect(html).toContain("continue conversation");
-    expect(html).toContain("retry turn");
-    expect(html).toContain("cancel turn");
-    expect(html).toContain("turn");
+    expect(html).toContain("Brief the Concertmaster");
+    expect(html).not.toContain("conversation not started");
+    expect(html).not.toContain("continue conversation");
+    expect(html).not.toContain("retry turn");
+    expect(html).not.toContain("cancel turn");
   });
 });

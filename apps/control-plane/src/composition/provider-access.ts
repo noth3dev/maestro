@@ -32,12 +32,25 @@ export function composeSettingsService(deps: ProviderAccessDeps): ReturnType<typ
     pool,
     models: {
       list: async () => {
-        const mapPath = resolve(process.cwd(), "config/model_map.json");
-        try {
-          const parsed = JSON.parse(readFileSync(mapPath, "utf8")) as {
-            entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }>;
-          };
-          return (parsed.entries ?? [])
+        const mapPaths = [
+          process.env.MAESTRO_MODEL_MAP,
+          resolve(process.cwd(), "config/model_map.json"),
+          resolve(process.cwd(), "../../config/model_map.json"),
+          resolve(process.cwd(), "../../../config/model_map.json"),
+        ].filter((path): path is string => path !== undefined && path.trim() !== "");
+        let parsed: { entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }> } | undefined;
+        for (const mapPath of mapPaths) {
+          try {
+            parsed = JSON.parse(readFileSync(mapPath, "utf8")) as {
+              entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }>;
+            };
+            break;
+          } catch {
+            // The packaged Control Plane starts from its dist directory; try the repository-level map next.
+          }
+        }
+        if (parsed === undefined) return [];
+        return (parsed.entries ?? [])
             .filter(
               (entry): entry is { modelRef: string; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } } =>
                 typeof entry.modelRef === "string",
@@ -51,9 +64,6 @@ export function composeSettingsService(deps: ProviderAccessDeps): ReturnType<typ
                 score: values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length,
               };
             });
-        } catch {
-          return [];
-        }
       },
     },
     providers: {

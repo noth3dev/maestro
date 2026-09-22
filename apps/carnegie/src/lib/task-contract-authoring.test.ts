@@ -150,6 +150,31 @@ describe("task contract authoring", () => {
     expect(result.message).toBeUndefined();
   });
 
+  it("publishes the conversation identity before a slow turn finishes", async () => {
+    const conversationId = "44444444-4444-4444-8444-444444444444";
+    const turnResult = {
+      conversation: { conversationId, projectId, goalId: null, model: "openai/gpt-5", status: "succeeded" as const, version: 2 },
+      turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId, role: "assistant" as const, content: "done", status: "completed" as const, cursor: "1", createdAt: "2026-09-16T00:00:00.000Z" },
+    };
+    let release!: (value: typeof turnResult) => void;
+    let markTurnStarted!: () => void;
+    const turnStarted = new Promise<void>((resolve) => { markTurnStarted = resolve; });
+    const api = {
+      listModels: vi.fn(async () => [{ identity: { provider: "openai", id: "gpt-5" }, capabilities: ["text"], authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } }]),
+      createConversation: vi.fn(async () => ({ conversationId, projectId, goalId: null, model: "openai/gpt-5", status: "active" as const, version: 1 })),
+      sendConversationTurn: vi.fn(() => {
+        markTurnStarted();
+        return new Promise<typeof turnResult>((resolve) => { release = resolve; });
+      }),
+    };
+    const identities: string[] = [];
+    const pending = submitHomeBrief(api, { projectId, text: "slow request", selectedGoalId: undefined, onConversationCreated: (id) => identities.push(id) });
+    await turnStarted;
+    expect(identities).toEqual([conversationId]);
+    release(turnResult);
+    await pending;
+  });
+
   it("keeps the created conversation identity when a real turn fails", async () => {
     const conversationId = "44444444-4444-4444-8444-444444444444";
     const api = {

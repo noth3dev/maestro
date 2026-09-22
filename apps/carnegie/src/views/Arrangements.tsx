@@ -63,15 +63,18 @@ export function Arrangements() {
   const items = arrangements === undefined ? [] : arrangements[tab];
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div className="dash-head" style={{ padding: "14px 20px 0" }}><div className="dash-title">Arrangements</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px" }}>Act 3 · verified improvement state from durable candidates, Encore Council judgments, and bounded rollouts</div>
+    <div className="workspace-view">
+      <header className="workspace-view-head">
+        <div className="dash-kicker">act 3</div>
+        <h1 className="dash-title">Arrangements</h1>
+        <p className="dash-sub">Verified improvement state from durable candidates, Encore Council judgments, and bounded rollouts.</p>
+      </header>
       <div className="page-tabs">
         {(["active", "candidates", "encoreCouncil", "negativeEvidence"] as const).map((name) => (
           <button type="button" key={name} className={`page-tab${tab === name ? " on" : ""}`} onClick={() => setTab(name)}>{name === "encoreCouncil" ? "encore council" : name === "negativeEvidence" ? "negative evidence" : name}</button>
         ))}
       </div>
-      <div className="page-body">
+      <div className="page-body workspace-view-body">
         {loading && <p>loading…</p>}
         {error !== undefined && <div className="alert alert-warning">{error}</div>}
         {!loading && error === undefined && arrangements !== undefined && items.length === 0 && <p>No durable {tab === "encoreCouncil" ? "Encore Council judgments" : tab === "negativeEvidence" ? "negative evidence" : `${tab} arrangements`} for this Goal yet.</p>}

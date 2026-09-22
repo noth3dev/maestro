@@ -2,12 +2,13 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { app, BrowserWindow, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen, shell } from "electron";
 import type { ApiClient } from "@maestro/api-client";
 import type { LocalBootstrapStepEvent } from "@maestro/local-backend";
 import type { WebContents } from "electron";
 import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type ConnectionConfig } from "./store.js";
 import { initializeCarnegieConnection } from "./bootstrap.js";
+import { isProviderAuthUrlAllowed } from "../src/lib/provider-account-login.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
 import { invokeWithErrorEnvelope } from "./api-error-bridge.js";
@@ -246,6 +247,11 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("maestro:bootstrap:status", () => bootstrapStatus);
+
+  ipcMain.handle("maestro:provider-auth:open", (_event, value: unknown) => {
+    if (typeof value !== "string" || !isProviderAuthUrlAllowed(value)) throw new Error("Provider returned an unsafe authentication URL");
+    return shell.openExternal(value);
+  });
 
   ipcMain.handle("maestro:config:error", () => setupError);
 

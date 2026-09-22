@@ -2,10 +2,13 @@ import { Icon } from "../icons.js";
 
 export function Flashmob({ onOpenSession }: { onOpenSession: () => void }) {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div className="dash-head" style={{ padding: "20px 20px 0" }}><div className="dash-title">flashmob</div></div>
-      <div className="dash-sub" style={{ padding: "0 20px 14px" }}>fast lane for light tasks · deferred feature (roadmap/_meta/naming-registry.md "Vanguard"), not wired to a real backend yet -- illustrative example sessions below</div>
-      <div className="page-body" style={{ paddingTop: 0 }}>
+    <div className="workspace-view">
+      <header className="workspace-view-head">
+        <div className="dash-kicker">quick actions</div>
+        <h1 className="dash-title">flashmob</h1>
+        <p className="dash-sub">Fast lane for light tasks. This preview is not wired to a live backend yet.</p>
+      </header>
+      <div className="page-body workspace-view-body">
         <div className="fm-session" onClick={onOpenSession}>
           <div className="fm-session-icon"><Icon name="message-square" /></div>
           <div className="fm-session-body">

@@ -81,6 +81,7 @@ export function Home({
   const dirty = draft !== undefined && draftForm !== undefined && JSON.stringify(draftForm) !== JSON.stringify(formFromContract(draft));
   const draftPhase = draft === undefined ? undefined : getTaskContractPhase(draft, confirmed, draftRejected);
   const projectId = config?.projectId;
+  const showConversationState = conversationId !== undefined || conversationMessages.length > 0 || turnStatus !== "idle";
 
   useEffect(() => {
     if (projectId === undefined) return;
@@ -118,6 +119,10 @@ export function Home({
         text: submittedText,
         selectedGoalId,
         ...(conversationId === undefined ? {} : { conversationId }),
+        onConversationCreated: (createdConversationId) => {
+          setConversationId(createdConversationId);
+          setConversationProjectId(config.projectId);
+        },
       });
       let completedTurn = false;
       if ("conversationId" in intake && intake.conversationId !== undefined) {
@@ -236,7 +241,7 @@ export function Home({
   return (
     <div className="home-main">
       <div className="home-title">{title}</div>
-      <section className="home-conversation" aria-label="Concertmaster conversation">
+      {showConversationState && <section className="home-conversation" aria-label="Concertmaster conversation">
         <div>conversation {conversationId ?? "not started"}</div>
         <div>turn {turnStatus}</div>
         {conversationMessages.map((message) => (
@@ -251,7 +256,7 @@ export function Home({
         <button type="button" className="btn btn-ghost btn-sm" disabled={conversationId === undefined || turnStatus !== "loading" || cancelBusy} onClick={() => void cancelTurn()}>
           {cancelBusy ? "cancelling…" : "cancel turn"}
         </button>
-      </section>
+      </section>}
       <form className={`home-composer${isFlashmob ? " mode-flashmob" : ""}`} onSubmit={(event) => void submitBrief(event)}>
         <label className="sr-only" htmlFor="home-brief">
           Brief the Concertmaster
