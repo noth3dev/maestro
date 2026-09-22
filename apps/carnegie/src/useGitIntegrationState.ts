@@ -1,17 +1,29 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { GoalGitIntegrationState } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { useGoals } from "./goals.js";
 
-export function useGitIntegrationState(): { state: GoalGitIntegrationState | undefined; loading: boolean; error: string | undefined } {
+export function useGitIntegrationState(): {
+  state: GoalGitIntegrationState | undefined;
+  loading: boolean;
+  error: string | undefined;
+  refresh: () => void;
+} {
   const { config } = useConnection();
   const { selectedGoalId } = useGoals();
   const [state, setState] = useState<GoalGitIntegrationState | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [reloadToken, setReloadToken] = useState(0);
+  const refresh = useCallback(() => setReloadToken((current) => current + 1), []);
 
   useEffect(() => {
-    if (config === undefined || selectedGoalId === undefined) return;
+    setState(undefined);
+    setError(undefined);
+    if (config === undefined || selectedGoalId === undefined) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(undefined);
@@ -29,7 +41,7 @@ export function useGitIntegrationState(): { state: GoalGitIntegrationState | und
     return () => {
       cancelled = true;
     };
-  }, [config, selectedGoalId]);
+  }, [config, selectedGoalId, reloadToken]);
 
-  return { state, loading, error };
+  return { state, loading, error, refresh };
 }

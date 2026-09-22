@@ -104,11 +104,28 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
         {detailLoading && <p>loading certifications…</p>}
         {detail?.certifications.map((certification) => (
           <div key={certification.certificationId} className="inbox-item info">
-            <div className="inbox-icon" style={{ background: "var(--olive-bg)", color: "var(--olive-text)" }}><Icon name="check" /></div>
+            <div className="inbox-icon" style={{ background: "var(--olive-bg)", color: "var(--olive-text)" }}>
+              <Icon name="check" />
+            </div>
             <div className="inbox-body">
-              <div className="inbox-title">{certification.kind} · {certification.verdict} · {certification.producingDepartment}</div>
-              <div className="inbox-sub">commit {certification.integratedCommitSha.slice(0, 12)}… · certified by {certification.certifiedByDepartment}</div>
-              <div className="inbox-actions"><button className="inbox-link" onClick={() => onNavigate("git")}><Icon name="external-link" /> view in Git</button></div>
+              <div className="inbox-title">
+                {certification.kind} · {certification.verdict} · {certification.producingDepartment}
+              </div>
+              <div className="inbox-sub">
+                Worker {certification.workerId} · commit {certification.integratedCommitSha.slice(0, 12)}… · certified by{" "}
+                {certification.certifiedByDepartment}
+              </div>
+              {certification.verdict === "blocked" && (
+                <div className="inbox-sub">
+                  Conditional certification remains blocked; review the server evidence and condition before treating this Worker as
+                  accepted.
+                </div>
+              )}
+              <div className="inbox-actions">
+                <button type="button" className="inbox-link" onClick={() => onNavigate("git")}>
+                  <Icon name="external-link" /> review Worker in Git
+                </button>
+              </div>
             </div>
           </div>
         ))}
