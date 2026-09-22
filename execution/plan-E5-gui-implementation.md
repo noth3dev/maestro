@@ -865,6 +865,8 @@ export type SettingsApi = Pick<ApiClient,
 
 ## Task 11: Complete Persona and Act 3 read-only surfaces without faking mutation
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `96cd5782`. Focused coverage passed 4 files / 14 tests; changed-file ESLint and `git diff --check` passed. Persona active/candidate state and Act 3 evidence remain server-backed/read-only. The full Carnegie build remains blocked by the documented baseline dependency/type errors; this does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/views/Persona.tsx`
 - Modify: `apps/carnegie/src/views/Arrangements.tsx`
