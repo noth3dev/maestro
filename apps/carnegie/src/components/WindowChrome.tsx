@@ -5,7 +5,7 @@ export function WindowChrome({ children }: { children: ReactNode }) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
-    let active = true;
+    const active = true;
     void window.maestro.windowControls.isMaximized().then((value) => {
       if (active) setMaximized(value);
     });
