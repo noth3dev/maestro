@@ -91,7 +91,7 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Accessibility / layout (Task 13)
 
-**Status: Partial infrastructure exists.** Carnegie now has the Task 13 semantic/responsive checks and CDP-gated live specs in `apps/carnegie/src/task13-a11y.test.ts`, `apps/carnegie/tests/e5-a11y.spec.ts`, and `apps/carnegie/tests/e5-live-acceptance.spec.ts`. Focused Vitest passed 7 files / 34 tests; changed-file ESLint, root/Carnegie builds, exact Carnegie Playwright (4 passed / 5 designed skips), and radial smoke passed. Real-CDP a11y execution reached the recovery renderer but was backend-blocked; no browser success is claimed for unavailable backend routes.
+**Status: Partial infrastructure exists.** Carnegie now has Task 13 semantic/responsive checks, rendered active-route/mode tests, and CDP-gated live specs in `apps/carnegie/src/task13-a11y.test.ts`, `apps/carnegie/src/components/Sidebar.test.tsx`, `apps/carnegie/tests/e5-a11y.spec.ts`, and `apps/carnegie/tests/e5-live-acceptance.spec.ts`. The current focused UI suite passes 8 files / 35 tests; root/Carnegie builds, changed-file ESLint, exact Carnegie Playwright (4 passed / 5 designed skips), and radial smoke pass. Real-CDP a11y execution reached the recovery renderer but was backend-blocked; no browser success is claimed for unavailable backend routes.
 
 ## Tasks 14–15 (live project progression, final gate)
 
