@@ -49,6 +49,16 @@ function formFromContract(contract: TaskContract): DraftForm {
   };
 }
 
+export function submitHomeComposer(
+  mode: HomeMode,
+  event: Pick<React.FormEvent, "preventDefault">,
+  submit: () => void,
+): void {
+  event.preventDefault();
+  if (mode === "flashmob") return;
+  submit();
+}
+
 export function Home({
   onNavigate,
   mode,
@@ -237,9 +247,7 @@ export function Home({
   };
 
   const submitComposer = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (isFlashmob) return;
-    void submitBrief(event);
+    submitHomeComposer(mode, event, () => { void submitBrief(event); });
   };
 
   return (

@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { Home } from "./Home.js";
+import { Home, submitHomeComposer } from "./Home.js";
 
 vi.mock("../connection.js", () => ({ useConnection: () => ({ config: { projectId: "11111111-1111-4111-8111-111111111111" } }) }));
 vi.mock("../goals.js", () => ({ useGoals: () => ({ selectedGoalId: undefined }) }));
@@ -25,6 +25,27 @@ describe("Home Concertmaster conversation", () => {
     expect(html).toMatch(/textarea[^>]*disabled/);
     expect(html).toMatch(/button[^>]*disabled[^>]*>send/);
     expect(html).not.toContain("fix the pricing page copy");
+  });
+
+
+  it("does not invoke the backend submitter for deferred Flashmob mode", () => {
+    const preventDefault = vi.fn();
+    const submitBackend = vi.fn();
+
+    submitHomeComposer("flashmob", { preventDefault }, submitBackend);
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(submitBackend).not.toHaveBeenCalled();
+  });
+
+  it("invokes the backend submitter only for Maestro mode", () => {
+    const preventDefault = vi.fn();
+    const submitBackend = vi.fn();
+
+    submitHomeComposer("maestro", { preventDefault }, submitBackend);
+
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(submitBackend).toHaveBeenCalledOnce();
   });
 
 });

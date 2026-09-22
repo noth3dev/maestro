@@ -14,8 +14,13 @@ describe("Luthiery view", () => {
 
     expect(html).toContain(`No durable ${initialTab === "skills" ? "skill" : "tool"} registry is available`);
     expect(html).toContain("backend-blocked");
-    expect(html).toContain("listSkills");
-    expect(html).toContain("getSkill");
+    if (initialTab === "skills") {
+      expect(html).toContain("listSkills");
+      expect(html).toContain("getSkill");
+    } else {
+      expect(html).toContain("listTools");
+      expect(html).toContain("getTool");
+    }
     expect(html).toContain("certification");
     expect(html).toContain("usage");
     expect(html).toContain("Phase 9");

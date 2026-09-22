@@ -45,6 +45,7 @@ describe("Flashmob deferred surface", () => {
 
     expect(promote).toBeDefined();
     expect(promote?.props.disabled).toBe(true);
+    expect(promote?.props.onClick).toBeUndefined();
     expect(renderToStaticMarkup(<FlashmobSession onBack={vi.fn()} />)).not.toContain("promoted");
   });
 
