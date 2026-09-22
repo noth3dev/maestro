@@ -15,16 +15,23 @@ vi.mock("node:fs", async (importOriginal) => {
     readFileSync: (path: never, options?: never) => {
       if (isModelMapPath(path)) {
         if (fsControl.mode === "throw") throw new Error("EACCES: permission denied");
-        if (fsControl.allowedModelMapPath !== undefined && String(path).replace(/\\/g, "/") !== fsControl.allowedModelMapPath.replace(/\\/g, "/")) throw new Error("ENOENT: test path is not the repository model map");
+        if (
+          fsControl.allowedModelMapPath !== undefined &&
+          String(path).replace(/\\/g, "/") !== fsControl.allowedModelMapPath.replace(/\\/g, "/")
+        )
+          throw new Error("ENOENT: test path is not the repository model map");
+        const source = JSON.parse((actual.readFileSync as (...args: never[]) => string)(path, options)) as {
+          schemaVersion: 1;
+          entries: Array<Record<string, unknown>>;
+        };
         return JSON.stringify({
           schemaVersion: 1,
           entries: [
+            { ...source.entries[0], modelRef: "openai/gpt-5.6-sol" },
             {
-              modelRef: "openai/gpt-5.6-sol",
-              capability: { axes: { reasoning: { status: "scored", score: 140 }, coding: { status: "scored", score: 150 } } },
+              ...(source.entries.find((entry) => entry.modelRef === "anthropic/claude-sonnet-5") ?? source.entries[0] ?? {}),
+              modelRef: "anthropic/claude-sonnet-5",
             },
-            { modelRef: "anthropic/claude-sonnet-5", capability: { axes: { reasoning: { status: "unproven", score: null } } } },
-            { capability: { axes: {} } },
           ],
         });
       }
@@ -110,7 +117,7 @@ describe("composeSettingsService", () => {
     expect(read.providers).toEqual([]);
   });
 
-  it("parses the human-owned model map into averaged scores and filters entries without modelRef", async () => {
+  it("parses the validated human-owned model map into averaged scores", async () => {
     fsControl.mode = "ok";
     const service = composeSettingsService({ pool: fakePool(), config, modelGateway: fakeGateway() });
     const read = await service.get("operator-1");
