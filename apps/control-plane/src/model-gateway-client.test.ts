@@ -331,6 +331,33 @@ it("logs out a managed account through the narrow gateway RPC", async () => {
   expect(requestBody).toEqual({ requestId: "request-logout", operatorId: "operator-1", providerId: "openai-codex" });
 });
 
+it("starts and polls managed account login for the anthropic-claude providerId through the narrow gateway RPC", async () => {
+  const paths: string[] = [];
+  const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    paths.push(String(input));
+    expect(init?.headers).toMatchObject({ authorization: "Bearer gateway-secret" });
+    if (String(input).endsWith("/account-logins/start"))
+      return response({ providerId: "anthropic-claude", loginId: "login-1", authUrl: "https://claude.ai/login" });
+    return response({ providerId: "anthropic-claude", loginId: "login-1", state: "succeeded" });
+  };
+  const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+  await expect(
+    client.startAccountLogin?.({ requestId: "request-1", operatorId: "operator-1", providerId: "anthropic-claude" }),
+  ).resolves.toEqual({ providerId: "anthropic-claude", loginId: "login-1", authUrl: "https://claude.ai/login" });
+  await expect(
+    client.accountLoginStatus?.({ requestId: "request-2", operatorId: "operator-1", providerId: "anthropic-claude", loginId: "login-1" }),
+  ).resolves.toEqual({ providerId: "anthropic-claude", loginId: "login-1", state: "succeeded" });
+  expect(paths).toEqual(["http://127.0.0.1:4321/v1/account-logins/start", "http://127.0.0.1:4321/v1/account-logins/status"]);
+});
+
+it("rejects an anthropic-claude account login URL whose hostname is not claude.ai", async () => {
+  const fetch = async () => response({ providerId: "anthropic-claude", loginId: "login-1", authUrl: "https://evil.test/login" });
+  const client = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch });
+  await expect(
+    client.startAccountLogin?.({ requestId: "request-1", operatorId: "operator-1", providerId: "anthropic-claude" }),
+  ).rejects.toMatchObject({ code: "gateway_request_failed", message: "model gateway returned untrusted account login URL" });
+});
+
 it("rejects reasoning stream events that carry hidden text", async () => {
   const result: ModelTurnResult = {
     requestId: "request-1",

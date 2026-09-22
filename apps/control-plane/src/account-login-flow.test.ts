@@ -12,6 +12,7 @@ import {
 } from "./account-login-flow.js";
 
 const identity: AccountLoginIdentity = { operatorId: "operator-1", loginId: "durable-login-1", providerId: "openai-codex", requestId: "request-1" };
+const claudeIdentity: AccountLoginIdentity = { operatorId: "operator-1", loginId: "durable-login-1", providerId: "anthropic-claude", requestId: "request-1" };
 const base = { loginId: "durable-login-1", requestId: "request-1", operatorId: "operator-1", ownerId: "control-plane-test", providerId: "openai-codex" as const, providerLoginId: "provider-login-1", authUrl: "https://chatgpt.com/login" };
 
 function depsFor(record: unknown, overrides: Record<string, unknown> = {}): AccountLoginFlowDeps {
@@ -150,5 +151,44 @@ describe("startAccountLoginFlow", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("anthropic-claude provider identity", () => {
+  it("round-trips the anthropic-claude providerId through start, status, and cancel", async () => {
+    const claudeBase = { ...base, providerId: "anthropic-claude" as const, authUrl: "https://claude.ai/login" };
+    const starting = { ...claudeBase, providerLoginId: null, authUrl: null, state: "starting" as const, message: null };
+    const ready = { ...claudeBase, state: "pending" as const, message: null };
+    const providerResult = { providerId: "anthropic-claude" as const, loginId: "provider-login-1", authUrl: "https://claude.ai/login" };
+    const startAccountLogin = vi.fn(async () => providerResult);
+    const completeStart = vi.fn(async () => ready);
+    const deps = depsFor(starting, {
+      reserveStart: vi.fn(async () => ({ created: true, record: starting })),
+      completeStart,
+    });
+    const startId = { operatorId: "operator-1", providerId: "anthropic-claude" as const, requestId: "request-1" };
+    const result = await startAccountLoginFlow(deps, { startAccountLogin }, startId);
+    expect(result).toEqual({ providerId: "anthropic-claude", loginId: "durable-login-1", authUrl: "https://claude.ai/login" });
+    expect(startAccountLogin).toHaveBeenCalledWith({ operatorId: "operator-1", requestId: "request-1", providerId: "anthropic-claude" });
+
+    const gateway = {
+      accountLoginStatus: vi.fn(async () => ({ providerId: "anthropic-claude" as const, loginId: "provider-login-1", state: "succeeded" as const })),
+    };
+    const pending = { ...claudeBase, state: "pending" as const, message: null };
+    const updated = { ...claudeBase, state: "succeeded" as const, message: null };
+    const updateState = vi.fn(async () => updated);
+    const statusResult = await pollAccountLoginStatus(depsFor(pending, { updateState }), gateway, claudeIdentity);
+    expect(statusResult).toEqual({ kind: "updated", record: updated });
+
+    const cancelGateway = { cancelAccountLogin: vi.fn(async () => {}) };
+    const cancelUpdateState = vi.fn(async () => ({ ...pending, state: "cancelled" as const }));
+    const cancelResult = await cancelAccountLoginFlow(depsFor(pending, { updateState: cancelUpdateState }), cancelGateway, claudeIdentity);
+    expect(cancelResult).toEqual({ kind: "cancelled" });
+    expect(cancelGateway.cancelAccountLogin).toHaveBeenCalledWith({
+      operatorId: "operator-1",
+      requestId: "request-1",
+      providerId: "anthropic-claude",
+      loginId: "provider-login-1",
+    });
   });
 });

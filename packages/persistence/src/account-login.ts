@@ -9,7 +9,7 @@ export interface AccountLoginRecord {
   readonly requestId: string;
   readonly operatorId: string;
   readonly ownerId: string;
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
   readonly providerLoginId: string | null;
   readonly authUrl: string | null;
   readonly state: AccountLoginState;
@@ -29,7 +29,7 @@ export class AccountLoginConflictError extends Error {
 }
 
 export interface AccountLoginStore {
-  reserveStart(operatorId: string, requestId: string, providerId: "openai-codex", ownerId: string): Promise<AccountLoginReservation>;
+  reserveStart(operatorId: string, requestId: string, providerId: "openai-codex" | "anthropic-claude", ownerId: string): Promise<AccountLoginReservation>;
   completeStart(loginId: string, providerLoginId: string, authUrl: string): Promise<AccountLoginRecord>;
   failStart(loginId: string, message: string): Promise<AccountLoginRecord>;
   get(loginId: string, operatorId: string): Promise<AccountLoginRecord | undefined>;
@@ -45,7 +45,7 @@ type LoginRow = {
   request_id: string;
   operator_id: string;
   owner_id: string;
-  provider_id: "openai-codex";
+  provider_id: "openai-codex" | "anthropic-claude";
   provider_login_id: string | null;
   auth_url: string | null;
   state: AccountLoginState;
@@ -53,10 +53,10 @@ type LoginRow = {
 };
 
 const columns = "login_id, request_id, operator_id, owner_id, provider_id, provider_login_id, auth_url, state, message";
-const allowedAuthHosts = new Set(["chatgpt.com", "auth.openai.com"]);
+const allowedAuthHosts = new Set(["chatgpt.com", "auth.openai.com", "claude.ai"]);
 
-function assertProvider(providerId: string): asserts providerId is "openai-codex" {
-  if (providerId !== "openai-codex") throw new Error("account login provider is unavailable");
+function assertProvider(providerId: string): asserts providerId is "openai-codex" | "anthropic-claude" {
+  if (providerId !== "openai-codex" && providerId !== "anthropic-claude") throw new Error("account login provider is unavailable");
 }
 
 function assertAuthUrl(authUrl: string): void {

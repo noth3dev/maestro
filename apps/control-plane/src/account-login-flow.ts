@@ -11,7 +11,7 @@ export interface AccountLoginFlowDeps {
 export interface AccountLoginIdentity {
   readonly operatorId: string;
   readonly loginId: string;
-  readonly providerId: "openai-codex";
+  readonly providerId: "openai-codex" | "anthropic-claude";
   readonly requestId: string;
 }
 
@@ -43,10 +43,10 @@ export async function startAccountLoginFlow(
     startAccountLogin: (input: {
       operatorId: string;
       requestId: string;
-      providerId: "openai-codex";
+      providerId: "openai-codex" | "anthropic-claude";
     }) => Promise<GatewayAccountLoginStartResult>;
   },
-  id: { operatorId: string; providerId: "openai-codex"; requestId: string },
+  id: { operatorId: string; providerId: "openai-codex" | "anthropic-claude"; requestId: string },
 ): Promise<GatewayAccountLoginStartResult> {
   const reservation = await deps.store.reserveStart(id.operatorId, id.requestId, id.providerId, deps.ownerId);
   let record = reservation.record;
@@ -130,7 +130,7 @@ export async function pollAccountLoginStatus(
     accountLoginStatus: (input: {
       operatorId: string;
       requestId: string;
-      providerId: "openai-codex";
+      providerId: "openai-codex" | "anthropic-claude";
       loginId: string;
     }) => Promise<GatewayAccountLoginStatusResult>;
   },
@@ -185,7 +185,12 @@ export type CancelAccountLoginResult =
 export async function cancelAccountLoginFlow(
   deps: AccountLoginFlowDeps,
   gateway: {
-    cancelAccountLogin: (input: { operatorId: string; requestId: string; providerId: "openai-codex"; loginId: string }) => Promise<void>;
+    cancelAccountLogin: (input: {
+      operatorId: string;
+      requestId: string;
+      providerId: "openai-codex" | "anthropic-claude";
+      loginId: string;
+    }) => Promise<void>;
   },
   id: AccountLoginIdentity,
 ): Promise<CancelAccountLoginResult> {
