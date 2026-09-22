@@ -196,12 +196,17 @@ export async function spawnWorker(
       const admissionDecision =
         request.createAdmission === undefined
           ? undefined
-          : await request.createAdmission({
-              workerId,
-              routeRef: `worker:${workerId}:${nextAttempt}`,
-              bundle,
-              base: { context: admissionContext, grant: admissionGrant, idempotencyKey: request.commandId ?? `worker:${workerId}` },
-            });
+          : request.operatorId === undefined
+            ? (() => {
+                throw new WorkerError("Ensemble worker admission requires an operator identity");
+              })()
+            : await request.createAdmission({
+                operatorId: request.operatorId,
+                workerId,
+                routeRef: `worker:${workerId}:${nextAttempt}`,
+                bundle,
+                base: { context: admissionContext, grant: admissionGrant, idempotencyKey: request.commandId ?? `worker:${workerId}` },
+              });
       const providerAdmission: ExecutionAdmission =
         admissionDecision?.admission ??
         (() => {

@@ -1,7 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
 import { SpawnWorkerInputSchema } from "@maestro/contracts";
 import type { Pool } from "pg";
+
+const persistenceMocks = vi.hoisted(() => ({
+  assertProjectRole: vi.fn(),
+  readDepartmentPlan: vi.fn(),
+  readHeadCouncil: vi.fn(),
+  spawnWorker: vi.fn(),
+}));
+
+vi.mock("@maestro/persistence", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@maestro/persistence")>()),
+  ...persistenceMocks,
+}));
+
+import { assertProjectRole, readDepartmentPlan, readHeadCouncil, spawnWorker } from "@maestro/persistence";
 import {
   EnsembleRoutingUnavailableError,
   assertWorkerRoutingMode,
@@ -36,6 +50,61 @@ describe("worker routing mode guard", () => {
       ),
     ).rejects.toBeInstanceOf(EnsembleRoutingUnavailableError);
     expect(kernel.spawn).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("worker admission identity seam", () => {
+  const projectId = "00000000-0000-4000-8000-000000000001";
+  const proof = { goalId: "goal-1", ownerId: "owner-1", fencingToken: "1" };
+  const council = {
+    goalId: proof.goalId,
+    snapshot: {
+      projectId,
+      participants: [{ departmentId: "product", participantId: "participant:product", headRoleId: "head:product", sessionRef: "session:product" }],
+      contract: { content: { project: { repository: "repo" } } },
+    },
+  };
+  const plan = { projectId, version: 1 };
+  const worker = {
+    workerId: "worker-1", councilId: "council-1", departmentId: "product", planVersion: 1, itemId: "item-1",
+    bundleContentHash: "hash", attempt: 1, executionRef: "execution-1", invocationRef: "invocation-1", status: "spawned",
+    answerText: null, usageTotalTokens: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(assertProjectRole).mockResolvedValue(undefined);
+    vi.mocked(readHeadCouncil).mockResolvedValue(council as never);
+    vi.mocked(readDepartmentPlan).mockResolvedValue(plan as never);
+    vi.mocked(spawnWorker).mockResolvedValue(worker as never);
+  });
+
+  it("passes the authenticated operator identity to persistence without replacing the Head actor", async () => {
+    const admission = vi.fn();
+    const service = createWorkerService({
+      modelRoutingMode: "ensemble",
+      createEnsembleAdmission: admission,
+      pool: {} as Pool,
+      kernel: { spawn: vi.fn() } as unknown as ExecutionKernelPort,
+      withGoalLease: vi.fn(async (_goal, operation) => operation(proof)),
+    });
+
+    await service.spawn(
+      "council-1",
+      "product",
+      { projectId, planVersion: 1, itemId: "item-1" },
+      "command-1",
+      { operatorId: "authenticated-operator", credentialId: "credential-1" },
+    );
+
+    expect(spawnWorker).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ operatorId: "authenticated-operator", createAdmission: admission }),
+      proof,
+      expect.objectContaining({ actorId: "head:product", sessionRef: "session:product" }),
+    );
   });
 });
 
