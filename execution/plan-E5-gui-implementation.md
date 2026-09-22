@@ -919,6 +919,8 @@ export type ArrangementApi = Pick<ApiClient, "getArrangements" | "listImprovemen
 
 ## Task 12: Make Luthiery and Flashmob honest, useful, and gate-safe
 
+**Implementation status (2026-09-22):** The slice is implemented and merged as `92cdeb06`. Focused coverage passed 3 files / 7 tests; changed-file ESLint and `git diff --check` passed. Luthiery is explicitly backend-blocked and Flashmob is explicitly out-of-scope/deferred with no fake Goal, Worker, progress, local registry, or promotion path. The delegated independent reviewer did not return before handoff; parent independent verification passed. The full Carnegie build remains blocked by the documented baseline dependency/type errors; this does not claim the overall E5 completion gate.
+
 **Files:**
 - Modify: `apps/carnegie/src/views/Luthiery.tsx`
 - Modify: `apps/carnegie/src/views/Flashmob.tsx`
