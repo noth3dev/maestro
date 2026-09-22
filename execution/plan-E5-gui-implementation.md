@@ -10,6 +10,13 @@
 
 **Spec:** This document's `Capability Contract`, `Scope`, and `Definition of Done` sections are the E5 specification.
 
+## Current execution status — 2026-09-23
+
+- E5 Tasks 1–13 have code-level evidence recorded in `execution/e5-capability-matrix.md` and `roadmap/act-1-foundation/active/operations/progress.md`; this does not close the live gate.
+- The latest managed-provider retry reached a real Carnegie conversation and received a real assistant response, but the current Home intake returned no Task Contract draft or durable contract identity. E5 Task 14 Steps 3–6 and the final E5 gate remain open.
+- Do not add a second one-shot client-side or conversation-only Task Contract producer to force this gate closed. E6 owns the authoritative interactive Overture Crew and Task Editor flow; E5 must consume a real server-returned contract when that boundary exists.
+- E6 remains phase-gated until E5 closes.
+
 ## Global Constraints
 
 - Never store or expose plaintext provider tokens; keep the existing encrypted main-process storage boundary.
