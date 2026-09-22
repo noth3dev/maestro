@@ -42,7 +42,7 @@ export class LifecycleHandler {
     c.conversationActivityController?.abort();
     if (c.workingLoaderTimer !== undefined) clearInterval(c.workingLoaderTimer);
     c.accountLoginController?.abort();
-    if (c.accountLoginId !== undefined && c.client !== undefined) void c.client.cancelAccountLogin(c.accountLoginId).catch(() => undefined);
+    if (c.accountLoginId !== undefined && c.client !== undefined) void c.client.cancelAccountLogin("openai-codex", c.accountLoginId).catch(() => undefined);
     c.flashmobAnimationId += 1;
     c.tui.stop();
     c.finish(0);

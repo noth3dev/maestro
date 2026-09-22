@@ -2,6 +2,7 @@ import type { ApiClient, ProviderAccountLoginStatus } from "@maestro/api-client"
 
 export interface AccountLoginPollingOptions {
   client: Pick<ApiClient, "accountLoginStatus">;
+  providerId: "openai-codex" | "anthropic-claude";
   loginId: string;
   authUrl: string;
   signal: AbortSignal;
@@ -22,10 +23,10 @@ export async function waitForAccountLogin(options: AccountLoginPollingOptions): 
   const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : 120000;
   const pollMs = Number.isFinite(options.pollMs) && options.pollMs >= 0 ? options.pollMs : 500;
   const deadline = Date.now() + timeoutMs;
-  let status = await options.client.accountLoginStatus(options.loginId);
+  let status = await options.client.accountLoginStatus(options.providerId, options.loginId);
   while (status.state === "pending" && Date.now() < deadline && !options.signal.aborted) {
     await new Promise<void>((resolve) => setTimeout(resolve, pollMs));
-    status = await options.client.accountLoginStatus(options.loginId);
+    status = await options.client.accountLoginStatus(options.providerId, options.loginId);
   }
   if (options.signal.aborted) return undefined;
   return status;

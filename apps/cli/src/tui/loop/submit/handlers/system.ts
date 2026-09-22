@@ -42,7 +42,7 @@ export async function handleSystemCommand(c: TuiController, parsed: ParsedComman
     if (c.client === undefined) c.view.appendWarning("Account logout is unavailable until the Control Plane is connected.");
     else {
       c.invalidateDashboardRefreshes();
-      await c.client.logoutAccount();
+      await c.client.logoutAccount("openai-codex");
       c.view.appendSuccess("ChatGPT account signed out; its model bindings were revoked.");
       void c.refreshDashboard();
     }

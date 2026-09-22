@@ -150,16 +150,16 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "login" && action === "openai-codex") {
-      const login = await client.startAccountLogin();
+      const login = await client.startAccountLogin("openai-codex");
       if (!json) io.stdout(`Opening ChatGPT account login in your browser: ${login.authUrl}\n`);
       try { await (io.openExternalUrl ?? openExternalUrl)(login.authUrl); } catch { if (!json) io.stdout(`If the browser did not open, visit: ${login.authUrl}\n`); }
       const timeoutMs = Number(env.MAESTRO_LOGIN_TIMEOUT_MS ?? "120000");
       const pollMs = Number(env.MAESTRO_LOGIN_POLL_MS ?? "500");
       const deadline = Date.now() + (Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 120_000);
-      let status = await client.accountLoginStatus(login.loginId);
+      let status = await client.accountLoginStatus("openai-codex", login.loginId);
       while (status.state === "pending" && Date.now() < deadline) {
         await new Promise<void>((resolve) => setTimeout(resolve, Number.isFinite(pollMs) && pollMs >= 0 ? pollMs : 500));
-        status = await client.accountLoginStatus(login.loginId);
+        status = await client.accountLoginStatus("openai-codex", login.loginId);
       }
       if (status.state === "succeeded") { if (!json) io.stdout(`Account login complete: ${login.providerId}\n`); printState(io.stdout, { providerId: login.providerId, loginId: login.loginId, state: status.state }, json); return 0; }
       if (status.state === "pending") throw new Error("Provider account login timed out");
@@ -173,7 +173,7 @@ export async function executeCli(args: string[], env: Env, io: CliIo): Promise<n
       return 0;
     }
     if (resource === "logout" && action === "openai-codex") {
-      await client.logoutAccount();
+      await client.logoutAccount("openai-codex");
       printState(io.stdout, { providerId: action, revoked: true }, json);
       return 0;
     }

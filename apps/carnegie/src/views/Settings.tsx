@@ -20,14 +20,14 @@ export type AccountLoginProviderId = "openai-codex" | "anthropic-claude";
 
 export type AccountLoginPanelState = {
   loginState: "idle" | "opening" | "waiting" | "connected" | "error";
-  message?: string;
-  url?: string;
+  message?: string | undefined;
+  url?: string | undefined;
   linkCopied: boolean;
 };
 
 export const initialAccountLoginPanelState: AccountLoginPanelState = { loginState: "idle", linkCopied: false };
 
-type AccountLoginRef = { loginId?: string; abort?: AbortController };
+type AccountLoginRef = { loginId?: string | undefined; abort?: AbortController | undefined };
 
 type AccountLoginApi = {
   startAccountLogin(providerId: AccountLoginProviderId): Promise<ProviderAccountLoginStartResult>;
