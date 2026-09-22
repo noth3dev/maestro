@@ -35,7 +35,7 @@ function subscribeToEventStream(query: { projectId: string; after: string }, lis
 
 const exposedApiMethods = [
   "listGoals", "getGoal", "createGoal", "listProjects", "getOrganization", "provisionProjectAccess", "transitionGoal",
-  "getSettings", "updateSettingsPreferences", "updateSettingsModelPool", "updateSettingsAuthorityDefaults", "listProviderConnections", "loginProvider", "logoutProvider", "startAccountLogin", "accountLoginStatus", "cancelAccountLogin", "logoutAccount", "getBudgetSummary", "getBillingSummary", "getArrangements", "getChannel", "postChannelMessage", "getProjection", "listEvents", "streamEvents",
+  "getSettings", "updateSettingsPreferences", "updateSettingsModelPool", "updateSettingsAuthorityDefaults", "getRouterCatalog", "validateRouterConfig", "replaceRouterConfig", "listProviderConnections", "loginProvider", "logoutProvider", "startAccountLogin", "accountLoginStatus", "cancelAccountLogin", "logoutAccount", "getBudgetSummary", "getBillingSummary", "getArrangements", "getChannel", "postChannelMessage", "getProjection", "listEvents", "streamEvents",
   "createTaskContract", "getTaskContract", "updateTaskContract", "selectOvertureRoles", "confirmTaskContract", "launchTaskContract",
   "pauseGoal", "resumeGoal", "stopGoal", "emergencyStopGoal",
   "requestCriticalAction", "approveAndRunCriticalAction", "selectFullAccessMode", "denyCriticalAction", "listInbox",

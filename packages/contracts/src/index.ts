@@ -23,4 +23,5 @@ export * from "./schemas/discord.js";
 export * from "./schemas/channel.js";
 export * from "./provider-credentials.js";
 export * from "./settings.js";
+export * from "./router.js";
 export * from "./persona.js";

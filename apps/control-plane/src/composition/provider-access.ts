@@ -1,10 +1,9 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { Pool } from "pg";
 import type { ModelGatewayPort } from "@maestro/agent-runtime";
 import { createPostgresSettingsService } from "@maestro/persistence";
 import type { MaestroConfig } from "../config.js";
 import type { ProviderCredentialService } from "../server.js";
+import { readModelMapSource } from "./model-map-source.js";
 
 type GatewayModel = Awaited<ReturnType<NonNullable<ModelGatewayPort["listModels"]>>>[number];
 
@@ -32,38 +31,19 @@ export function composeSettingsService(deps: ProviderAccessDeps): ReturnType<typ
     pool,
     models: {
       list: async () => {
-        const mapPaths = [
-          process.env.MAESTRO_MODEL_MAP,
-          resolve(process.cwd(), "config/model_map.json"),
-          resolve(process.cwd(), "../../config/model_map.json"),
-          resolve(process.cwd(), "../../../config/model_map.json"),
-        ].filter((path): path is string => path !== undefined && path.trim() !== "");
-        let parsed: { entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }> } | undefined;
-        for (const mapPath of mapPaths) {
-          try {
-            parsed = JSON.parse(readFileSync(mapPath, "utf8")) as {
-              entries?: Array<{ modelRef?: unknown; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } }>;
+        try {
+          return readModelMapSource().modelMap.entries.map((entry) => {
+            const values = Object.values(entry.capability.axes).flatMap((axis) =>
+              axis.status === "scored" && axis.score !== null ? [axis.score] : [],
+            );
+            return {
+              modelRef: entry.modelRef,
+              score: values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length,
             };
-            break;
-          } catch {
-            // The packaged Control Plane starts from its dist directory; try the repository-level map next.
-          }
+          });
+        } catch {
+          return [];
         }
-        if (parsed === undefined) return [];
-        return (parsed.entries ?? [])
-            .filter(
-              (entry): entry is { modelRef: string; capability?: { axes?: Record<string, { score?: unknown; status?: unknown }> } } =>
-                typeof entry.modelRef === "string",
-            )
-            .map((entry) => {
-              const values = Object.values(entry.capability?.axes ?? {}).flatMap((axis) =>
-                axis.status === "scored" && typeof axis.score === "number" ? [axis.score] : [],
-              );
-              return {
-                modelRef: entry.modelRef,
-                score: values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length,
-              };
-            });
       },
     },
     providers: {

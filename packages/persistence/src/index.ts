@@ -74,6 +74,7 @@ export * from "./worker-profile-derivation.js";
 export * from "./channel.js";
 
 export * from "./settings.js";
+export { readEnabledModelRefs } from "./settings.js";
 
 export * from "./embedded-database.js";
 

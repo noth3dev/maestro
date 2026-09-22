@@ -21,6 +21,8 @@ export interface WorkerAdmissionDecision {
 }
 
 export interface WorkerAdmissionFactoryInput {
+  /** Authenticated operator who requested this worker admission. */
+  readonly operatorId: string;
   readonly workerId: string;
   readonly routeRef: string;
   readonly bundle: MissionBundle;
@@ -47,6 +49,8 @@ export interface SpawnWorkerRequest {
   readonly prepareWorktree?: (workerId: string) => Promise<string>;
   /** Exact provider-qualified model selected by the host and checked against the Mission Bundle. */
   readonly modelRef?: string;
+  /** Authenticated operator for the ensemble-only host seam. Pin callers may leave this undefined. */
+  readonly operatorId?: string;
   /** Ensemble-only host seam. Pin callers leave this undefined and retain the existing path. */
   readonly createAdmission?: (input: WorkerAdmissionFactoryInput) => Promise<WorkerAdmissionDecision>;
 }

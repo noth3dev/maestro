@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
-import type { SettingsAuthorityDefaults, SettingsAuthorityDefaultsUpdate, SettingsModel, SettingsModelPoolUpdate, SettingsPreferences, SettingsPreferencesUpdate, SettingsProvider, SettingsRead } from "@maestro/contracts";
+import { SettingsModelPoolConfigSchema } from "@maestro/contracts";
+import type { SettingsAuthorityDefaults, SettingsAuthorityDefaultsUpdate, SettingsModel, SettingsModelPoolConfig, SettingsModelPoolUpdate, SettingsPreferences, SettingsPreferencesUpdate, SettingsProvider, SettingsRead } from "@maestro/contracts";
 
 export const DEFAULT_SETTINGS_PREFERENCES: SettingsPreferences = { compactSidebar: false, desktopPush: true, emailDigest: false, slackWebhook: false };
 export const DEFAULT_AUTHORITY_DEFAULTS: SettingsAuthorityDefaults = { spendCeilingCents: 5000, criticalActionsRequireApproval: true, allowFlashmob: true };
@@ -23,9 +24,24 @@ function requiredSettingsRow<T>(rows: readonly T[]): T {
   return row;
 }
 
+export async function readEnabledModelRefs(pool: Pool, operatorId: string): Promise<readonly string[]> {
+  const row = (await pool.query<{ model_pool: unknown }>(`SELECT model_pool FROM operator_settings WHERE operator_id = $1`, [operatorId])).rows[0];
+  return row === undefined ? [] : refs(row.model_pool);
+}
+
 export function createPostgresSettingsService(options: { pool: Pool; models: SettingsModelSource; providers?: SettingsProviderSource }) {
   async function ensure(operatorId: string): Promise<void> {
     await options.pool.query(`INSERT INTO operator_settings (operator_id) VALUES ($1) ON CONFLICT (operator_id) DO NOTHING`, [operatorId]);
+  }
+  async function replaceModelPool(operatorId: string, input: SettingsModelPoolConfig, read: (operatorId: string) => Promise<SettingsRead>): Promise<SettingsRead> {
+    await ensure(operatorId);
+    const config = SettingsModelPoolConfigSchema.parse(input);
+    const source = await options.models.list();
+    if (config.enabledModelRefs.some((modelRef) => !source.some((model) => model.modelRef === modelRef))) {
+      throw new Error("model is not present in the human-owned model_map");
+    }
+    await options.pool.query(`UPDATE operator_settings SET model_pool = $2::jsonb, updated_at = transaction_timestamp() WHERE operator_id = $1`, [operatorId, JSON.stringify({ enabledModelRefs: [...config.enabledModelRefs].sort() })]);
+    return read(operatorId);
   }
   return {
     async get(operatorId: string): Promise<SettingsRead> {
@@ -42,15 +58,17 @@ export function createPostgresSettingsService(options: { pool: Pool; models: Set
       await options.pool.query(`UPDATE operator_settings SET preferences = $2::jsonb, updated_at = transaction_timestamp() WHERE operator_id = $1`, [operatorId, JSON.stringify({ ...current.preferences, ...patch })]);
       return this.get(operatorId);
     },
+    async replaceModelPool(operatorId: string, input: SettingsModelPoolConfig): Promise<SettingsRead> {
+      return replaceModelPool(operatorId, input, (id) => this.get(id));
+    },
     async updateModelPool(operatorId: string, patch: SettingsModelPoolUpdate): Promise<SettingsRead> {
       await ensure(operatorId);
       const source = await options.models.list();
       if (!source.some((model) => model.modelRef === patch.modelRef)) throw new Error("model is not present in the human-owned model_map");
-      const current = await this.get(operatorId);
-      const enabled = new Set(current.models.filter((model) => model.inUse).map((model) => model.modelRef));
+      const rawRefs = await readEnabledModelRefs(options.pool, operatorId);
+      const enabled = new Set(rawRefs.length === 0 ? source.map((model) => model.modelRef) : rawRefs);
       if (patch.inUse) enabled.add(patch.modelRef); else enabled.delete(patch.modelRef);
-      await options.pool.query(`UPDATE operator_settings SET model_pool = $2::jsonb, updated_at = transaction_timestamp() WHERE operator_id = $1`, [operatorId, JSON.stringify({ enabledModelRefs: [...enabled].sort() })]);
-      return this.get(operatorId);
+      return replaceModelPool(operatorId, { schemaVersion: 1, enabledModelRefs: [...enabled] }, (id) => this.get(id));
     },
     async updateAuthorityDefaults(operatorId: string, patch: SettingsAuthorityDefaultsUpdate): Promise<SettingsRead> {
       await ensure(operatorId);

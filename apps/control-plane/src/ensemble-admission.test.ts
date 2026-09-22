@@ -7,15 +7,18 @@ const config = {
   modelRoutingMode: "ensemble", nativeModelRef: undefined, modelAccountRefs: { openai: "openai-account", anthropic: "anthropic-account" }, worktreeRoot: "/workspace", actorId: "control",
 } as unknown as MaestroConfig;
 
-const modelMap: ModelMap = {
-  schemaVersion: 1,
-  entries: [{
-    modelRef: "openai/model-strong",
-    capability: { schemaVersion: 2, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 180, rationale: "human score", evidence: ["review-1"] }])) as never },
-    providerFacts: { schemaVersion: 1, contextCapacity: 128_000, pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 }, authentication: { modes: ["api-key"] }, dataPolicy: { allowedDataClasses: ["workspace"], retention: "transient", trainingUse: "never", regions: ["us"] }, modalities: ["text"], toolCalls: { supported: true }, provenance: { source: "review-1", observedAt: "2026-09-15" } },
-    provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-15" },
-  }],
+const strongModel = {
+  modelRef: "openai/model-strong",
+  capability: { schemaVersion: 2, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 180, rationale: "human score", evidence: ["review-1"] }])) as never },
+  providerFacts: { schemaVersion: 1, contextCapacity: 128_000, pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 2 }, authentication: { modes: ["api-key"] }, dataPolicy: { allowedDataClasses: ["workspace"], retention: "transient", trainingUse: "never", regions: ["us"] }, modalities: ["text"], toolCalls: { supported: true }, provenance: { source: "review-1", observedAt: "2026-09-15" } },
+  provenance: { owner: "human", sourceRefs: ["review-1"], reviewedAt: "2026-09-15" },
 };
+const fastModel = {
+  ...strongModel,
+  modelRef: "openai/model-fast",
+  capability: { ...strongModel.capability, axes: Object.fromEntries(MODEL_CAPABILITY_AXES.map((axis) => [axis, { status: "scored", score: 100, rationale: "human score", evidence: ["review-1"] }])) as never },
+};
+const modelMap: ModelMap = { schemaVersion: 1, entries: [strongModel, fastModel] };
 
 const taskDemand = {
   schemaVersion: 1 as const, taskKinds: ["coding"] as const,
@@ -27,6 +30,18 @@ const snapshot: RoutingWorkSnapshot = {
   schemaVersion: 1, goalRef: "goal-1", projectRef: "project-1", missionBundleRef: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", approvedModels: ["openai/model-strong"], taskDemand,
   routingWorkInput: { schemaVersion: 1, workCharacter: { schemaVersion: 1, risk: 120, reversibility: 60, verificationAttachment: 100, materialScale: 50, timePressure: 80, budgetHeadroom: 100, provenance: taskDemand.provenance }, explicitHeadUplift: 130 },
   operationalOverlay: { schemaVersion: 1, installationRef: "installation-1", projectRef: "project-1", goalRef: "goal-1", overlayVersion: 2, observations: [{ candidateRef: "strong-primary", measuredLatencyMs: 10, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "openai-account", observedAt: "2026-09-15T00:00:00.000Z" }] },
+};
+
+const twoCandidateSnapshot: RoutingWorkSnapshot = {
+  ...snapshot,
+  approvedModels: ["openai/model-strong", "openai/model-fast"],
+  operationalOverlay: {
+    ...snapshot.operationalOverlay,
+    observations: [
+      ...snapshot.operationalOverlay.observations,
+      { candidateRef: "fast-secondary", measuredLatencyMs: 20, measuredCost: 1, failureRate: 0, timeoutRate: 0, providerErrorRate: 0, currentAvailability: true, accountBinding: "openai-account", observedAt: "2026-09-15T00:00:00.000Z" },
+    ],
+  },
 };
 
 const base = {
@@ -85,6 +100,37 @@ describe("ensemble native admission", () => {
       { candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" },
       { candidateRef: "unapproved", modelRef: "openai/model-strong", accountBinding: "openai-account" },
     ], routeRef: "worker:worker-1:1", base });
+    expect(decision.admission.modelPolicy).toEqual(["openai/model-strong"]);
+  });
+
+  it("applies the operator model pool and records excluded candidates", () => {
+    const decision = createEnsembleNativeAdmission(config, {
+      snapshot: twoCandidateSnapshot,
+      modelMap,
+      candidates: [
+        { candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" },
+        { candidateRef: "fast-secondary", modelRef: "openai/model-fast", accountBinding: "openai-account" },
+      ],
+      operatorEnabledModelRefs: ["openai/model-strong"],
+      routeRef: "worker:worker-1:1",
+      base,
+    });
+    expect(decision.admission.modelPolicy).toEqual(["openai/model-strong"]);
+    expect(decision.routingEvidence.rejections).toContainEqual({ candidateRef: "fast-secondary", reason: "operator model pool excludes candidate" });
+  });
+
+  it("treats an empty operator model pool as unrestricted while keeping the strongest eligible candidate", () => {
+    const decision = createEnsembleNativeAdmission(config, {
+      snapshot: twoCandidateSnapshot,
+      modelMap,
+      candidates: [
+        { candidateRef: "strong-primary", modelRef: "openai/model-strong", accountBinding: "openai-account" },
+        { candidateRef: "fast-secondary", modelRef: "openai/model-fast", accountBinding: "openai-account" },
+      ],
+      operatorEnabledModelRefs: [],
+      routeRef: "worker:worker-1:1",
+      base,
+    });
     expect(decision.admission.modelPolicy).toEqual(["openai/model-strong"]);
   });
 });

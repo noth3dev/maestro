@@ -35,6 +35,7 @@ export interface EnsembleNativeAdmissionInput {
   readonly snapshot: RoutingWorkSnapshot;
   readonly modelMap: ModelMap;
   readonly candidates: readonly RouterCandidate[];
+  readonly operatorEnabledModelRefs: readonly string[];
   readonly routeRef: string;
   readonly base: RoutedNativeAdmissionBase;
 }
@@ -65,6 +66,7 @@ export function createEnsembleNativeAdmission(
       modelMap: input.modelMap,
       operationalOverlay: input.snapshot.operationalOverlay,
       candidates: input.candidates,
+      operatorEnabledModelRefs: input.operatorEnabledModelRefs,
       pressure: pressureCalculation.pressure,
     });
   } catch (error) {

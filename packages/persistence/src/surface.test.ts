@@ -319,6 +319,7 @@ describe("persistence surface", () => {
         "readDevice",
         "readDeviceAgentSession",
         "readDeviceGrant",
+        "readEnabledModelRefs",
         "readEnvironment",
         "readEvidenceBundle",
         "readGoalOperationalOverlaySnapshot",

@@ -171,12 +171,15 @@ describeDatabase("Worker lifecycle with PostgreSQL", () => {
     const config = { modelRoutingMode: "ensemble", modelAccountRefs: { openai: "openai-account" } } as unknown as MaestroConfig;
     const kernel = fakeKernel("succeeded", { provider: "openai", id: "gpt-5.6-sol" }, "openai-account");
     try {
+      let admissionInput: WorkerAdmissionFactoryInput | undefined;
       const createAdmission = async (input: WorkerAdmissionFactoryInput) => {
+        admissionInput = input;
         const snapshot = await readRoutingWorkSnapshot(pool, { councilId: input.bundle.councilId, departmentId: input.bundle.departmentId, planVersion: input.bundle.planVersion, itemId: input.bundle.itemId, goalRef: input.base.context.goalId, projectRef: input.base.context.projectId });
         const catalog = readRoutingCandidateCatalog({ modelMapPath: resolve(process.cwd(), "config/model_map.json"), catalogPath });
         return createEnsembleNativeAdmission(config, { snapshot, ...catalog, routeRef: input.routeRef, base: input.base });
       };
-      const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", createAdmission }, proof, headContext("product"));
+      const worker = await spawnWorker(pool, kernel, { councilId: council.councilId, departmentId: "product", planVersion: plan.version, itemId: "scout-1", operatorId: "operator-1", createAdmission }, proof, headContext("product"));
+      expect(admissionInput?.operatorId).toBe("operator-1");
       expect(worker.status).toBe("spawned");
       const binding = await pool.query<{ binding_id: string }>("SELECT binding_id FROM native_execution_bindings WHERE worker_id = $1", [worker.workerId]);
       expect(binding.rows).toHaveLength(1);
