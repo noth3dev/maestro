@@ -709,12 +709,12 @@ export function Settings() {
             <button className="btn btn-sm" disabled title="Profile editing is not connected to a durable route">change avatar</button>
           </div>
           <div className="form-field" style={{ marginBottom: 14 }}>
-            <label className="form-label">display name</label>
-            <input className="input" type="text" value="Unavailable" readOnly disabled />
+            <label className="form-label" htmlFor="settings-display-name">display name</label>
+            <input id="settings-display-name" className="input" type="text" value="Unavailable" readOnly disabled />
           </div>
           <div className="form-field">
-            <label className="form-label">email</label>
-            <input className="input" type="text" value="Unavailable" readOnly disabled />
+            <label className="form-label" htmlFor="settings-email">email</label>
+            <input id="settings-email" className="input" type="text" value="Unavailable" readOnly disabled />
             <span className="form-hint">used for critical-action email alerts</span>
           </div>
         </div>
@@ -726,11 +726,11 @@ export function Settings() {
           <div className="settings-section-sub">theme and density</div>
           <div className="settings-row">
             <div><div className="settings-row-label">dark mode</div><div className="settings-row-hint">follows this toggle, not the OS setting</div></div>
-            <ToggleSwitch on={isDark} onToggle={() => setTheme(isDark ? "light" : "dark")} />
+            <ToggleSwitch label="Dark mode" on={isDark} onToggle={() => setTheme(isDark ? "light" : "dark")} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">compact sidebar</div><div className="settings-row-hint">start collapsed on launch</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.preferences.compactSidebar} onToggle={() => updatePreferences({ compactSidebar: !settings.preferences.compactSidebar })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch label="Compact sidebar" on={settings.preferences.compactSidebar} onToggle={() => updatePreferences({ compactSidebar: !settings.preferences.compactSidebar })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}
@@ -744,12 +744,12 @@ export function Settings() {
           ) : (
             <>
               <div className="form-field" style={{ marginBottom: 14 }}>
-                <label className="form-label">control plane URL</label>
-                <input className="input" type="text" value={config.apiUrl} readOnly />
+                <label className="form-label" htmlFor="settings-control-plane-url">control plane URL</label>
+                <input id="settings-control-plane-url" className="input" type="text" value={config.apiUrl} readOnly />
               </div>
               <div className="form-field" style={{ marginBottom: 20 }}>
-                <label className="form-label">project ID</label>
-                <input className="input" type="text" value={config.projectId} readOnly />
+                <label className="form-label" htmlFor="settings-project-id">project ID</label>
+                <input id="settings-project-id" className="input" type="text" value={config.projectId} readOnly />
               </div>
               <button
                 className="btn btn-sm"
@@ -773,15 +773,15 @@ export function Settings() {
           <div className="settings-section-sub">how you hear about approvals and certifications</div>
           <div className="settings-row">
             <div><div className="settings-row-label">desktop push</div><div className="settings-row-hint">approval needed, certification complete</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.preferences.desktopPush} onToggle={() => updatePreferences({ desktopPush: !settings.preferences.desktopPush })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch label="Desktop push" on={settings.preferences.desktopPush} onToggle={() => updatePreferences({ desktopPush: !settings.preferences.desktopPush })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">email digest</div><div className="settings-row-hint">daily summary of goal activity</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.preferences.emailDigest} onToggle={() => updatePreferences({ emailDigest: !settings.preferences.emailDigest })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch label="Email digest" on={settings.preferences.emailDigest} onToggle={() => updatePreferences({ emailDigest: !settings.preferences.emailDigest })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">slack webhook</div><div className="settings-row-hint">mirror #general into a workspace channel</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.preferences.slackWebhook} onToggle={() => updatePreferences({ slackWebhook: !settings.preferences.slackWebhook })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch label="Slack webhook" on={settings.preferences.slackWebhook} onToggle={() => updatePreferences({ slackWebhook: !settings.preferences.slackWebhook })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}
@@ -900,16 +900,16 @@ export function Settings() {
             </div>
           )}
           <div className="form-field" style={{ marginBottom: 14 }}>
-            <label className="form-label">default spend ceiling per goal</label>
-            <input className="input" type="number" min="0" value={settingsReady ? settings.authorityDefaults.spendCeilingCents / 100 : ""} placeholder={settingsReady ? undefined : "unavailable"} disabled={!settingsReady} onChange={(event) => requestAuthorityUpdate({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
+            <label className="form-label" htmlFor="settings-spend-ceiling">default spend ceiling per goal</label>
+            <input id="settings-spend-ceiling" className="input" type="number" min="0" value={settingsReady ? settings.authorityDefaults.spendCeilingCents / 100 : ""} placeholder={settingsReady ? undefined : "unavailable"} disabled={!settingsReady} onChange={(event) => requestAuthorityUpdate({ spendCeilingCents: Math.max(0, Math.round(Number(event.target.value || 0) * 100)) })} />
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">critical actions always require approval</div><div className="settings-row-hint">deletes, deploys, credential changes</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.criticalActionsRequireApproval} onToggle={() => requestAuthorityUpdate({ criticalActionsRequireApproval: !settings.authorityDefaults.criticalActionsRequireApproval })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch label="Critical actions always require approval" on={settings.authorityDefaults.criticalActionsRequireApproval} onToggle={() => requestAuthorityUpdate({ criticalActionsRequireApproval: !settings.authorityDefaults.criticalActionsRequireApproval })} /> : <span className="badge">unavailable</span>}
           </div>
           <div className="settings-row">
             <div><div className="settings-row-label">allow flashmob by default</div><div className="settings-row-hint">light tasks skip full council deliberation</div></div>
-            {settingsReady ? <ToggleSwitch on={settings.authorityDefaults.allowFlashmob} onToggle={() => requestAuthorityUpdate({ allowFlashmob: !settings.authorityDefaults.allowFlashmob })} /> : <span className="badge">unavailable</span>}
+            {settingsReady ? <ToggleSwitch label="Allow Flashmob by default" on={settings.authorityDefaults.allowFlashmob} onToggle={() => requestAuthorityUpdate({ allowFlashmob: !settings.authorityDefaults.allowFlashmob })} /> : <span className="badge">unavailable</span>}
           </div>
         </div>
       )}

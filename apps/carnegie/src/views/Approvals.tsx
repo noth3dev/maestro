@@ -150,10 +150,14 @@ export function Approvals({
         <h2 id="approval-request-title">Request critical action</h2>
         <p className="form-hint">The request is classified by the server. A request that needs approval remains pending in this Inbox.</p>
         <form onSubmit={(event) => void submitRequest(event)}>
-          <input aria-label="Action" className="input" value={request.action} onChange={(event) => setRequest((current) => ({ ...current, action: event.target.value }))} placeholder="action" />
-          <input aria-label="Target" className="input" value={request.target} onChange={(event) => setRequest((current) => ({ ...current, target: event.target.value }))} placeholder="target" />
-          <input aria-label="Policy version" className="input" type="number" min="0" value={request.policyVersion} onChange={(event) => setRequest((current) => ({ ...current, policyVersion: event.target.value }))} />
-          <input aria-label="Budget effect cents" className="input" type="number" min="0" value={request.budgetEffectCents} onChange={(event) => setRequest((current) => ({ ...current, budgetEffectCents: event.target.value }))} />
+          <label className="sr-only" htmlFor="approval-action">Action</label>
+          <input id="approval-action" className="input" value={request.action} onChange={(event) => setRequest((current) => ({ ...current, action: event.target.value }))} placeholder="action" />
+          <label className="sr-only" htmlFor="approval-target">Target</label>
+          <input id="approval-target" className="input" value={request.target} onChange={(event) => setRequest((current) => ({ ...current, target: event.target.value }))} placeholder="target" />
+          <label className="sr-only" htmlFor="approval-policy-version">Policy version</label>
+          <input id="approval-policy-version" className="input" type="number" min="0" value={request.policyVersion} onChange={(event) => setRequest((current) => ({ ...current, policyVersion: event.target.value }))} />
+          <label className="sr-only" htmlFor="approval-budget-effect">Budget effect cents</label>
+          <input id="approval-budget-effect" className="input" type="number" min="0" value={request.budgetEffectCents} onChange={(event) => setRequest((current) => ({ ...current, budgetEffectCents: event.target.value }))} />
           <button className="btn btn-primary" type="submit" disabled={busy !== undefined || request.action.trim() === "" || request.target.trim() === ""}>{busy === "request" ? "requesting…" : "request critical action"}</button>
         </form>
       </section>}

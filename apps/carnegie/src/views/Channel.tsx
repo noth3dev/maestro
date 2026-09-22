@@ -124,8 +124,8 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
       <div className="channel-feed">
         <div className="channel-head">
           <Icon name="activity" /> {channel?.channel.displayName ?? `#${selector.channelId}`}
-          <label className="channel-selector-label">Channel
-            <select aria-label="Channel" value={selectorKey(selector)} onChange={(event) => {
+          <label className="channel-selector-label" htmlFor="channel-selector">Channel
+            <select id="channel-selector" aria-label="Channel" value={selectorKey(selector)} onChange={(event) => {
               const next = channelSelectors.find((candidate) => selectorKey(candidate) === event.target.value);
               if (next !== undefined) { setChannel(undefined); setSelectedWorkerId(undefined); setMissionBundle(undefined); setSelector(next); }
             }}>
@@ -135,9 +135,12 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
           <span className="goalname">{selectedGoalId ?? "no Goal selected"}</span>
           <button type="button" className="roster-toggle-btn" onClick={() => setRosterHidden((current) => !current)} aria-label={rosterHidden ? "Show roster" : "Hide roster"}><Icon name="panel-right" /></button>
         </div>
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {sending ? `Sending message to #${selector.channelId}…` : `Channel #${selector.channelId} ready.`}
+        </div>
         <div className="channel-messages">
-          {(loading || detailLoading || workersLoading) && <p>{workersLoading && workers !== undefined ? "refreshing Worker roster; showing last durable state…" : "loading…"}</p>}
-          {displayError !== undefined && <div className="alert alert-warning">{displayError}</div>}
+          {(loading || detailLoading || workersLoading) && <p role="status" aria-live="polite" aria-busy="true">{workersLoading && workers !== undefined ? "refreshing Worker roster; showing last durable state…" : "loading…"}</p>}
+          {displayError !== undefined && <div className="alert alert-warning" role="alert">{displayError}</div>}
           {channel?.messages.map((message) => (
             <div key={message.messageId} className="msg">
               <div className="avatar avatar-sm av-teal"><Icon name="message-circle" style={{ width: 14, height: 14 }} /></div>
@@ -147,7 +150,7 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
               </div>
             </div>
           ))}
-          {!loading && channel !== undefined && channel.messages.length === 0 && <p>No messages in this channel yet.</p>}
+          {!loading && channel !== undefined && channel.messages.length === 0 && <p role="status">No messages in this channel yet.</p>}
           {detail?.events.slice(-10).map((event) => (
             <div key={event.eventId} className="msg">
               <div className="avatar avatar-sm av-teal"><Icon name="zap" style={{ width: 14, height: 14 }} /></div>

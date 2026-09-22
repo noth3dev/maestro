@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
+import React, { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { ReactFlow, ReactFlowProvider, useReactFlow, type Edge, type Node, type NodeMouseHandler, type Viewport } from "@xyflow/react";
 import type { ProjectionReadModel } from "@maestro/contracts";
 import { buildRadialLayout, type RadialGraphNode } from "./radial-layout.js";
@@ -181,9 +181,6 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, 
   const selected = layout.nodes.find((node) => node.id === selectedNodeId);
   const selectedProjectionNode = projection.nodes.find((node) => node.nodeId === selectedNodeId && !node.removed);
   const t = useT();
-  const onShellClick = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.target === event.currentTarget) setSelectedNodeId(undefined);
-  };
   const onSelectNode = (nodeId: string) => {
     setSelectedNodeId(nodeId);
     const node = layout.nodes.find((entry) => entry.id === nodeId);
@@ -192,12 +189,15 @@ export function RadialGraph({ projection, selectedGoalId, onSelectGoal, onBack, 
   };
 
   return (
-    <div className="floor-wrap radial-graph-shell" onClick={onShellClick}>
+    <div className="floor-wrap radial-graph-shell">
       <div className="floor-head radial-graph-head">
         <button type="button" className="gitbar-back" onClick={onBack}><span aria-hidden="true">←</span> {t.radial.back}</button>
         <span className="radial-title">{t.radial.title}</span>
         <span className="sub">durable projection · cursor {projection.eventCursor}</span>
-        {selected !== undefined && <span className="radial-selection" role="status">{t.radial.selected}: {selected.label} · {selected.state ?? selected.kind}</span>}
+        {selected !== undefined && <>
+          <span className="radial-selection" role="status">{t.radial.selected}: {selected.label} · {selected.state ?? selected.kind}</span>
+          <button type="button" className="btn btn-sm" onClick={() => setSelectedNodeId(undefined)}>clear selection</button>
+        </>}
       </div>
       <ReactFlowProvider>
         <GraphCanvas

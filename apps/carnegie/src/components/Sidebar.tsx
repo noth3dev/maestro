@@ -42,7 +42,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   );
 
   return (
-    <div className={`sidebar${collapsed ? " collapsed" : ""}`}>
+    <nav className={`sidebar${collapsed ? " collapsed" : ""}`} aria-label="Primary navigation">
       <div className="sb-logo">
         <div className="sb-logo-mark" />
         <div className="sb-logo-text">maestro</div>
@@ -62,6 +62,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
           {navItem("inbox", "inbox", t.nav.inbox, pendingApprovalCount)}
           {navItem("dashboard", "layout-dashboard", t.nav.dashboard)}
           {navItem("planning", "clipboard-list", t.nav.planning)}
+          {navItem("channel", "message-circle", "channel")}
           {navItem("flashmob", "zap", t.nav.flashmob)}
         </div>
         <div className="sb-fixed-menu-group" />
@@ -78,9 +79,9 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
         </div>
         <div className="sb-divider" />
 
-        <button type="button" className="sb-goalswitch">
-          <span className="lbl">{selectedGoal !== undefined ? selectedGoal.state : "—"}</span> <Icon name="chevron-down" />
-        </button>
+        <div className="sb-goalswitch" role="heading" aria-level={2}>
+          <span className="lbl">{selectedGoal !== undefined ? selectedGoal.state : "No Goal selected"}</span>
+        </div>
         {goals !== undefined && goals.length > 0 && (
           <div className="sb-channels">
             {goals.map((goal) => (
@@ -109,6 +110,6 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
           </button>
         </div>
       </div>
-    </div>
+    </nav>
   );
 }

@@ -253,9 +253,9 @@ export function Home({
   return (
     <div className="home-main">
       <div className="home-title">{title}</div>
-      {showConversationState && <section className="home-conversation" aria-label="Concertmaster conversation">
+      {showConversationState && <section className="home-conversation" aria-label="Concertmaster conversation" role="log" aria-live="polite" aria-relevant="additions text">
         <div>conversation {conversationId ?? "not started"}</div>
-        <div>turn {turnStatus}</div>
+        <div role="status" aria-live="polite" aria-atomic="true">turn {turnStatus}</div>
         {conversationMessages.map((message) => (
           <p key={message.id} data-role={message.role}>{message.content}</p>
         ))}
@@ -423,16 +423,16 @@ export function Home({
 
       {!isFlashmob && draft === undefined && (
         <div className="home-cards">
-          <div className="home-card" onClick={() => onNavigate("floor")}>
-            <Icon name="chart-pie" />
-            <div className="home-card-title">open floor view</div>
-            <div className="home-card-sub">see the whole org work</div>
-          </div>
-          <div className="home-card" onClick={() => onNavigate("inbox")}>
-            <Icon name="inbox" />
-            <div className="home-card-title">inbox</div>
-            <div className="home-card-sub">certifications for the selected Goal</div>
-          </div>
+          <button type="button" className="home-card" onClick={() => onNavigate("floor")}>
+            <Icon name="chart-pie" aria-hidden="true" />
+            <span className="home-card-title">open floor view</span>
+            <span className="home-card-sub">see the whole org work</span>
+          </button>
+          <button type="button" className="home-card" onClick={() => onNavigate("inbox")}>
+            <Icon name="inbox" aria-hidden="true" />
+            <span className="home-card-title">inbox</span>
+            <span className="home-card-sub">certifications for the selected Goal</span>
+          </button>
         </div>
       )}
 

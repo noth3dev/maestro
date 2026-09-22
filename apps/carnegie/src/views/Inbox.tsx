@@ -86,7 +86,10 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
         <p className="dash-sub">Pending approvals across visible Goals; certifications for the selected Goal. Approvals, worker decisions, and scoped Concertmaster discussions come from durable project state.</p>
       </header>
       <div className="inbox-list workspace-view-body">
-        {loading && <p>loading…</p>}
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {loading ? "Loading inbox…" : displayError !== undefined ? "Inbox unavailable." : `Inbox loaded with ${groups.criticalActions.length} pending critical actions.`}
+        </div>
+        {loading && <p role="status" aria-live="polite" aria-busy="true">loading…</p>}
         {displayError !== undefined && <div className="alert alert-warning" role="alert">{displayError}</div>}
         {detailLoading && <p>loading worker decisions…</p>}
         <Approvals
