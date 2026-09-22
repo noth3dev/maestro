@@ -6,6 +6,7 @@ describe("model-provider-anthropic surface", () => {
     expect(Object.keys(surface).sort()).toMatchInlineSnapshot(`
       [
         "AnthropicProviderError",
+        "ClaudeOAuthClient",
         "createAnthropicPlugin",
       ]
     `);
