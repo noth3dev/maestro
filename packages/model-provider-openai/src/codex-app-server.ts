@@ -69,9 +69,15 @@ export interface CodexAccountSummary {
   readonly planType?: string;
 }
 
+export interface CodexModelReasoningEfforts {
+  readonly supported: readonly string[];
+  readonly default: string | null;
+}
+
 export interface CodexModelSummary {
   readonly id: string;
   readonly displayName: string;
+  readonly reasoningEfforts?: CodexModelReasoningEfforts;
 }
 
 type JsonRpcResponse = { readonly id: number; readonly result?: unknown; readonly error?: { readonly message?: unknown } };
@@ -231,6 +237,7 @@ export class CodexAppServerClient {
     readonly tools: readonly unknown[];
     readonly signal: AbortSignal;
     readonly maxOutputTokens: number;
+    readonly reasoningEffort?: string;
     readonly emit?: (event: ModelStreamEvent) => void;
   }): Promise<{
     requestId: string;
@@ -320,6 +327,7 @@ export class CodexAppServerClient {
         approvalPolicy: "never",
         sandboxPolicy: { type: "readOnly" },
         maxOutputTokens: input.maxOutputTokens,
+        ...(input.reasoningEffort === undefined ? {} : { effort: input.reasoningEffort }),
       })
         .then((turnResult) => {
           const turn = isRecord(turnResult) && isRecord(turnResult.turn) ? turnResult.turn : undefined;
@@ -426,7 +434,21 @@ export class CodexAppServerClient {
           if (seenIds.has(id)) continue;
           seenIds.add(id);
           const displayName = typeof entry.displayName === "string" && entry.displayName.trim() !== "" ? entry.displayName.trim() : id;
-          models.push({ id, displayName });
+          const hasEffortMetadata = Object.hasOwn(entry, "supportedReasoningEfforts") || Object.hasOwn(entry, "defaultReasoningEffort");
+          if (hasEffortMetadata) {
+            if (!Array.isArray(entry.supportedReasoningEfforts) || typeof entry.defaultReasoningEffort !== "string")
+              throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned invalid reasoning effort metadata");
+            const supported = entry.supportedReasoningEfforts.map((option) => {
+              if (!isRecord(option) || typeof option.reasoningEffort !== "string" || option.reasoningEffort.trim() === "")
+                throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned invalid reasoning effort option");
+              return option.reasoningEffort.trim();
+            });
+            if (new Set(supported).size !== supported.length || !supported.includes(entry.defaultReasoningEffort))
+              throw new CodexAppServerError("provider_malformed_response", "Codex app-server returned inconsistent reasoning effort metadata");
+            models.push({ id, displayName, reasoningEfforts: { supported, default: entry.defaultReasoningEffort } });
+          } else {
+            models.push({ id, displayName });
+          }
         }
         const nextCursor = result.nextCursor;
         if (nextCursor === null || nextCursor === undefined) return models;
@@ -563,6 +585,7 @@ class CodexAppServerProvider implements ModelProviderPort {
     readonly identity: { provider: "openai-codex"; id: string },
     readonly accountRef: string,
     private readonly client: CodexAppServerClient,
+    private readonly reasoningEffort?: string,
   ) {}
 
   async turn(request: ModelTurnRequest) {
@@ -573,6 +596,7 @@ class CodexAppServerProvider implements ModelProviderPort {
       tools: request.tools,
       signal: request.signal,
       maxOutputTokens: request.limits.maxOutputTokens,
+      ...(this.reasoningEffort === undefined ? {} : { reasoningEffort: this.reasoningEffort }),
       emit: request.emit,
     });
   }
@@ -592,20 +616,23 @@ export interface CodexAppServerPluginOptions {
 
 export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions): ProviderPlugin {
   const dynamic = options.models === undefined;
-  let models = dynamic ? [] : [...options.models];
+  let models: readonly CodexModelSummary[] = dynamic ? [] : options.models.map((id) => ({ id, displayName: id }));
   let refreshFlight: Promise<void> | undefined;
   const catalog = (): readonly ModelCatalogEntry[] =>
-    models.map((id) => ({
-      identity: { provider: "openai-codex", id },
+    models.map((model) => ({
+      identity: { provider: "openai-codex", id: model.id },
       capabilities: new Set(["text", "streaming", "cancellation", "managed-subscription"] as const),
       authModes: ["managed-subscription"],
       dataPolicy: codexDataPolicy,
+      ...(model.reasoningEfforts === undefined ? {} : { reasoningEfforts: model.reasoningEfforts }),
     }));
   const refreshModels = async (): Promise<void> => {
     if (!dynamic) return;
     if (refreshFlight !== undefined) return refreshFlight;
     const flight = (async () => {
-      models = [...new Set((await options.client.listModels()).map((model) => model.id))];
+      const discovered = await options.client.listModels();
+      const seen = new Set<string>();
+      models = discovered.filter((model) => !seen.has(model.id) && seen.add(model.id));
     })();
     refreshFlight = flight;
     try {
@@ -628,12 +655,13 @@ export function createCodexAppServerPlugin(options: CodexAppServerPluginOptions)
         request.account.authMode !== "managed-subscription"
       )
         throw new CodexAppServerError("provider_auth", "Codex managed account binding mismatch");
-      if (!models.includes(request.model.id))
+      if (!models.some((model) => model.id === request.model.id))
         throw new CodexAppServerError("provider_malformed_response", "Codex model is not in the configured catalog");
       return new CodexAppServerProvider(
         request.model as { provider: "openai-codex"; id: string },
         request.account.accountRef,
         options.client,
+        request.reasoningEffort,
       );
     },
   };

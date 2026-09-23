@@ -46,10 +46,10 @@ class FakeTransport implements CodexAppServerTransport {
           this.modelListMode === "malformed-entry"
             ? { data: [{}], nextCursor: null }
             : request.params?.cursor === "page-2"
-              ? { data: [{ id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false }], nextCursor: null }
+              ? { data: [{ id: "gpt-5.5", model: "gpt-5.5", displayName: "GPT-5.5", hidden: false, defaultReasoningEffort: "high", supportedReasoningEfforts: [{ reasoningEffort: "low", description: "Fast" }, { reasoningEffort: "high", description: "Deep" }] }], nextCursor: null }
               : {
                   data: [
-                    { id: "gpt-5.6-luna", model: "gpt-5.6-luna", displayName: "GPT-5.6-Luna", hidden: false },
+                    { id: "gpt-5.6-luna", model: "gpt-5.6-luna", displayName: "GPT-5.6-Luna", hidden: false, defaultReasoningEffort: "medium", supportedReasoningEfforts: [{ reasoningEffort: "low", description: "Fast" }, { reasoningEffort: "medium", description: "Balanced" }] },
                     { id: "hidden", model: "hidden", displayName: "Hidden", hidden: true },
                   ],
                   nextCursor: "page-2",
@@ -152,8 +152,8 @@ describe("Codex app-server model catalog", () => {
     const transport = new FakeTransport();
     const client = new CodexAppServerClient({ transport });
     await expect(client.listModels()).resolves.toEqual([
-      { id: "gpt-5.6-luna", displayName: "GPT-5.6-Luna" },
-      { id: "gpt-5.5", displayName: "GPT-5.5" },
+      { id: "gpt-5.6-luna", displayName: "GPT-5.6-Luna", reasoningEfforts: { supported: ["low", "medium"], default: "medium" } },
+      { id: "gpt-5.5", displayName: "GPT-5.5", reasoningEfforts: { supported: ["low", "high"], default: "high" } },
     ]);
     expect(transport.messages).toEqual(
       expect.arrayContaining([
@@ -265,6 +265,7 @@ it("runs a text turn through the managed app-server and supports cancellation", 
     tools: [],
     signal: new AbortController().signal,
     maxOutputTokens: 100,
+    reasoningEffort: "high",
     emit: (event) => events.push(event),
   });
   await expect(resultPromise).resolves.toMatchObject({
@@ -280,9 +281,10 @@ it("runs a text turn through the managed app-server and supports cancellation", 
   } | undefined;
   expect(threadStart?.params?.developerInstructions).toBe("host-owned policy");
   const turnStart = transport.messages.find((message) => (message as { method?: string }).method === "turn/start") as {
-    params?: { input?: readonly { text?: string }[] };
+    params?: { input?: readonly { text?: string }[]; effort?: string };
   } | undefined;
   expect(turnStart?.params?.input).toEqual([{ type: "text", text: "user: hello" }]);
+  expect(turnStart?.params?.effort).toBe("high");
   await client.close();
 });
 
