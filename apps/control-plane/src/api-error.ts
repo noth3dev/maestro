@@ -35,6 +35,10 @@ import {
   ChannelNotFoundError,
   ChannelConflictError,
   ChannelClosedError,
+  OvertureRunNotFoundError,
+  OvertureConflictError,
+  OvertureVersionConflictError,
+  OvertureIntegrityError,
 } from "@maestro/persistence";
 import { StableApiErrorSchema, type StableApiError } from "@maestro/contracts";
 import {
@@ -159,6 +163,9 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof WorkerMessageRejectedError) return apiError(409, "worker_message_rejected", error.message);
   if (error instanceof WorkerNotFoundError) return apiError(404, "worker_not_found", error.message);
   if (error instanceof WorkerError) return apiError(409, "worker_conflict", error.message);
+  if (error instanceof OvertureRunNotFoundError) return apiError(404, "overture_run_not_found", error.message);
+  if (error instanceof OvertureVersionConflictError || error instanceof OvertureConflictError || error instanceof OvertureIntegrityError)
+    return apiError(409, "overture_conflict", error.message);
   if (error instanceof GitProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof ConcertmasterReportProjectMismatchError) return apiError(400, "validation_error", error.message);
   if (error instanceof ConcertmasterReportGoalNotFoundError) return apiError(404, "goal_not_found", error.message);

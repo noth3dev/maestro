@@ -29,6 +29,7 @@ import type { ConcertmasterReportService } from "./concertmaster-report-service.
 import { type MissionBundleService } from "./mission-bundle-service.js";
 import { type WorkerService } from "./worker-service.js";
 import { type ConversationService } from "./conversation-service.js";
+import type { OvertureService } from "./overture-service.js";
 
 import { type GitIntegrationService } from "./git-integration-service.js";
 import type { CertificationService } from "./certification-service.js";
@@ -58,6 +59,7 @@ import { registerGitRoutes } from "./routes/git.js";
 import { registerCriticalActionRoutes } from "./routes/critical-actions.js";
 import { registerTaskContractRoutes } from "./routes/task-contracts.js";
 import { registerConversationRoutes } from "./routes/conversations.js";
+import { registerOvertureRoutes } from "./routes/overture.js";
 import { registerChannelRoutes } from "./routes/channels.js";
 import { registerReadRoutes } from "./routes/reads.js";
 import { registerDiscordRoutes } from "./routes/discord.js";
@@ -119,6 +121,7 @@ export function buildServer({
   accountLoginOwnerId,
   readinessCheck,
   conversationService,
+  overture,
   projectionService,
   settingsService,
   routerCatalogService,
@@ -175,6 +178,7 @@ export function buildServer({
   /** Dependency probe used by /readyz. Liveness never calls this check. */
   readinessCheck?: () => Promise<void>;
   conversationService?: ConversationService;
+  overture?: OvertureService;
   /** Durable projection composition over existing source tables for Carnegie panels. */
   projectionService?: ProjectionService;
   settingsService?: SettingsService;
@@ -305,6 +309,7 @@ export function buildServer({
     encore,
     discordSignal,
     conversations,
+    ...(overture === undefined ? {} : { overture }),
     projections,
     personaInspection,
     organizations,
@@ -351,6 +356,7 @@ export function buildServer({
   registerCriticalActionRoutes(app, deps);
   registerTaskContractRoutes(app, deps);
   registerConversationRoutes(app, deps);
+  registerOvertureRoutes(app, deps);
   registerChannelRoutes(app, deps);
   registerReadRoutes(app, deps);
   registerDiscordRoutes(app, deps);

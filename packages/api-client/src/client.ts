@@ -17,6 +17,7 @@ import { createOversightMethods } from "./methods/oversight.js";
 import { createReportingMethods } from "./methods/reporting.js";
 import { createEventsMethods } from "./methods/events.js";
 import { createRouterMethods } from "./methods/router.js";
+import { createOvertureMethods } from "./methods/overture.js";
 import {
   GoalResultSchema,
   type MetronomeChallengeList,
@@ -64,6 +65,13 @@ import {
   type ConversationEvent,
   type ConversationActivityEvent,
   type ConversationEventQuery,
+  type CreateOvertureRunBody,
+  type AppendOvertureOperatorMessageBody,
+  type OvertureRun,
+  type OvertureMessage,
+  type OvertureEvent,
+  type OvertureRunQuery,
+  type OvertureEventQuery,
   type ModelCatalogEntry,
   type ProviderCredentialLoginInput,
   type ProviderCredentialBinding,
@@ -182,6 +190,14 @@ export interface ApiClient {
     query: GoalQuery,
     options?: { signal?: AbortSignal; onConnected?: () => void },
   ): AsyncIterable<ConversationActivityEvent>;
+  createOvertureRun(input: CreateOvertureRunBody, options?: { idempotencyKey?: string }): Promise<OvertureRun>;
+  getOvertureRun(runId: string, query: OvertureRunQuery): Promise<OvertureRun>;
+  sendOvertureOperatorMessage(
+    runId: string,
+    input: AppendOvertureOperatorMessageBody,
+    options?: { idempotencyKey?: string },
+  ): Promise<OvertureMessage>;
+  listOvertureEvents(runId: string, query: OvertureEventQuery): Promise<readonly OvertureEvent[]>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
@@ -265,7 +281,10 @@ export interface ApiClient {
   generateConcertmasterReport(goalId: string, query: GoalQuery, commandId: string): Promise<ConcertmasterFinalReport>;
   getConcertmasterReport(goalId: string, query: GoalQuery): Promise<ConcertmasterFinalReport>;
   getEvidenceBundle(goalId: string, query: GoalQuery): Promise<EvidenceBundleRead>;
-  getEvidenceDump(goalId: string, query: GoalQuery): Promise<{ bundle: EvidenceBundleRead; certifications: CertificationList; report: ConcertmasterFinalReport }>;
+  getEvidenceDump(
+    goalId: string,
+    query: GoalQuery,
+  ): Promise<{ bundle: EvidenceBundleRead; certifications: CertificationList; report: ConcertmasterFinalReport }>;
   getGitIntegrationState(goalId: string, query: GoalQuery): Promise<GoalGitIntegrationState>;
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;
@@ -340,6 +359,7 @@ export function createApiClient({
     ...createCatalogMethods(ctx),
     ...createProvidersMethods(ctx),
     ...createConversationsMethods(ctx),
+    ...createOvertureMethods(ctx),
     ...createEffectsMethods(ctx),
     ...createCouncilsMethods(ctx),
     ...createPlanningMethods(ctx),

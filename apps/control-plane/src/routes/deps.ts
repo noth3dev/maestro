@@ -32,3 +32,5 @@ export type SettingsRouteDeps = Pick<RouteDeps, "settingsService">;
 export type RouterRouteDeps = Pick<RouteDeps, "routerCatalogService">;
 export type TaskContractRouteDeps = Pick<RouteDeps, "taskContracts">;
 export type WorkerRouteDeps = Pick<RouteDeps, "workers" | "certifications">;
+
+export type OvertureRouteDeps = Pick<RouteDeps, "overture">;

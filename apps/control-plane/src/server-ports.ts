@@ -1,6 +1,7 @@
 import type { EventCursor } from "@maestro/contracts";
 import type { AccountLoginStore, OperatorAuthentication, OperatorContext } from "@maestro/persistence";
 import type { PersonaInspectionService } from "./persona-inspection-service.js";
+import type { OvertureService } from "./overture-service.js";
 import type { RouterCatalogService } from "./composition/router-catalog.js";
 
 import { type GoalService } from "./goal-service.js";
@@ -165,6 +166,7 @@ export interface RouteDeps {
   encore: EncoreService;
   discordSignal: DiscordSignalService;
   conversations: ConversationService;
+  overture?: OvertureService;
   projections: ProjectionService;
   personaInspection: PersonaInspectionService;
   organizations: OrganizationService;

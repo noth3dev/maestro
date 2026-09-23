@@ -56,6 +56,8 @@ export const StableApiErrorCodeSchema = z.enum([
   "channel_not_found",
   "channel_conflict",
   "channel_closed",
+  "overture_run_not_found",
+  "overture_conflict",
 ]);
 const RoutingShortfallApiSchema = z
   .object({

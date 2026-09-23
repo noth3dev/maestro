@@ -207,7 +207,13 @@ export const OverturePlanManifestSchema = z
 export type OverturePlanManifest = z.infer<typeof OverturePlanManifestSchema>;
 
 export const CreateOvertureRunInputSchema = z
-  .object({ projectId: UuidSchema, conversationId: UuidSchema, roles: z.array(RoleIdSchema).min(1).readonly(), commandId: UuidSchema })
+  .object({
+    runId: UuidSchema,
+    projectId: UuidSchema,
+    conversationId: UuidSchema,
+    roles: z.array(RoleIdSchema).min(1).readonly(),
+    commandId: UuidSchema,
+  })
   .strict();
 export type CreateOvertureRunInput = z.infer<typeof CreateOvertureRunInputSchema>;
 export const AppendOvertureMessageInputSchema = z
@@ -285,3 +291,26 @@ export const AnswerOvertureClarificationInputSchema = z
   })
   .strict();
 export type AnswerOvertureClarificationInput = z.infer<typeof AnswerOvertureClarificationInputSchema>;
+
+export const CreateOvertureRunBodySchema = z
+  .object({ runId: UuidSchema, projectId: UuidSchema, conversationId: UuidSchema, roles: z.array(RoleIdSchema).min(1).readonly() })
+  .strict();
+export type CreateOvertureRunBody = z.infer<typeof CreateOvertureRunBodySchema>;
+export const AppendOvertureOperatorMessageBodySchema = z
+  .object({ projectId: UuidSchema, conversationId: UuidSchema, turnId: UuidSchema, content: SafeContentSchema })
+  .strict();
+export type AppendOvertureOperatorMessageBody = z.infer<typeof AppendOvertureOperatorMessageBodySchema>;
+export const OvertureRunQuerySchema = z.object({ projectId: UuidSchema, conversationId: UuidSchema }).strict();
+export type OvertureRunQuery = z.infer<typeof OvertureRunQuerySchema>;
+export const OvertureEventQuerySchema = z
+  .object({
+    projectId: UuidSchema,
+    conversationId: UuidSchema,
+    afterCursor: z
+      .string()
+      .regex(/^(0|[1-9][0-9]*)$/)
+      .default("0"),
+  })
+  .strict();
+
+export type OvertureEventQuery = z.infer<typeof OvertureEventQuerySchema>;

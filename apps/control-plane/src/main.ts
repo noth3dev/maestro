@@ -41,6 +41,7 @@ import { composeFoundationServices } from "./composition/foundation-services.js"
 import { composeExecutionServices } from "./composition/execution-services.js";
 import { composeProviderCredentials, composeSettingsService } from "./composition/provider-access.js";
 import { composeRouterCatalogService } from "./composition/router-catalog.js";
+import { createPostgresOvertureService } from "./overture-service.js";
 import { inspectIpPythonProcessOutcome } from "./composition/ipython.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
@@ -174,6 +175,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
+    overture: createPostgresOvertureService(pool),
     settingsService,
     routerCatalogService,
     ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),

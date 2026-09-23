@@ -1175,3 +1175,66 @@ describe("router catalog client", () => {
     );
   });
 });
+
+describe("overture client", () => {
+  it("uses typed run, operator-message, and event endpoints", async () => {
+    const runId = "99999999-9999-4999-8999-999999999999";
+    const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const turnId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const run = {
+      runId,
+      conversationId,
+      projectId,
+      goalId: null,
+      executionPhase: "overture" as const,
+      taskContractRef: null,
+      state: "collecting" as const,
+      version: 1,
+      roleTaxonomyVersion: 2 as const,
+      planManifestHash: null,
+      taskContractId: null,
+      roles: [{ roleId: "conversation-lead" as const, status: "active" as const, modelRef: "openai/gpt-5" }],
+    };
+    const message = {
+      messageId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      runId,
+      conversationId,
+      projectId,
+      turnId,
+      cursor: "1",
+      actor: "operator" as const,
+      modelRef: null,
+      content: "Clarify the scope",
+      createdAt: "2026-09-23T00:00:00.000Z",
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(run), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(run), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(message), { status: 201 }))
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(
+      client.createOvertureRun({ runId, projectId, conversationId, roles: ["conversation-lead"] }, { idempotencyKey: commandId }),
+    ).resolves.toEqual(run);
+    await expect(client.getOvertureRun(runId, { projectId, conversationId })).resolves.toEqual(run);
+    await expect(
+      client.sendOvertureOperatorMessage(
+        runId,
+        { projectId, conversationId, turnId, content: "Clarify the scope" },
+        { idempotencyKey: commandId },
+      ),
+    ).resolves.toEqual(message);
+    await expect(client.listOvertureEvents(runId, { projectId, conversationId, afterCursor: "0" })).resolves.toEqual([]);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `https://maestro.test/v1/overture/runs`,
+      expect.objectContaining({ method: "POST", headers: expect.objectContaining({ "idempotency-key": commandId }) }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      4,
+      `https://maestro.test/v1/overture/runs/${runId}/events?projectId=${projectId}&conversationId=${conversationId}&afterCursor=0`,
+      expect.anything(),
+    );
+  });
+});
