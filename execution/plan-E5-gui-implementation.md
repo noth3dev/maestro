@@ -1091,6 +1091,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 The Task Editor UI also supports adding or revising phase and slice documents with server-enforced dependency edges; stale versions and missing phase dependencies fail closed. It never creates a Task Contract until the operator supplies repository, base revision, data boundary, and organization fields.
 
+**Task 15 model-selection/reasoning-effort checkpoint (2026-09-24):** Added provider-advertised reasoning-effort metadata from the Codex model catalog, strict Gateway admission validation, and persistence of the selected effort in the new Conversation's opaque Gateway binding. Unsupported efforts fail closed before provider admission; models without metadata remain at the provider default. Carnegie Home and Inbox now expose exact live model selection plus an accessible dial backed only by the selected model's advertised options. Commits `b4f9dce7`, `e331e1ea`, and `9a80d468` are on local `main`; focused verification passed **11 files / 116 tests**, root and renderer builds passed, ESLint, boundary, and migration checks passed. This is code-level evidence only: it does not create or claim a live Task Contract, Goal, Worker, or E5 completion.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

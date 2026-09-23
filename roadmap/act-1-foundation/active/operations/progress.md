@@ -4912,3 +4912,12 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Task Editor hierarchy UI extension 2026-09-23: added operator-driven phase/slice plan revisions with dependency-aware server calls; missing phases and stale versions fail closed. The UI still requires explicit project/repository/organization boundaries before Task Contract creation.
 
 - Provider admission probe 2026-09-24: native Model Gateway started with a probe token; authenticated `/v1/models` returned `[]`, gateway keychain metadata for `local-operator` was empty, and no provider API-key environment variables were present. Probe stopped without provider execution. Live role turns remain `provider_unavailable`; no Task Contract/Goal/Worker claim.
+
+## 2026-09-24 — E5 heartbeat #48 model-selection checkpoint
+
+- Added provider/model-specific reasoning-effort metadata and strict Gateway admission validation. Unsupported selections fail closed before provider admission; absent metadata remains provider default. The selected value is stored only in the new Conversation's opaque Gateway binding and is returned as `reasoningEffort`/`null` through the conversation contract.
+- Added the accessible Carnegie Home/Inbox model controls: exact live provider/model dropdown plus a dial-style range control backed only by each selected model's advertised effort options. Existing conversations remain immutable.
+- Local commits: `b4f9dce7`, `e331e1ea`, `9a80d468`. Local `main` is 12 commits ahead of `origin/main`; no push was performed.
+- Verification: focused reasoning/Gateway/Control Plane/Carnegie suite **11 files / 116 tests passed**; `npm run build`, renderer typecheck, `npm run lint`, `npm run boundaries:check`, `npm run migrations:check`, and changed-scope `git diff --check` passed.
+- Full `npm test` was started against `maestro-local-postgres` at `127.0.0.1:55432` and remains in progress in `/tmp/maestro-full-test.log`; no full-suite result is claimed until the process exits.
+- E5 remains open and E6 remains gated. This slice produced no live Task Contract, Goal, Worker, evidence, or external effect.

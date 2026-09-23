@@ -34,3 +34,7 @@ Task 14's durable foundation is committed and pushed as `6a3e8492`. Its real-Pos
 
 
 The final Task 14 verification also passed the unrestricted real-PostgreSQL suite (**435 files / 2,888 tests**) and the hardened focused gate (**6 files / 17 tests**). This does not open E6: the foundation is ready for commit, but Task 15 and all former E6 runtime work remain behind the E5 Task 14 commit/review gate, and live Home/provider evidence still lacks a Task Contract and downstream execution identities.
+
+## Compatibility-pointer update (2026-09-24)
+
+The pointer remains archival and E6 is not being executed independently. The current E5 Task 15 model-selection slice is recorded in `execution/plan-E5-gui-implementation.md`: commits `b4f9dce7`, `e331e1ea`, and `9a80d468` add exact provider/model reasoning metadata, fail-closed admission, durable new-conversation binding, and Home/Inbox controls. Focused code verification is green (**11 files / 116 tests** plus build/lint/boundary/migration checks), but no live Task Contract, Goal, Worker, or downstream evidence exists. Preserve the E5-before-E6 gate.
