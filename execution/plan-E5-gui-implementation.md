@@ -1366,3 +1366,10 @@ The unrestricted real-PostgreSQL suite completed with **435 test files / 2,888 t
 Commit `ec3141a5` gates Ensemble readiness on exact live Gateway presence and host-authorized account bindings. It also propagates optional routing mode, native model, candidate catalog, account refs, and model-map configuration through local bootstrap into the Control Plane. Focused verification passed **3 files / 66 tests** (`router-catalog`, `local-bootstrap`, `connection`); root build and ESLint passed. The live provider catalog is still unavailable/authenticated-empty in this environment, so no provider, Task Contract, Goal, or Worker evidence is claimed.
 
 The next GUI usability slice is the Overture clarification answer round-trip: persistence already supports answers, but Control Plane, API client, Electron bridge, and Home do not yet expose an operator answer form.
+
+
+## Task 15 clarification-answer checkpoint (2026-09-24)
+
+The missing operator answer path is now implemented in commit `11e11429`. `AnswerOvertureClarificationBodySchema` and the typed API method feed a scoped, idempotent Control Plane route backed by the existing PostgreSQL `answerOvertureClarification` function. Clarification event payloads now carry only the already-safe question/answer text so Home can reconstruct the open question from the durable event stream. Carnegie exposes an accessible answer form and clears it after a successful answer.
+
+RED/GREEN evidence: the new route/API bridge/Home tests first failed at the missing method/route, then focused verification passed **7 files / 75 tests**, including the real PostgreSQL `overture.integration.test.ts` (**6 tests**). Root build, renderer typecheck, ESLint, and `git diff --check` passed. This enables the operator-facing clarification round-trip but does not claim a live provider or E5 completion.

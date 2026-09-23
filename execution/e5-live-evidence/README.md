@@ -65,3 +65,10 @@ Task 14 is **backend-blocked at provider/model availability**. The fresh rerun p
 - No Task Contract draft/ID/version/hash, Goal, Worker, evidence, certification, report, or external effect was produced. The current Home intake returns the completed conversation response but does not create a Task Contract draft, so Task 14 Steps 3–6 remain unverified.
 - Evidence: `/tmp/e5-live-final2-after-turn.png`, `/tmp/e5-live-final2-terminal.png`, `/tmp/e5-live-final2-turn.log`, `/tmp/e5-live-final2-terminal.log`.
 - Correct status: **provider live / Task Contract flow still open**; do not claim E5 or start E6.
+
+
+## Heartbeat #50 clarification answer implementation (2026-09-24)
+
+- Commit `11e11429` adds the code-level Overture clarification answer round-trip from durable safe events through Control Plane, API client, Electron bridge, and Carnegie Home.
+- Focused verification passed **7 files / 75 tests**, including real PostgreSQL Overture persistence (**6 tests**); build, lint, and diff checks passed.
+- This is not live provider evidence and does not create a Task Contract, Goal, Worker, report, or external effect.

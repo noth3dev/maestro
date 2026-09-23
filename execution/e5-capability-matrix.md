@@ -146,3 +146,10 @@ A fresh Electron profile with no explicit `MAESTRO_API_URL` used Docker-backed l
 - The model-selection specification was repaired at `docs/superpowers/specs/2026-09-23-carnegie-ensemble-concertmaster-model-selection.md`.
 - Static audit found a concrete Task 15 usability gap: Overture clarification answers stop at persistence. No Control Plane answer route, API-client method, Electron bridge method, or Home answer form exists yet. This remains code-level planning evidence only.
 - No live provider, Task Contract, Goal, Worker, or E5 completion claim is made; Task 14 remains `Backend-blocked` and E6 remains gated.
+
+
+## Heartbeat #50 clarification-answer checkpoint (2026-09-24)
+
+- Commit `11e11429` closes the operator-facing Overture clarification answer seam: safe question/answer event payloads, Control Plane answer route, API client, Electron allow-list, and Carnegie Home form.
+- RED/GREEN focused evidence: **7 files / 75 tests passed**, with real PostgreSQL Overture persistence **6 tests passed**; build, renderer typecheck, lint, and diff checks passed.
+- This proves the code-level round-trip only. The role-runtime continuation and live provider boundary remain unverified; Task 14 stays `Backend-blocked`, E5 remains open, and E6 remains gated.

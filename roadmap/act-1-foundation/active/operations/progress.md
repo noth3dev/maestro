@@ -4935,3 +4935,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Repaired the corrupted model-selection spec at `docs/superpowers/specs/2026-09-23-carnegie-ensemble-concertmaster-model-selection.md`; it now records the exact router/bootstrap/conversation invariants and acceptance gates.
 - Static GUI audit found the next narrow gap: Overture clarifications can be opened and persisted, but there is no Control Plane route, API-client method, Electron bridge entry, or Home answer form. This is the next TDD vertical slice.
 - Live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed; E6 remains gated.
+
+## 2026-09-24 — E5 heartbeat #50 clarification answer seam
+
+- Implemented and committed `11e11429`: operator answers now travel through the existing safe PostgreSQL clarification state, a scoped/idempotent Control Plane route, typed API client, Electron bridge, and Carnegie Home form.
+- Clarification event payloads include only safe question/answer text so the GUI can reconstruct the open question from durable events. Focused verification passed **7 files / 75 tests**, including Overture PostgreSQL integration (**6 tests**); build/lint/diff checks passed.
+- The code-level answer round-trip is green. Live provider, automatic role continuation, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed; E6 remains gated.
