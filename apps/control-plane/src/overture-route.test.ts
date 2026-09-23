@@ -84,6 +84,16 @@ function service(): OvertureService {
       status: "open",
       commandId: input.commandId,
     }),
+    answerClarification: async (input) => ({
+      clarificationId: input.clarificationId,
+      runId: input.runId,
+      projectId: input.projectId,
+      question: "What is out of scope?",
+      answer: input.answer,
+      answerCommandId: input.commandId,
+      status: "answered" as const,
+      commandId: "99999999-9999-4999-8999-999999999999",
+    }),
     createTaskContract: async (input) => ({
       contractId: input.commandId,
       schemaVersion: 1 as const,
@@ -183,6 +193,23 @@ describe("Overture routes", () => {
     expect(manifest.json().documents[0].path).toBe("plan00.md");
     await fastify.close();
   });
+  it("answers an existing clarification with scoped identity and idempotency", async () => {
+    const fastify = await app();
+    const response = await fastify.inject({
+      method: "POST",
+      url: `/v1/overture/runs/${ids.runId}/clarifications/99999999-9999-4999-8999-999999999999/answer`,
+      headers: { "idempotency-key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      payload: { projectId: ids.projectId, conversationId: ids.conversationId, answer: "Keep the change inside the project boundary." },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      clarificationId: "99999999-9999-4999-8999-999999999999",
+      status: "answered",
+      answer: "Keep the change inside the project boundary.",
+    });
+    await fastify.close();
+  });
+
   it("hands an exact plan manifest to the awaiting Task Contract", async () => {
     const fastify = await app();
     const response = await fastify.inject({

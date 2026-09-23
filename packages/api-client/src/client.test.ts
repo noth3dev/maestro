@@ -1405,6 +1405,40 @@ describe("overture client", () => {
     );
   });
 
+  it("answers an Overture clarification with scoped query fields and idempotency", async () => {
+    const runId = "99999999-9999-4999-8999-999999999999";
+    const clarificationId = "88888888-8888-4888-8888-888888888888";
+    const projectId = "11111111-1111-4111-8111-111111111111";
+    const conversationId = "22222222-2222-4222-8222-222222222222";
+    const clarification = {
+      clarificationId,
+      runId,
+      projectId,
+      question: "What is out of scope?",
+      answer: "Keep it inside the project.",
+      answerCommandId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      status: "answered" as const,
+      commandId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(clarification), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(
+      client.answerOvertureClarification(
+        runId,
+        clarificationId,
+        { projectId, conversationId, answer: clarification.answer },
+        { idempotencyKey: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+      ),
+    ).resolves.toEqual(clarification);
+    expect(fetch).toHaveBeenCalledWith(
+      `https://maestro.test/v1/overture/runs/${runId}/clarifications/${clarificationId}/answer`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "idempotency-key": "cccccccc-cccc-4ccc-8ccc-cccccccccccc" }),
+      }),
+    );
+  });
+
   it("reads durable Overture messages with the same conversation cursor", async () => {
     const runId = "99999999-9999-4999-8999-999999999999";
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
