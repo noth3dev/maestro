@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import {
   OVERTURE_ROLE_IDS,
@@ -184,6 +184,53 @@ export async function readOvertureRun(
   conversationId: string,
 ): Promise<OvertureRun | undefined> {
   return readRunWithinTransaction(queryable, runId, projectId, conversationId);
+}
+
+export async function createOvertureOperatorTurn(
+  pool: Pool,
+  args: {
+    readonly runId: string;
+    readonly conversationId: string;
+    readonly projectId: string;
+    readonly content: string;
+    readonly commandId: string;
+  },
+): Promise<{ readonly turnId: string; readonly messageCommandId: string; readonly created: boolean }> {
+  assertSafeContent(args.content);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const run = await client.query<{ conversation_id: string }>(
+      "SELECT conversation_id FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
+      [args.runId, args.projectId],
+    );
+    if (run.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
+    if (run.rows[0]!.conversation_id !== args.conversationId)
+      throw new OvertureConflictError("Overture operator turn conversation does not match its Run");
+
+    const inserted = await client.query<{ turn_id: string }>(
+      "INSERT INTO conversation_turns (turn_id, turn_ref, request_id, conversation_id, project_id, role, content, status, cursor) VALUES ($1, $1, $1, $2, $3, 'user', $4, 'accepted', 0) ON CONFLICT (turn_id) DO NOTHING RETURNING turn_id",
+      [args.commandId, args.conversationId, args.projectId, args.content],
+    );
+    if (inserted.rowCount === 1) {
+      await client.query("COMMIT");
+      return { turnId: args.commandId, messageCommandId: derivedOvertureMessageCommandId(args.commandId), created: true };
+    }
+    const existing = await client.query<{ turn_id: string; conversation_id: string; project_id: string; role: string; content: string }>(
+      "SELECT turn_id, conversation_id, project_id, role, content FROM conversation_turns WHERE turn_id = $1",
+      [args.commandId],
+    );
+    const row = existing.rows[0];
+    if (row === undefined || row.conversation_id !== args.conversationId || row.project_id !== args.projectId || row.role !== "user" || row.content !== args.content)
+      throw new OvertureConflictError("Overture operator turn command was reused with different content");
+    await client.query("COMMIT");
+    return { turnId: row.turn_id, messageCommandId: derivedOvertureMessageCommandId(args.commandId), created: false };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function appendOvertureMessage(
@@ -937,6 +984,11 @@ async function appendEvent(
     "INSERT INTO overture_outbox (outbox_id, event_id, run_id, project_id, event_type, payload, status) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'pending') ON CONFLICT (event_id) DO NOTHING",
     [randomUUID(), inserted.rows[0]!.event_id, args.runId, args.projectId, args.eventType, payload],
   );
+}
+
+function derivedOvertureMessageCommandId(commandId: string): string {
+  const hex = createHash("sha256").update(`overture-answer-message:${commandId}`, "utf8").digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20)}`;
 }
 
 function assertSafeContent(content: string): void {

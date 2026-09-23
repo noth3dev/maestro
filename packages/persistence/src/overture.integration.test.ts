@@ -211,7 +211,7 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       content: "The connected repository",
       commandId: answerCommandId,
     });
-    expect(overtureTurn).toEqual({ turnId: answerCommandId, created: true });
+    expect(overtureTurn).toMatchObject({ turnId: answerCommandId, created: true, messageCommandId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
     await expect(
       createOvertureOperatorTurn(pool, {
         runId,
@@ -220,7 +220,7 @@ describeDatabase("Overture PostgreSQL persistence", () => {
         content: "The connected repository",
         commandId: answerCommandId,
       }),
-    ).resolves.toEqual({ turnId: answerCommandId, created: false });
+    ).resolves.toMatchObject({ turnId: answerCommandId, created: false, messageCommandId: expect.stringMatching(/^[0-9a-f-]{36}$/) });
     expect((await pool.query("SELECT role, status, content FROM conversation_turns WHERE turn_id = $1", [answerCommandId])).rows[0]).toMatchObject({
       role: "user",
       status: "accepted",

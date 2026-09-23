@@ -26,6 +26,7 @@ import {
   reviseOverturePlan,
   openOvertureClarification,
   answerOvertureClarification,
+  createOvertureOperatorTurn,
   readOvertureArtifacts,
   bindOvertureRoleModel,
   createOvertureRun,
@@ -141,7 +142,43 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
     },
     async answerClarification(input, operator) {
       await assertRole(operator, input.projectId);
-      return answerOvertureClarification(pool, input);
+      const clarification = await answerOvertureClarification(pool, input);
+      const run = await readOvertureRun(pool, input.runId, input.projectId, input.conversationId);
+      if (run === undefined) throw new OvertureRunNotFoundError("Overture run not found");
+      const turn = await createOvertureOperatorTurn(pool, {
+        runId: input.runId,
+        projectId: input.projectId,
+        conversationId: input.conversationId,
+        content: input.answer,
+        commandId: input.commandId,
+      });
+      const operatorMessage = await appendOvertureMessage(pool, {
+        runId: input.runId,
+        projectId: input.projectId,
+        conversationId: input.conversationId,
+        turnId: turn.turnId,
+        actor: "operator",
+        modelRef: null,
+        content: input.answer,
+        commandId: turn.messageCommandId,
+      });
+      const roleActive = run.roles.some((role) => role.roleId === "conversation-lead" && role.status === "active");
+      if (roleTurnRunner !== undefined && roleActive) {
+        const messages = await readOvertureMessages(pool, input.runId, input.projectId, input.conversationId);
+        const roleAlreadyAnswered = messages.some((message) => message.turnId === turn.turnId && message.actor === "conversation-lead");
+        if (!roleAlreadyAnswered) {
+          await roleTurnRunner.run({
+            runId: input.runId,
+            projectId: input.projectId,
+            conversationId: input.conversationId,
+            turnId: turn.turnId,
+            operatorMessageId: operatorMessage.messageId,
+            operatorId: operator.operatorId,
+            content: input.answer,
+          });
+        }
+      }
+      return clarification;
     },
     async createTaskContract(input, operator) {
       await assertRole(operator, input.projectId);

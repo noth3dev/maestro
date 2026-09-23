@@ -204,6 +204,7 @@ describe("persistence surface", () => {
         "createLocalOperatorCredential",
         "createMissionBundle",
         "createOvertureArtifact",
+        "createOvertureOperatorTurn",
         "createOvertureRun",
         "createPostgresAccountLoginStore",
         "createPostgresSettingsService",
