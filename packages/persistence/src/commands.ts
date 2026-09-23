@@ -145,8 +145,9 @@ export async function releaseGoalLease(pool: Pool, proof: GoalLeaseProof): Promi
 /**
  * Create the Goal projection while an outer launch transaction is open.
  * Launch orchestration uses this to couple Task Contract launch, GoalCreated,
- * and the first durable goal-events outbox handoff without a second operator
- * action. The caller owns BEGIN/COMMIT and must hold the Goal lease.
+ * and the first durable `start_goal` orchestration command in the goal-events
+ * outbox without a second operator action. The caller owns BEGIN/COMMIT and
+ * must hold the Goal lease.
  */
 export async function executeCreateGoalCommandInTransaction(
   client: PoolClient,
@@ -240,7 +241,16 @@ export async function executeCreateGoalCommandInTransaction(
   await client.query(
     `INSERT INTO outbox (event_id, topic, payload)
      VALUES ($1, 'goal-events', $2::jsonb)`,
-    [eventId, JSON.stringify({ eventId })],
+    [eventId, JSON.stringify({
+      eventId,
+      orchestration: {
+        commandId: eventId,
+        type: "start_goal",
+        projectId: command.projectId,
+        goalId: command.goalId,
+        taskContractId: command.contractId,
+      },
+    })],
   );
   await client.query("SELECT pg_notify('maestro_outbox', $1)", [eventId]);
   return result;

@@ -78,7 +78,22 @@ describeDatabase("Task Contract control-plane API", () => {
       expect((await setupPool.query("SELECT default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob FROM goal_controls WHERE goal_id = $1", [launchedBody.goalId])).rows).toEqual([
         { default_spend_ceiling_cents: "12345", default_critical_actions_require_approval: false, default_allow_flashmob: false },
       ]);
-      expect((await setupPool.query("SELECT topic FROM outbox WHERE event_id IN (SELECT event_id FROM goal_events WHERE goal_id = $1)", [launchedBody.goalId])).rows).toEqual([{ topic: "goal-events" }]);
+      const goalEvent = await setupPool.query<{ event_id: string; command_id: string }>("SELECT event_id, command_id FROM goal_events WHERE goal_id = $1", [launchedBody.goalId]);
+      expect(goalEvent.rows).toHaveLength(1);
+      const outbox = await setupPool.query<{ topic: string; payload: { eventId: string; orchestration?: { commandId: string; type: string; projectId: string; goalId: string; taskContractId: string } } }>("SELECT topic, payload FROM outbox WHERE event_id = $1", [goalEvent.rows[0]!.event_id]);
+      expect(outbox.rows).toEqual([{
+        topic: "goal-events",
+        payload: {
+          eventId: goalEvent.rows[0]!.event_id,
+          orchestration: {
+            commandId: goalEvent.rows[0]!.event_id,
+            type: "start_goal",
+            projectId,
+            goalId: launchedBody.goalId,
+            taskContractId: contractId,
+          },
+        },
+      }]);
 
       const retriedLaunch = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers, body: JSON.stringify({ projectId }) });
       expect(retriedLaunch.status).toBe(200);
