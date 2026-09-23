@@ -14,7 +14,15 @@ import type { MethodContext } from "../context.js";
 
 export function createOvertureMethods(
   ctx: MethodContext,
-): Pick<ApiClient, "createOvertureRun" | "getOvertureRun" | "sendOvertureOperatorMessage" | "listOvertureEvents" | "streamOvertureEvents"> {
+): Pick<
+  ApiClient,
+  | "createOvertureRun"
+  | "getOvertureRun"
+  | "sendOvertureOperatorMessage"
+  | "listOvertureMessages"
+  | "listOvertureEvents"
+  | "streamOvertureEvents"
+> {
   const { request, headers, fetch, base } = ctx;
   return {
     createOvertureRun(input, options) {
@@ -55,6 +63,15 @@ export function createOvertureMethods(
           body: JSON.stringify(AppendOvertureOperatorMessageBodySchema.parse(input)),
         },
         OvertureMessageSchema,
+      );
+    },
+    listOvertureMessages(runId, query) {
+      const parsedRunId = UuidSchema.parse(runId);
+      const parsedQuery = OvertureEventQuerySchema.parse(query);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/messages?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId, afterCursor: parsedQuery.afterCursor })}`,
+        { headers },
+        OvertureMessageSchema.array(),
       );
     },
     listOvertureEvents(runId, query) {

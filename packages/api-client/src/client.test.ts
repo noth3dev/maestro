@@ -1238,6 +1238,30 @@ describe("overture client", () => {
     );
   });
 
+  it("reads durable Overture messages with the same conversation cursor", async () => {
+    const runId = "99999999-9999-4999-8999-999999999999";
+    const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const message = {
+      messageId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      runId,
+      conversationId,
+      projectId,
+      turnId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      cursor: "3",
+      actor: "operator" as const,
+      modelRef: null,
+      content: "Continue",
+      createdAt: "2026-09-23T00:00:00.000Z",
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify([message]), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.listOvertureMessages(runId, { projectId, conversationId, afterCursor: "2" })).resolves.toEqual([message]);
+    expect(fetch).toHaveBeenCalledWith(
+      `https://maestro.test/v1/overture/runs/${runId}/messages?projectId=${projectId}&conversationId=${conversationId}&afterCursor=2`,
+      expect.anything(),
+    );
+  });
+
   it("streams typed Overture events from the reconnect cursor", async () => {
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const streamRunId = "99999999-9999-4999-8999-999999999999";

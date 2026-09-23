@@ -197,6 +197,7 @@ export interface ApiClient {
     input: AppendOvertureOperatorMessageBody,
     options?: { idempotencyKey?: string },
   ): Promise<OvertureMessage>;
+  listOvertureMessages(runId: string, query: OvertureEventQuery): Promise<readonly OvertureMessage[]>;
   listOvertureEvents(runId: string, query: OvertureEventQuery): Promise<readonly OvertureEvent[]>;
   streamOvertureEvents(runId: string, query: OvertureEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<OvertureEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;

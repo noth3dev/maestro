@@ -12,6 +12,7 @@ describe("Carnegie renderer API bridge", () => {
       "createOvertureRun",
       "getOvertureRun",
       "sendOvertureOperatorMessage",
+      "listOvertureMessages",
       "listOvertureEvents",
       "streamEvents",
     ])

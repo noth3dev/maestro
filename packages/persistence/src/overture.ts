@@ -621,6 +621,39 @@ export async function reviseOverturePlan(
   }
 }
 
+export async function readOvertureMessages(
+  queryable: Queryable,
+  runId: string,
+  projectId: string,
+  conversationId: string,
+  afterCursor = "0",
+): Promise<ReadonlyArray<OvertureMessage>> {
+  const boundary = await queryable.query("SELECT 1 FROM overture_runs WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3", [
+    runId,
+    projectId,
+    conversationId,
+  ]);
+  if (boundary.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
+  const result = await queryable.query<MessageRow>(
+    "SELECT message_id, run_id, conversation_id, project_id, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, created_at FROM overture_messages WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3 AND message_cursor > $4::bigint ORDER BY message_cursor ASC",
+    [runId, projectId, conversationId, afterCursor],
+  );
+  return result.rows.map((row) =>
+    OvertureMessageSchema.parse({
+      messageId: row.message_id,
+      runId: row.run_id,
+      conversationId: row.conversation_id,
+      projectId: row.project_id,
+      turnId: row.turn_id,
+      cursor: row.message_cursor,
+      actor: row.actor_kind === "role" ? row.actor_id : row.actor_kind,
+      modelRef: row.model_ref,
+      content: row.content,
+      createdAt: iso(row.created_at),
+    }),
+  );
+}
+
 export async function readOvertureEvents(
   queryable: Queryable,
   runId: string,

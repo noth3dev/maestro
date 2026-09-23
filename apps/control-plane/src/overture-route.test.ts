@@ -44,6 +44,7 @@ function service(): OvertureService {
       content: input.content,
       createdAt: "2026-09-23T00:00:00.000Z",
     }),
+    listMessages: async () => [],
     getRun: async () => run,
     listEvents: async () => [],
   };
@@ -113,6 +114,12 @@ describe("Overture routes", () => {
     });
     expect(message.statusCode).toBe(201);
     expect(message.json().actor).toBe("operator");
+    const messages = await fastify.inject({
+      method: "GET",
+      url: `/v1/overture/runs/${ids.runId}/messages?projectId=${ids.projectId}&conversationId=${ids.conversationId}&afterCursor=0`,
+    });
+    expect(messages.statusCode).toBe(200);
+    expect(messages.json()).toEqual([]);
     await fastify.close();
   });
 });

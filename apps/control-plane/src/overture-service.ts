@@ -6,6 +6,7 @@ import {
   assertProjectRole,
   createOvertureRun,
   readOvertureEvents,
+  readOvertureMessages,
   readOvertureRun,
   OvertureRunNotFoundError,
 } from "@maestro/persistence";
@@ -13,6 +14,13 @@ import {
 export interface OvertureService {
   createRun(input: CreateOvertureRunInput, operator: OperatorContext): Promise<OvertureRun>;
   appendOperatorMessage(input: AppendOvertureMessageInput, operator: OperatorContext): Promise<OvertureMessage>;
+  listMessages(
+    runId: string,
+    projectId: string,
+    conversationId: string,
+    afterCursor: string,
+    operator: OperatorContext,
+  ): Promise<readonly OvertureMessage[]>;
   getRun(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OvertureRun>;
   listEvents(
     runId: string,
@@ -37,6 +45,10 @@ export function createPostgresOvertureService(pool: Pool): OvertureService {
       await assertRole(operator, input.projectId);
       if (input.actor !== "operator" || input.modelRef !== null) throw new Error("Overture operator messages must be operator-authored");
       return appendOvertureMessage(pool, input);
+    },
+    async listMessages(runId, projectId, conversationId, afterCursor, operator) {
+      await assertRole(operator, projectId);
+      return readOvertureMessages(pool, runId, projectId, conversationId, afterCursor);
     },
     async getRun(runId, projectId, conversationId, operator) {
       await assertRole(operator, projectId);
