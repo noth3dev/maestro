@@ -11,6 +11,7 @@ import {
   bindOvertureRoleModel,
   createOvertureArtifact,
   createOvertureRun,
+  createOvertureOperatorTurn,
   openOvertureClarification,
   readOvertureArtifacts,
   markOvertureRunLaunchedForTaskContract,
@@ -201,6 +202,29 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       projectId,
       answer: "The connected repository",
       commandId: randomUUID(),
+    });
+    const answerCommandId = randomUUID();
+    const overtureTurn = await createOvertureOperatorTurn(pool, {
+      runId,
+      conversationId,
+      projectId,
+      content: "The connected repository",
+      commandId: answerCommandId,
+    });
+    expect(overtureTurn).toEqual({ turnId: answerCommandId, created: true });
+    await expect(
+      createOvertureOperatorTurn(pool, {
+        runId,
+        conversationId,
+        projectId,
+        content: "The connected repository",
+        commandId: answerCommandId,
+      }),
+    ).resolves.toEqual({ turnId: answerCommandId, created: false });
+    expect((await pool.query("SELECT role, status, content FROM conversation_turns WHERE turn_id = $1", [answerCommandId])).rows[0]).toMatchObject({
+      role: "user",
+      status: "accepted",
+      content: "The connected repository",
     });
     const plan00 = await reviseOverturePlan(pool, {
       runId,
