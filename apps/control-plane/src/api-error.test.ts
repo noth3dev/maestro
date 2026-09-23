@@ -4,6 +4,7 @@ import { EnsembleRoutingShortfallError } from "./ensemble-admission.js";
 import { mapError } from "./api-error.js";
 import { OvertureRunNotFoundError } from "@maestro/persistence";
 import { OvertureProviderUnavailableError } from "./overture-role-turn.js";
+import { TaskContractOrchestrationUnavailableError } from "./task-contract-service.js";
 
 describe("Control Plane provider diagnostics", () => {
   it("surfaces local Codex spawn detail without changing provider_unavailable", () => {
@@ -54,6 +55,15 @@ describe("Ensemble routing shortfall diagnostics", () => {
           },
         },
       },
+    });
+  });
+});
+
+describe("Task Contract launch diagnostics", () => {
+  it("maps unavailable Goal orchestration to a stable service-unavailable response", () => {
+    expect(mapError(new TaskContractOrchestrationUnavailableError("Task Contract launch orchestration is not configured"))).toEqual({
+      status: 503,
+      body: { error: { code: "task_contract_orchestration_unavailable", message: "Task Contract launch orchestration is not configured" } },
     });
   });
 });

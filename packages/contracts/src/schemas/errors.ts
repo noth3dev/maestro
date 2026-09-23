@@ -42,6 +42,7 @@ export const StableApiErrorCodeSchema = z.enum([
   "task_contract_version_conflict",
   "exact_confirmation_required",
   "task_contract_integrity_error",
+  "task_contract_orchestration_unavailable",
   "discord_signal_rejected",
   "worker_capacity_exceeded",
   "worker_message_rejected",

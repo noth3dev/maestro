@@ -68,6 +68,7 @@ import {
   TaskContractProjectBoundaryError,
   TaskContractProjectMismatchError,
   TaskContractVersionConflictError,
+  TaskContractOrchestrationUnavailableError,
 } from "./task-contract-service.js";
 import { HeadGoalNotFoundError, HeadProjectMismatchError, HeadContractMismatchError } from "./head-participation-service.js";
 import { CouncilContractMismatchError, CouncilGoalNotFoundError, CouncilProjectMismatchError } from "./council-service.js";
@@ -194,6 +195,8 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof ConversationConflictError) return apiError(409, "conversation_conflict", error.message);
   if (error instanceof ConversationModelNotAllowedError) return apiError(400, "model_not_allowed", "Requested model is not allowed");
   if (error instanceof ConversationUnavailableError) return apiError(503, "conversation_unavailable", error.message);
+  if (error instanceof TaskContractOrchestrationUnavailableError)
+    return apiError(503, "task_contract_orchestration_unavailable", error.message);
   if (error instanceof TaskContractIntegrityError || error instanceof GoalTaskContractIntegrityError)
     return apiError(503, "task_contract_integrity_error", error.message);
   if (error instanceof TaskContractNotFoundError) return apiError(404, "task_contract_not_found", "Task Contract was not found");

@@ -209,3 +209,7 @@ Fresh unrestricted PostgreSQL verification after `5634e9d1` passed **441 files /
 ## Task 16 typed start_goal consumer (2026-09-24)
 
 **Status: Partial.** An opt-in control-plane loop now drains only explicitly typed `start_goal` outbox rows after startup reconciliation. It performs envelope/binding validation and owner-fenced delivery/retry, but intentionally does not activate Heads or create downstream hierarchy records. Focused verification passed **46 tests across 4 files** plus **10 main integration tests**; build/typecheck/lint/diff passed. E5 remains open.
+
+## Task 16 Launch error mapping (2026-09-24)
+
+**Status: Partial.** The missing `TaskContractOrchestrationUnavailableError` API mapping is now explicit and schema-allowlisted as HTTP 503 `task_contract_orchestration_unavailable`. API/contracts verification passed **20 tests across 2 files**; typecheck/build passed. Orchestration availability and downstream execution remain open.
