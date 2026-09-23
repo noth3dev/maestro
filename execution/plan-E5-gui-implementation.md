@@ -1352,3 +1352,6 @@ Task 13/15 follow-up at `f282458c`: active-route/mode semantics and rendered mar
 ## Task 14 final verification checkpoint (2026-09-23)
 
 The unrestricted real-PostgreSQL suite completed with **435 test files / 2,888 tests passed**, exit 0, in 1027.06s. The post-hardening focused gate completed with **6 files / 17 tests passed**. `npm run build`/workspace typecheck, migration numbering, Prettier, targeted ESLint, and `git diff --check` passed. The database sensitive-content trigger now covers the same provider-token, JWT, private-key, credential, and raw-model-output classes as the application boundary. Task 14 is ready for commit; Task 15 remains gated until that commit and review. Live E5 remains open because the real Home/provider path has not produced a Task Contract or downstream Goal/Worker evidence.
+
+
+**Provider admission probe (2026-09-24):** Native gateway startup succeeded with a probe token, but authenticated `/v1/models` returned `[]`. The gateway keychain metadata for `local-operator` was empty, and no provider API-key environment variables were present. The probe was stopped without provider execution. Live provider and downstream E5 evidence remain blocked.
