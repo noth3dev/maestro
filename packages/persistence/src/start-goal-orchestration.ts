@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import type { ValidatedStartGoalOrchestrationCommand } from "./commands.js";
 
 export type StartGoalOrchestrationState = "running" | "blocked" | "unknown" | "completed";
-export type StartGoalOrchestrationStage = "head_activation";
+export type StartGoalOrchestrationStage = "head_activation" | "council_creation";
 
 export type StartGoalOrchestrationInput = Omit<ValidatedStartGoalOrchestrationCommand, "actorId"> & {
   actorId: string | null;
@@ -26,6 +26,7 @@ export interface StartGoalOrchestrationStateInput {
   readonly goalId: string;
   readonly commandId: string;
   readonly eventKey: string;
+  readonly stage?: StartGoalOrchestrationStage;
   readonly state: StartGoalOrchestrationState;
   readonly reason: string;
   readonly details?: Record<string, unknown>;
@@ -105,6 +106,7 @@ export async function beginStartGoalOrchestration(
         goalId: input.goalId,
         commandId: input.commandId,
         eventKey: `${input.commandId}:started`,
+        stage: "head_activation",
         state: "running",
         reason: "start_goal claimed",
       });
@@ -135,13 +137,14 @@ export async function recordStartGoalOrchestrationState(
     const row = current.rows[0];
     if (current.rowCount !== 1 || row === undefined || row.start_command_id !== input.commandId)
       throw new StartGoalOrchestrationBindingError();
-    const historyInserted = await appendHistory(client, input);
+    const stage = input.stage ?? row.stage;
+    const historyInserted = await appendHistory(client, { ...input, stage });
     const terminal = row.state === "blocked" || row.state === "unknown" || row.state === "completed";
     if (terminal && historyInserted) throw new StartGoalOrchestrationBindingError();
     if (!terminal) {
       await client.query(
-        `UPDATE goal_orchestration_runs SET state = $2, reason = $3, updated_at = transaction_timestamp() WHERE goal_id = $1`,
-        [input.goalId, input.state, input.reason],
+        `UPDATE goal_orchestration_runs SET stage = $2, state = $3, reason = $4, updated_at = transaction_timestamp() WHERE goal_id = $1`,
+        [input.goalId, stage, input.state, input.reason],
       );
     }
     const updated = await client.query<RunRow>(
@@ -168,23 +171,26 @@ export async function readStartGoalOrchestration(pool: Queryable, goalId: string
   return result.rows[0] === undefined ? undefined : toRun(result.rows[0]!);
 }
 
-async function appendHistory(client: PoolClient, input: StartGoalOrchestrationStateInput): Promise<boolean> {
+async function appendHistory(
+  client: PoolClient,
+  input: StartGoalOrchestrationStateInput & { readonly stage: StartGoalOrchestrationStage },
+): Promise<boolean> {
   const details = JSON.stringify(input.details ?? {});
   const inserted = await client.query(
     `INSERT INTO goal_orchestration_history
       (history_id, goal_id, command_id, event_key, stage, state, reason, details)
-     VALUES ($1, $2, $3, $4, 'head_activation', $5, $6, $7::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
      ON CONFLICT (goal_id, event_key) DO NOTHING
      RETURNING history_id`,
-    [randomUUID(), input.goalId, input.commandId, input.eventKey, input.state, input.reason, details],
+    [randomUUID(), input.goalId, input.commandId, input.eventKey, input.stage, input.state, input.reason, details],
   );
   if (inserted.rowCount === 1) return true;
   const exact = await client.query(
     `SELECT 1
        FROM goal_orchestration_history
-      WHERE goal_id = $1 AND event_key = $2 AND command_id = $3 AND stage = 'head_activation'
-        AND state = $4 AND reason = $5 AND details = $6::jsonb`,
-    [input.goalId, input.eventKey, input.commandId, input.state, input.reason, details],
+      WHERE goal_id = $1 AND event_key = $2 AND command_id = $3 AND stage = $4
+        AND state = $5 AND reason = $6 AND details = $7::jsonb`,
+    [input.goalId, input.eventKey, input.commandId, input.stage, input.state, input.reason, details],
   );
   if (exact.rowCount !== 1) throw new StartGoalOrchestrationBindingError();
   return false;

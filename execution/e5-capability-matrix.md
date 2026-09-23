@@ -235,3 +235,8 @@ Run 11 was not green: **441 files / 2,941 passed of 2,942 tests**, exit 1, durat
 ## Task 16 regression runs 13–14
 
 Run 13 was non-green (**445 files / 2,952 tests**, 5 failures, exit 1, **1034.66s**) because it began before the final hardening, surface snapshot updates, and persistence fixture update. Fresh run 14 after those changes passed **446 files / 2,954 tests**, exit 0, **949.77s** (`/tmp/maestro-full-test-14.log`). This confirms automated regression only; live downstream evidence and E5 acceptance remain open.
+
+
+## Task 16 Council-creation handoff and run 15
+
+**Status: Partial.** The controller now durably creates the first Head Council after explicit Head activation and replays without a duplicate. Focused verification passed **12 files / 70 tests**; fresh PostgreSQL `npm test` passed **446 files / 2,956 tests**, exit 0, duration **945.94s** (`/tmp/maestro-full-test-15.log`). Brief submission/reveal/decision and live provider/downstream acceptance remain open.

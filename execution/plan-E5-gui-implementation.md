@@ -1457,3 +1457,10 @@ The next bounded slice adds an optional, explicit, content-hash-bound `headActiv
 Run 13 ended non-green: **445 test files / 2,952 tests**, with 5 failures, exit 1, duration **1034.66s** (`/tmp/maestro-full-test-13.log`). It was started before the final hardening and before the three public surface snapshots and persistence fixture were updated; its failures were the stale snapshots, the pre-hardening hash assertion, and the pre-binding-fixture replay test.
 
 Fresh unrestricted PostgreSQL run 14 after all hardening and snapshot updates passed **446 test files / 2,954 tests**, exit 0, duration **949.77s** (`/tmp/maestro-full-test-14.log`). This is automated evidence only. No live provider, downstream Council/DepartmentPlan/MissionBundle/Worker execution, certification, report, external-effect, or E5 completion is claimed; E6 remains gated.
+
+
+## Task 16 Council-creation handoff and regression run 15 (2026-09-24)
+
+After all explicit Heads reach durable `active`, the bounded controller now creates exactly one Head Council through the existing lease-bound `CouncilService.create` seam. The orchestration run advances to `council_creation`; Council briefs, reveal, decision, Department Plans, Mission Bundles, Workers, and later stages remain separate and are not inferred. Migration `0110_council_creation_orchestration_stage.sql` widens the append-only stage checks. Stable Council command identity derives from the original start command and Goal.
+
+Focused verification passed **12 files / 70 tests**. Fresh unrestricted PostgreSQL run 15 passed **446 test files / 2,956 tests**, exit 0, duration **945.94s** (`/tmp/maestro-full-test-15.log`). This is automated evidence only; no live provider, downstream brief/reveal/decision, worker, certification, report, external effect, or E5 completion is claimed.

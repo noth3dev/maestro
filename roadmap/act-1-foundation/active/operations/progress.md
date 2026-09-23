@@ -4986,3 +4986,10 @@ Verification: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/ma
 - Run 13 ended non-green before the final hardening: **445 files / 2,952 tests**, 5 failures, exit 1, **1034.66s**.
 - Fresh unrestricted PostgreSQL run 14 after hardening and snapshot/fixture updates passed **446 files / 2,954 tests**, exit 0, **949.77s** (`/tmp/maestro-full-test-14.log`).
 - E5 remains partial and E6 remains archival/gated. This proves automated local behavior only; no live provider, downstream Council/Worker, certification, report, or external-effect evidence is claimed.
+
+
+## Task 16 Council-creation handoff — 2026-09-24
+
+- Added the next bounded post-Head stage: after all explicit Heads are durably active, the controller creates the Goal-bound Head Council through the existing `CouncilService.create` path, persists `council_creation`, and replays without duplicate creation. Brief submission, reveal, decision, and later execution remain untouched.
+- Added migration 0110 to widen orchestration stage checks and deterministic Council creation command identity. Focused verification passed **12 files / 70 tests**; build/lint/migration/boundary checks pass.
+- Fresh unrestricted PostgreSQL run 15 passed **446 files / 2,956 tests**, exit 0, **945.94s** (`/tmp/maestro-full-test-15.log`). E5 remains partial; no live provider or downstream evidence is claimed.

@@ -231,6 +231,7 @@ describe("domain surface", () => {
         "decisionPacketContentHash",
         "declareTaskDemand",
         "departmentPlanSubstanceContentHash",
+        "deriveCouncilCreationCommandId",
         "deriveDiscordIncidentFingerprint",
         "deriveHeadActivationCommandId",
         "deriveMissionPersonaOverlay",

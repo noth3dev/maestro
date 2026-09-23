@@ -250,6 +250,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     pool,
     goalService,
     headParticipationService,
+    councilService,
   });
   const startGoalOutboxLoop =
     config.startGoalOutboxIntervalMs === undefined

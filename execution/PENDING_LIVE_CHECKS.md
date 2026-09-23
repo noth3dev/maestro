@@ -87,3 +87,6 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 - [x] **Task 16 run 13 investigation (2026-09-24):** non-green because the run started before the final hardening and surface snapshot/persistence-fixture updates: **445 files / 2,952 tests**, 5 failures, exit 1, **1034.66s** (`/tmp/maestro-full-test-13.log`).
 
 - [ ] **Task 16 fresh run 14 (2026-09-24):** unrestricted PostgreSQL `npm test` passed **446 files / 2,954 tests**, exit 0, **949.77s** (`/tmp/maestro-full-test-14.log`). Automated gates are green; live provider, downstream stage, certification/report, and E5 acceptance evidence remain pending.
+
+
+- [ ] **Task 16 Council-creation handoff (2026-09-24):** automated focused coverage passes for stage widening, stable Council command identity, durable Council creation after active Heads, and replay without duplication. Run 15 passed **446 files / 2,956 tests**, exit 0, **945.94s** (`/tmp/maestro-full-test-15.log`). Live provider, sealed Head briefs, reveal/decision, downstream execution, certification/report, and E5 acceptance remain pending.

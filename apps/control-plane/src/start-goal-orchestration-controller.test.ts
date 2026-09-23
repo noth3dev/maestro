@@ -113,9 +113,13 @@ describe("start-goal orchestration controller", () => {
       record,
       goalService: { getGoal, transitionGoal },
       headParticipationService: { activate },
+      councilService: { create: vi.fn(async () => ({ councilId: "council-1" })) },
     } as never);
 
-    await expect(controller.execute({ ...commandBase, headActivationPlan: plan })).resolves.toMatchObject({ state: "completed" });
+    await expect(controller.execute({ ...commandBase, headActivationPlan: plan })).resolves.toMatchObject({
+      state: "completed",
+      stage: "council_creation",
+    });
     expect(begin).toHaveBeenCalledWith(undefined, expect.objectContaining({ headActivationPlanHash: plan.contentHash }), plan.contentHash);
     expect(transitionGoal).toHaveBeenCalledTimes(3);
     expect(transitionGoal.mock.calls.map((call) => call[1].to)).toEqual(["ready_for_confirmation", "launched", "active"]);
@@ -125,6 +129,9 @@ describe("start-goal orchestration controller", () => {
       expect.objectContaining({ operatorId: "operator-1" }),
       deriveHeadActivationCommandId(commandBase.commandId, "product"),
     );
-    expect(record).toHaveBeenLastCalledWith(undefined, expect.objectContaining({ state: "completed", reason: "head_activation_complete" }));
+    expect(record).toHaveBeenLastCalledWith(
+      undefined,
+      expect.objectContaining({ state: "completed", stage: "council_creation", reason: "council_created" }),
+    );
   });
 });

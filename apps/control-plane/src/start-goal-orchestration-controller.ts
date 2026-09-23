@@ -1,8 +1,9 @@
 import type { HeadParticipationInput } from "@maestro/contracts";
-import { deriveHeadActivationCommandId } from "@maestro/domain";
+import { deriveCouncilCreationCommandId, deriveHeadActivationCommandId } from "@maestro/domain";
 import type { Pool } from "pg";
 import {
   beginStartGoalOrchestration,
+  CouncilProtocolError,
   recordStartGoalOrchestrationState,
   type ValidatedStartGoalOrchestrationCommand,
   type StartGoalOrchestrationRun,
@@ -10,11 +11,13 @@ import {
 } from "@maestro/persistence";
 import type { GoalService } from "./goal-service.js";
 import type { HeadParticipationService } from "./head-participation-service.js";
+import type { CouncilService } from "./council-service.js";
 
 export interface StartGoalOrchestrationControllerDependencies {
   pool: Pool;
   goalService: Pick<GoalService, "getGoal" | "transitionGoal">;
   headParticipationService: Pick<HeadParticipationService, "activate">;
+  councilService: Pick<CouncilService, "create">;
   begin?: typeof beginStartGoalOrchestration;
   record?: typeof recordStartGoalOrchestrationState;
 }
@@ -61,6 +64,7 @@ export function createStartGoalOrchestrationController(
           state: "blocked",
           reason: "missing_head_activation_plan",
         });
+      if (run.stage === "council_creation") return createCouncil(run, command, plan, deps, record);
 
       try {
         let goal = await deps.goalService.getGoal(command.goalId, command.projectId);
@@ -107,14 +111,16 @@ export function createStartGoalOrchestrationController(
           );
           if (participation.status !== "active") throw new Error("Head activation outcome is not yet durable active");
         }
-        return transitionState(run, record, deps.pool, {
+        const councilRun = await transitionState(run, record, deps.pool, {
           goalId: command.goalId,
           commandId: command.commandId,
           eventKey: `${command.commandId}:head-activation-complete`,
-          state: "completed",
+          stage: "council_creation",
+          state: "running",
           reason: "head_activation_complete",
-          details: { stage: "head_activation", nextStage: "council_pending" },
+          details: { stage: "head_activation", nextStage: "council_creation" },
         });
+        return createCouncil(councilRun, command, plan, deps, record);
       } catch (error) {
         if (error instanceof BlockedStartGoalError)
           return transitionState(run, record, deps.pool, {
@@ -136,12 +142,53 @@ export function createStartGoalOrchestrationController(
   };
 }
 
+async function createCouncil(
+  run: StartGoalOrchestrationRun,
+  command: ValidatedStartGoalOrchestrationCommand,
+  plan: NonNullable<ValidatedStartGoalOrchestrationCommand["headActivationPlan"]>,
+  deps: StartGoalOrchestrationControllerDependencies,
+  record: typeof recordStartGoalOrchestrationState,
+): Promise<StartGoalOrchestrationRun> {
+  const operator = { operatorId: command.actorId!, credentialId: "start-goal-orchestrator" };
+  try {
+    const council = await deps.councilService.create(
+      command.goalId,
+      {
+        projectId: command.projectId,
+        contractId: command.taskContractId,
+        briefDeadline: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
+        evidence: { headActivationPlanHash: plan.contentHash, evidenceReferences: [] },
+      },
+      deriveCouncilCreationCommandId(command.commandId, command.goalId),
+      operator,
+    );
+    return transitionState(run, record, deps.pool, {
+      goalId: command.goalId,
+      commandId: command.commandId,
+      eventKey: `${command.commandId}:council-created`,
+      stage: "council_creation",
+      state: "completed",
+      reason: "council_created",
+      details: { councilId: council.councilId, nextStage: "briefs_pending" },
+    });
+  } catch (error) {
+    return transitionState(run, record, deps.pool, {
+      goalId: command.goalId,
+      commandId: command.commandId,
+      eventKey: `${command.commandId}:council-blocked`,
+      stage: "council_creation",
+      state: error instanceof CouncilProtocolError ? "blocked" : "unknown",
+      reason: error instanceof CouncilProtocolError ? "council_creation_blocked" : "council_creation_outcome_unknown",
+    });
+  }
+}
+
 async function transitionState(
   run: StartGoalOrchestrationRun,
   record: typeof recordStartGoalOrchestrationState,
   pool: Pool,
   input: StartGoalOrchestrationStateInput,
 ): Promise<StartGoalOrchestrationRun> {
-  await record(pool, input);
-  return { ...run, state: input.state, reason: input.reason };
+  const recorded = await record(pool, input);
+  return recorded ?? { ...run, stage: input.stage ?? run.stage, state: input.state, reason: input.reason };
 }

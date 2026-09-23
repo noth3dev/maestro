@@ -22,6 +22,17 @@ export interface HeadActivationPlan extends HeadActivationPlanInput {
 }
 
 /** Stable UUID-shaped command identity for one explicit department brief. */
+/** Stable UUID-shaped command identity for creating the Goal's Head Council. */
+export function deriveCouncilCreationCommandId(startCommandId: string, goalId: string): string {
+  if (startCommandId.trim() === "" || goalId.trim() === "")
+    throw new InvalidHeadActivationPlanError("Council command identity is required");
+  const digest = createHash("sha256").update(`maestro:start_goal:council:${startCommandId}:${goalId}`, "utf8").digest();
+  digest[6] = (digest[6]! & 0x0f) | 0x50;
+  digest[8] = (digest[8]! & 0x3f) | 0x80;
+  const hex = digest.subarray(0, 16).toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function deriveHeadActivationCommandId(startCommandId: string, departmentId: string): string {
   if (startCommandId.trim() === "" || departmentId.trim() === "")
     throw new InvalidHeadActivationPlanError("Head activation command identity is required");

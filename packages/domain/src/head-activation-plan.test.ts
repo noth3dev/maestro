@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertValidHeadActivationPlan,
   createHeadActivationPlan,
+  deriveCouncilCreationCommandId,
   headActivationPlanContentHash,
   type HeadActivationPlanInput,
 } from "./head-activation-plan.js";
@@ -40,5 +41,12 @@ describe("Head activation plan", () => {
 
   it("rejects a plan that omits an explicit activation brief", () => {
     expect(() => assertValidHeadActivationPlan({ version: 1, departments: [] })).toThrow("department");
+  });
+
+  it("derives a stable Council creation command identity from the start command and Goal", () => {
+    const first = deriveCouncilCreationCommandId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(first).toBe(deriveCouncilCreationCommandId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"));
+    expect(first).not.toBe(deriveCouncilCreationCommandId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "cccccccc-cccc-4ccc-8ccc-cccccccccccc"));
   });
 });

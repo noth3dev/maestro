@@ -84,6 +84,61 @@ describeDatabase("start_goal orchestration controller", () => {
     ]);
   });
 
+  it("creates one Council after all explicit Heads are active and replays without duplication", async () => {
+    const plan = createHeadActivationPlan({
+      version: 1,
+      departments: [
+        {
+          departmentId: "product",
+          requestedContribution: "boundary",
+          urgency: "normal",
+          contextScope: ["contract"],
+          budgetEffect: "none",
+          reason: "needed",
+        },
+      ],
+    });
+    const input = command(plan);
+    await seed(input, plan);
+    const activations: string[] = [];
+    const councils: string[] = [];
+    const goalService = {
+      getGoal: async () => ({ goalId, projectId, contractId: taskContractId, state: "active" as const, version: 4 }),
+      transitionGoal: async () => {
+        throw new Error("active Goal must not transition");
+      },
+    };
+    const headParticipationService = {
+      activate: async (_goalId: string, _input: unknown, _operator: unknown, commandId: string) => {
+        activations.push(commandId);
+        return {
+          goalId,
+          departmentId: "product",
+          headRoleId: "head:product",
+          contractId: taskContractId,
+          contextId: null,
+          status: "active" as const,
+          activeSessionRef: "session-1",
+        };
+      },
+    };
+    const councilService = {
+      create: async (_goalId: string, _input: unknown, commandId: string) => {
+        councils.push(commandId);
+        return { councilId: "council-1" } as never;
+      },
+    };
+    const controller = createStartGoalOrchestrationController({ pool, goalService, headParticipationService, councilService } as never);
+
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
+    expect(activations).toEqual([expect.any(String)]);
+    expect(councils).toHaveLength(1);
+    expect((await pool.query("SELECT stage, state, reason FROM goal_orchestration_runs WHERE goal_id = $1", [goalId])).rows).toEqual([
+      { stage: "council_creation", state: "completed", reason: "council_created" },
+    ]);
+  });
+
   it("advances the lifecycle, activates explicit departments, and replays without duplicate effects", async () => {
     const plan = createHeadActivationPlan({
       version: 1,
@@ -131,14 +186,19 @@ describeDatabase("start_goal orchestration controller", () => {
         };
       },
     };
-    const controller = createStartGoalOrchestrationController({ pool, goalService, headParticipationService } as never);
+    const controller = createStartGoalOrchestrationController({
+      pool,
+      goalService,
+      headParticipationService,
+      councilService: { create: async () => ({ councilId: "council-1" }) },
+    } as never);
 
-    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed" });
-    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
     expect(transitions).toEqual(["ready_for_confirmation", "launched", "active"]);
     expect(activations).toEqual([deriveHeadActivationCommandId(input.commandId, "product")]);
     expect((await pool.query("SELECT state, reason FROM goal_orchestration_runs WHERE goal_id = $1", [goalId])).rows).toEqual([
-      { state: "completed", reason: "head_activation_complete" },
+      { state: "completed", reason: "council_created" },
     ]);
   });
 });
