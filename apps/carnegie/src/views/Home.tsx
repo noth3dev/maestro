@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { OvertureEvent, OvertureMessage, OverturePlanManifest, OvertureRun, TaskContract } from "@maestro/contracts";
+import type { ModelCatalogEntry, OvertureEvent, OvertureMessage, OverturePlanManifest, OvertureRun, TaskContract } from "@maestro/contracts";
 import { Icon } from "../icons.js";
+import { ReasoningDial, defaultReasoningEffort } from "../components/ReasoningDial.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import type { ViewName } from "../views.js";
@@ -16,6 +17,7 @@ import {
   updateTaskContractDraft,
 } from "../lib/task-contract-authoring.js";
 import { loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
+import { modelRef, readSavedConcertmasterModelRef, resolveDefaultModelRef, saveConcertmasterModelRef, sortLiveModels } from "../lib/concertmaster-model.js";
 
 const overtureRoles = [
   "conversation-lead",
@@ -98,6 +100,11 @@ export function Home({
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [conversationProjectId, setConversationProjectId] = useState<string | undefined>(undefined);
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
+  const [concertmasterModels, setConcertmasterModels] = useState<readonly ModelCatalogEntry[]>([]);
+  const [concertmasterModelRef, setConcertmasterModelRef] = useState<string | undefined>(undefined);
+  const [concertmasterReasoningEffort, setConcertmasterReasoningEffort] = useState<string | undefined>(undefined);
+  const [concertmasterModelsLoading, setConcertmasterModelsLoading] = useState(false);
+  const [concertmasterModelsError, setConcertmasterModelsError] = useState<string | undefined>(undefined);
   const [turnStatus, setTurnStatus] = useState<"idle" | "loading" | "completed" | "failed" | "cancelled" | "unknown">("idle");
   const [intakeMessage, setIntakeMessage] = useState<string | undefined>(undefined);
   const [draftForm, setDraftForm] = useState<DraftForm | undefined>(undefined);
@@ -127,6 +134,7 @@ export function Home({
   const isFlashmob = mode === "flashmob";
   const dirty = draft !== undefined && draftForm !== undefined && JSON.stringify(draftForm) !== JSON.stringify(formFromContract(draft));
   const draftPhase = draft === undefined ? undefined : getTaskContractPhase(draft, confirmed, draftRejected);
+  const selectedConcertmasterModel = concertmasterModels.find((model) => modelRef(model) === concertmasterModelRef);
   const projectId = config?.projectId;
   const showConversationState = conversationId !== undefined || conversationMessages.length > 0 || turnStatus !== "idle";
 
@@ -160,6 +168,37 @@ export function Home({
     setOvertureError(undefined);
     setError(undefined);
   }, [projectId]);
+
+  useEffect(() => {
+    if (projectId === undefined) return;
+    let current = true;
+    setConcertmasterModelsLoading(true);
+    setConcertmasterModelsError(undefined);
+    void window.maestro.api
+      .listModels()
+      .then((models) => {
+        if (!current) return;
+        const sorted = sortLiveModels(models);
+        setConcertmasterModels(sorted);
+        const saved = readSavedConcertmasterModelRef(projectId);
+        const selected = resolveDefaultModelRef(sorted, saved);
+        setConcertmasterModelRef(selected);
+        if (selected === undefined) setConcertmasterModelsError("No live Concertmaster models are available.");
+      })
+      .catch((cause) => {
+        if (current) setConcertmasterModelsError(cause instanceof Error ? cause.message : "Could not load live Concertmaster models.");
+      })
+      .finally(() => {
+        if (current) setConcertmasterModelsLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    setConcertmasterReasoningEffort(defaultReasoningEffort(selectedConcertmasterModel));
+  }, [selectedConcertmasterModel]);
 
   useEffect(() => {
     if (projectId === undefined || conversationId === undefined || conversationProjectId !== projectId) return;
@@ -425,6 +464,8 @@ export function Home({
         projectId: config.projectId,
         text: submittedText,
         selectedGoalId,
+        ...(conversationId === undefined && concertmasterModelRef !== undefined ? { modelRef: concertmasterModelRef } : {}),
+        ...(conversationId === undefined && concertmasterReasoningEffort !== undefined ? { reasoningEffort: concertmasterReasoningEffort } : {}),
         ...(conversationId === undefined ? {} : { conversationId }),
         onConversationCreated: (createdConversationId) => {
           setConversationId(createdConversationId);
@@ -616,6 +657,42 @@ export function Home({
           aria-describedby={isFlashmob ? "home-flashmob-hint" : undefined}
         />
         <div className="home-composer-row">
+          <div className="home-model-picker">
+            <label htmlFor="home-concertmaster-model">Concertmaster model</label>
+            <select
+              id="home-concertmaster-model"
+              value={concertmasterModelRef ?? ""}
+              disabled={isFlashmob || busy || conversationId !== undefined || concertmasterModelsLoading || concertmasterModels.length === 0}
+              onChange={(event) => {
+                const next = event.target.value;
+                setConcertmasterModelRef(next === "" ? undefined : next);
+                if (projectId !== undefined && next !== "") saveConcertmasterModelRef(projectId, next);
+                setConcertmasterReasoningEffort(defaultReasoningEffort(concertmasterModels.find((model) => modelRef(model) === next)));
+              }}
+              aria-describedby="home-concertmaster-model-hint"
+            >
+              {concertmasterModelRef === undefined && (
+                <option value="" disabled>
+                  {concertmasterModelsLoading ? "loading models…" : (concertmasterModelsError ?? "no live models")}
+                </option>
+              )}
+              {concertmasterModels.map((model) => (
+                <option key={modelRef(model)} value={modelRef(model)}>
+                  {modelRef(model)}
+                </option>
+              ))}
+            </select>
+            <span id="home-concertmaster-model-hint" className="form-hint">
+              Choose the model for this new Concertmaster conversation.
+            </span>
+          </div>
+          <ReasoningDial
+            model={selectedConcertmasterModel}
+            value={concertmasterReasoningEffort}
+            onChange={setConcertmasterReasoningEffort}
+            disabled={isFlashmob || busy || conversationId !== undefined}
+            id="home-reasoning-effort"
+          />
           <div className="pill-toggle" role="group" aria-label="Home mode">
             <button
               type="button"
@@ -637,7 +714,7 @@ export function Home({
           <button
             className={`btn btn-primary btn-sm home-send-btn${isFlashmob ? " mode-flashmob" : ""}`}
             style={{ marginLeft: "auto" }}
-            disabled={isFlashmob || busy || text.trim() === ""}
+            disabled={isFlashmob || busy || text.trim() === "" || concertmasterModelRef === undefined}
             type="submit"
           >
             {busy && draft === undefined ? "saving…" : "send"} <Icon name="send" style={{ width: 12, height: 12 }} />

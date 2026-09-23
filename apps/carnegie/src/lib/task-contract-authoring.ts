@@ -48,6 +48,8 @@ export async function submitGoalLessBrief(
     projectId: string;
     text: string;
     goalId?: string;
+    modelRef?: string;
+    reasoningEffort?: string;
     conversationId?: string;
     onConversationCreated?: (conversationId: string) => void;
   },
@@ -57,11 +59,19 @@ export async function submitGoalLessBrief(
 
   let conversationId = input.conversationId;
   if (conversationId === undefined) {
-    const selected = (await api.listModels())[0];
-    if (selected === undefined) throw new Error("No Concertmaster model is available");
+    const models = await api.listModels();
+    const selected =
+      input.modelRef === undefined
+        ? models[0]
+        : models.find((candidate) => `${candidate.identity.provider}/${candidate.identity.id}` === input.modelRef);
+    if (selected === undefined) {
+      throw new Error(input.modelRef === undefined ? "No Concertmaster model is available" : "Selected Concertmaster model is no longer available");
+    }
     const model = `${selected.identity.provider}/${selected.identity.id}`;
+    if (input.reasoningEffort !== undefined && !selected.reasoningEfforts?.supported.includes(input.reasoningEffort))
+      throw new Error("Selected thinking strength is no longer available for this model");
     const conversation = await api.createConversation(
-      { projectId: input.projectId, goalId: input.goalId ?? null, model },
+      { projectId: input.projectId, goalId: input.goalId ?? null, model, ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }) },
       { idempotencyKey: globalThis.crypto.randomUUID() },
     );
     conversationId = conversation.conversationId;
@@ -143,6 +153,8 @@ export async function submitHomeBrief(
     projectId: string;
     text: string;
     selectedGoalId: string | undefined;
+    modelRef?: string;
+    reasoningEffort?: string;
     conversationId?: string;
     onConversationCreated?: (conversationId: string) => void;
   },
@@ -151,6 +163,8 @@ export async function submitHomeBrief(
     projectId: input.projectId,
     text: input.text,
     ...(input.selectedGoalId === undefined ? {} : { goalId: input.selectedGoalId }),
+    ...(input.modelRef === undefined ? {} : { modelRef: input.modelRef }),
+    ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
     ...(input.conversationId === undefined ? {} : { conversationId: input.conversationId }),
     ...(input.onConversationCreated === undefined ? {} : { onConversationCreated: input.onConversationCreated }),
   });

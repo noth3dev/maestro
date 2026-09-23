@@ -40,6 +40,19 @@ function fakeApi(): TaskContractAuthoringApi {
 }
 
 describe("task contract authoring", () => {
+  it("creates a new Concertmaster conversation with the selected live model", async () => {
+    const api = {
+      listModels: vi.fn(async () => [
+        { identity: { provider: "openai-codex", id: "gpt-a" }, capabilities: ["text"], authModes: ["managed-subscription"], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } },
+        { identity: { provider: "openai-codex", id: "gpt-b" }, capabilities: ["text"], authModes: ["managed-subscription"], reasoningEfforts: { supported: ["low", "high"], default: "high" }, dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: [] } },
+      ]),
+      createConversation: vi.fn(async () => ({ conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId: null, model: "openai-codex/gpt-b", status: "active" as const, version: 1 })),
+      sendConversationTurn: vi.fn(async () => ({ conversation: { conversationId: "44444444-4444-4444-8444-444444444444", projectId, goalId: null, model: "openai-codex/gpt-b", status: "succeeded" as const, version: 2 }, turn: { turnId: "55555555-5555-4555-8555-555555555555", conversationId: "44444444-4444-4444-8444-444444444444", role: "assistant" as const, content: "selected", status: "completed" as const, cursor: "1", createdAt: "2026-09-16T00:00:00.000Z" } })),
+    };
+    await submitHomeBrief(api, { projectId, text: "use the selected model", selectedGoalId: undefined, modelRef: "openai-codex/gpt-b", reasoningEffort: "low" });
+    expect(api.createConversation).toHaveBeenCalledWith({ projectId, goalId: null, model: "openai-codex/gpt-b", reasoningEffort: "low" }, expect.objectContaining({ idempotencyKey: expect.any(String) }));
+  });
+
   it("turns a brief into a schema-valid project-bound draft", () => {
     const draft = buildTaskContractDraft(projectId, "  Ship the pricing copy safely  ");
 

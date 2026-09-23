@@ -4,11 +4,13 @@ import { useConnection } from "../connection.js";
 import { useGoalDetail } from "../useGoalDetail.js";
 import { useGoals } from "../goals.js";
 import type { InboxRead } from "@maestro/api-client";
-import type { CapabilitySession } from "@maestro/contracts";
+import type { CapabilitySession, ModelCatalogEntry } from "@maestro/contracts";
 import type { ViewName } from "../views.js";
 import { Approvals, type WorkerDecisionProjection } from "./Approvals.js";
 import { loadInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
 import { groupInboxItems, requestCriticalAction, selectFullAccessMode, type ApprovalDiscussionProjection } from "../lib/approval-data.js";
+import { ReasoningDial, defaultReasoningEffort } from "../components/ReasoningDial.js";
+import { modelRef, readSavedConcertmasterModelRef, resolveDefaultModelRef, saveConcertmasterModelRef, sortLiveModels } from "../lib/concertmaster-model.js";
 
 export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) {
   const { config } = useConnection();
@@ -18,7 +20,34 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [discussion, setDiscussion] = useState<ApprovalDiscussionProjection[]>([]);
+  const [concertmasterModels, setConcertmasterModels] = useState<readonly ModelCatalogEntry[]>([]);
+  const [concertmasterModelRef, setConcertmasterModelRef] = useState<string | undefined>(undefined);
+  const [concertmasterReasoningEffort, setConcertmasterReasoningEffort] = useState<string | undefined>(undefined);
+  const [concertmasterModelsError, setConcertmasterModelsError] = useState<string | undefined>(undefined);
   const [fullAccessSession, setFullAccessSession] = useState<CapabilitySession | undefined>(undefined);
+
+  const selectedConcertmasterModel = concertmasterModels.find((model) => modelRef(model) === concertmasterModelRef);
+
+  useEffect(() => {
+    if (config === undefined) return;
+    let current = true;
+    setConcertmasterModelsError(undefined);
+    void window.maestro.api.listModels().then((models) => {
+      if (!current) return;
+      const sorted = sortLiveModels(models);
+      setConcertmasterModels(sorted);
+      const selected = resolveDefaultModelRef(sorted, readSavedConcertmasterModelRef(config.projectId));
+      setConcertmasterModelRef(selected);
+      if (selected === undefined) setConcertmasterModelsError("No live Concertmaster models are available.");
+    }).catch((cause) => {
+      if (current) setConcertmasterModelsError(cause instanceof Error ? cause.message : "Could not load live Concertmaster models.");
+    });
+    return () => { current = false; };
+  }, [config]);
+
+  useEffect(() => {
+    setConcertmasterReasoningEffort(defaultReasoningEffort(selectedConcertmasterModel));
+  }, [selectedConcertmasterModel]);
 
   const refresh = () => {
     if (config === undefined) return;
@@ -55,6 +84,8 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
       projectId: config.projectId,
       goalId: item.goalId,
       text,
+      ...(previous === undefined && concertmasterModelRef !== undefined ? { modelRef: concertmasterModelRef } : {}),
+      ...(previous === undefined && concertmasterReasoningEffort !== undefined ? { reasoningEffort: concertmasterReasoningEffort } : {}),
       ...(previous === undefined ? {} : { conversationId: previous.conversationId }),
     });
     const next: ApprovalDiscussionProjection = {
@@ -84,6 +115,26 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
         <div className="dash-kicker">operations</div>
         <h1 className="dash-title">inbox</h1>
         <p className="dash-sub">Pending approvals across visible Goals; certifications for the selected Goal. Approvals, worker decisions, and scoped Concertmaster discussions come from durable project state.</p>
+        <div className="inbox-concertmaster-controls" aria-label="Concertmaster controls">
+          <div className="home-model-picker">
+            <label htmlFor="inbox-concertmaster-model">Concertmaster model</label>
+            <select
+              id="inbox-concertmaster-model"
+              value={concertmasterModelRef ?? ""}
+              disabled={concertmasterModels.length === 0}
+              onChange={(event) => {
+                const next = event.target.value;
+                setConcertmasterModelRef(next === "" ? undefined : next);
+                if (next !== "" && config !== undefined) saveConcertmasterModelRef(config.projectId, next);
+                setConcertmasterReasoningEffort(defaultReasoningEffort(concertmasterModels.find((model) => modelRef(model) === next)));
+              }}
+            >
+              {concertmasterModelRef === undefined && <option value="" disabled>{concertmasterModelsError ?? "loading models…"}</option>}
+              {concertmasterModels.map((model) => <option key={modelRef(model)} value={modelRef(model)}>{modelRef(model)}</option>)}
+            </select>
+          </div>
+          <ReasoningDial model={selectedConcertmasterModel} value={concertmasterReasoningEffort} onChange={setConcertmasterReasoningEffort} id="inbox-reasoning-effort" />
+        </div>
       </header>
       <div className="inbox-list workspace-view-body">
         <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">

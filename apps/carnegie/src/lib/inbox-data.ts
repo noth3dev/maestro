@@ -58,18 +58,25 @@ export type InboxDiscussionApi = Pick<ApiClient, "listModels" | "createConversat
  */
 export async function discussWithConcertmaster(
   api: InboxDiscussionApi,
-  input: { projectId: string; goalId: string; text: string; conversationId?: string },
+  input: { projectId: string; goalId: string; text: string; modelRef?: string; reasoningEffort?: string; conversationId?: string },
 ): Promise<ConversationTurnResult> {
   const text = input.text.trim();
   if (text === "") throw new Error("Discussion text cannot be empty");
   let conversationId = input.conversationId;
   if (conversationId === undefined) {
     const models = await api.listModels();
-    const selected = models[0];
-    if (selected === undefined) throw new Error("No Concertmaster model is available");
+    const selected =
+      input.modelRef === undefined
+        ? models[0]
+        : models.find((candidate) => `${candidate.identity.provider}/${candidate.identity.id}` === input.modelRef);
+    if (selected === undefined) {
+      throw new Error(input.modelRef === undefined ? "No Concertmaster model is available" : "Selected Concertmaster model is no longer available");
+    }
     const model = `${selected.identity.provider}/${selected.identity.id}`;
+    if (input.reasoningEffort !== undefined && !selected.reasoningEfforts?.supported.includes(input.reasoningEffort))
+      throw new Error("Selected thinking strength is no longer available for this model");
     const conversation = await api.createConversation(
-      { projectId: input.projectId, goalId: input.goalId, model },
+      { projectId: input.projectId, goalId: input.goalId, model, ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }) },
       { idempotencyKey: newCommandId() },
     );
     if (conversation.projectId !== input.projectId || conversation.goalId !== input.goalId) {

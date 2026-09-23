@@ -151,6 +151,25 @@
 .home-composer textarea { width:100%; border:none; outline:none; resize:none; min-height:52px; font-size:13px; background:transparent; color:var(--text-primary); }
 .home-composer textarea::placeholder { color:var(--text-muted); }
 .home-composer-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.home-model-picker { display:flex; flex-direction:column; gap:4px; margin-top:10px; }
+.home-model-picker label { font-size:11px; color:var(--text-secondary); }
+.home-model-picker select { width:100%; border:1px solid var(--border-strong); border-radius:var(--radius-sm); padding:7px 9px; background:var(--surface-1); color:var(--text-primary); font-size:12px; }
+.home-model-picker .form-hint { font-size:10px; }
+.home-model-picker select { appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%); background-position:calc(100% - 13px) 50%, calc(100% - 9px) 50%; background-size:4px 4px, 4px 4px; background-repeat:no-repeat; padding-right:26px; cursor:pointer; }
+.home-model-picker select:focus-visible, .reasoning-dial-input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.reasoning-control { display:flex; min-width:142px; flex-direction:column; gap:3px; margin-top:10px; }
+.reasoning-control-head { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--text-secondary); }
+.reasoning-control-head output { color:var(--text-primary); font-weight:600; text-transform:capitalize; }
+.reasoning-dial { position:relative; width:44px; height:44px; margin:2px auto 0; }
+.reasoning-dial-face { position:absolute; inset:5px; display:block; border:1px solid var(--border-strong); border-radius:50%; background:var(--surface-1); box-shadow:inset 0 0 0 4px var(--surface-2), var(--shadow-sm); }
+.reasoning-dial-notch { position:absolute; top:3px; left:50%; width:2px; height:12px; border-radius:2px; background:var(--accent); transform:translateX(-50%) rotate(var(--dial-angle)); transform-origin:50% 19px; }
+.reasoning-dial-input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+.reasoning-dial-input:disabled { cursor:not-allowed; }
+.reasoning-control[data-supported="false"] { opacity:.7; }
+.reasoning-dial-scale { display:flex; justify-content:space-between; gap:4px; color:var(--text-muted); font-size:9px; text-transform:capitalize; }
+.inbox-concertmaster-controls { display:flex; align-items:flex-end; gap:16px; margin-top:14px; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface-1); }
+.inbox-concertmaster-controls .home-model-picker { min-width:220px; margin-top:0; }
+.inbox-concertmaster-controls .reasoning-control { margin-top:0; }
 .home-cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:440px; }
 .home-card { display:block; width:100%; min-height:76px; background:var(--surface-1); border-radius:var(--radius-lg); padding:12px 14px; cursor:pointer; transition:background var(--duration-fast); border:1px solid transparent; color:var(--text-primary); font:inherit; text-align:left; }
 .home-card:hover { background:var(--surface-3); border-color:var(--border-strong); }
@@ -817,6 +836,9 @@
   .home-cards { grid-template-columns: 1fr; }
   .home-draft { max-height: none; padding: 14px; }
   .home-composer-row { align-items: stretch; flex-direction: column; }
+  .inbox-concertmaster-controls { align-items:stretch; flex-direction:column; gap:10px; }
+  .inbox-concertmaster-controls .home-model-picker { min-width:0; }
+  .inbox-concertmaster-controls .reasoning-control { align-self:flex-start; }
   .home-send-btn { margin-left: 0 !important; width: 100%; justify-content: center; }
   .channel-wrap { flex-direction: column; }
   .channel-feed { min-height: 0; border-right: 0; }

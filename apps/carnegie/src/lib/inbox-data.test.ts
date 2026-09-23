@@ -35,6 +35,20 @@ describe("Inbox durable actions", () => {
     expect(denyCriticalAction).toHaveBeenCalledWith(goalId, { projectId, action: item.action, target: item.target, policyVersion: 1, budgetEffectCents: 0 }, commandId);
   });
 
+  it("uses the selected live model for a new Concertmaster discussion", async () => {
+    const conversationId = "66666666-6666-4666-8666-666666666666";
+    const api = {
+      listModels: vi.fn(async () => [
+        { identity: { provider: "openai-codex", id: "gpt-a" }, capabilities: [], authModes: ["managed-subscription" as const], dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy" as const, trainsOnCustomerData: false, regions: [] } },
+        { identity: { provider: "openai-codex", id: "gpt-b" }, capabilities: [], authModes: ["managed-subscription" as const], reasoningEfforts: { supported: ["low", "high"], default: "high" }, dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy" as const, trainsOnCustomerData: false, regions: [] } },
+      ]),
+      createConversation: vi.fn(async () => ({ conversationId, projectId, goalId, model: "openai-codex/gpt-b", status: "active" as const, version: 1 })),
+      sendConversationTurn: vi.fn(async () => ({ conversation: { conversationId, projectId, goalId, model: "openai-codex/gpt-b", status: "active" as const, version: 1 }, turn: { turnId: "77777777-7777-4777-8777-777777777777", conversationId, role: "assistant" as const, content: "selected", status: "completed" as const, cursor: "1", createdAt: "2025-01-01T00:00:00.000Z" } })),
+    };
+    await discussWithConcertmaster(api, { projectId, goalId, text: "Use the selected model", modelRef: "openai-codex/gpt-b", reasoningEffort: "low" });
+    expect(api.createConversation).toHaveBeenCalledWith({ projectId, goalId, model: "openai-codex/gpt-b", reasoningEffort: "low" }, { idempotencyKey: expect.any(String) });
+  });
+
   it("returns the real scoped Concertmaster response and can resume the same conversation", async () => {
     const conversationId = "66666666-6666-4666-8666-666666666666";
     const sendConversationTurn = vi.fn(async () => ({ conversation: { conversationId, projectId, goalId, model: "openai-codex/gpt-5.6-luna", status: "active" as const, version: 1 }, turn: { turnId: "77777777-7777-4777-8777-777777777777", conversationId, role: "assistant" as const, content: "The action needs approval because it changes production.", status: "completed" as const, cursor: "1", createdAt: "2025-01-01T00:00:00.000Z" } }));
