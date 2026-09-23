@@ -1077,6 +1077,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Task 15 PostgreSQL verification note (2026-09-23):** The new durable-message assertion is present in `packages/persistence/src/overture.integration.test.ts`, but the requested real-PostgreSQL run could not start: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npx vitest run packages/persistence/src/overture.integration.test.ts` exited 1 with `connect ECONNREFUSED 127.0.0.1:55432` during migration setup. This is an environment blocker, not passing database evidence; no PostgreSQL acceptance claim is made for this slice.
 
+**Task 15 PostgreSQL recovery checkpoint (2026-09-23):** Disposable container `maestro-local-postgres` is running on `127.0.0.1:55432`. Rerunning `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npx vitest run packages/persistence/src/overture.integration.test.ts` passed **1 file / 5 tests** in 5.78s, including the durable message-reader assertion. This closes the prior database-availability blocker for the persistence slice. Provider-backed Crew execution remains unverified because no Model Gateway listener is currently available on `127.0.0.1:4321`.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.
