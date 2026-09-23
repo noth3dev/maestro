@@ -189,3 +189,7 @@ Fresh unrestricted PostgreSQL verification after `7e0e7f82` passed **441 files /
 ## Task 16 typed `start_goal` envelope guard (2026-09-24)
 
 **Status: Partial.** A pure persistence boundary now validates the exact scoped `start_goal` envelope after claim without acknowledging or executing it. Focused verification passed **30 tests across 3 files**, with build/typecheck/lint/diff checks green. This is not a consumer and does not advance the Goal hierarchy; E5 remains open.
+
+## Task 16 post-parser regression (2026-09-24)
+
+Fresh unrestricted PostgreSQL verification after `7098cb5b` passed **441 files / 2,931 tests**, exit 0, duration **904.09s** (`/tmp/maestro-full-test-6.log`). Automated regression is green; live provider and downstream orchestration gates remain open.
