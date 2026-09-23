@@ -1410,3 +1410,7 @@ The next safe orchestration boundary is now explicit: `parseStartGoalOrchestrati
 ## Task 16 post-parser regression checkpoint (2026-09-24)
 
 After commit `7098cb5b`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,931 tests**, exit 0, duration **904.09s** (`/tmp/maestro-full-test-6.log`). This fresh run covers the typed envelope guard and prior Launch/outbox/GUI slices. It remains automated evidence only; no live provider, downstream Goal execution, Worker, certification, report, or E5 completion is claimed.
+
+## Task 16 durable start_goal binding checkpoint (2026-09-24)
+
+The claimed `start_goal` envelope now has a PostgreSQL-backed validation seam. It requires the exact `GoalCreated` event, project and Goal identity, Goal-bound Task Contract identity, launched contract state, canonical Task Contract substance, and matching content hash. It returns only the validated identity and hash, with a fixed non-sensitive binding error; it does not acknowledge, transition, call a provider, or create downstream records. Focused PostgreSQL/persistence verification passed **30 tests across 3 files**, and `npm run build`, `npm run typecheck`, `npm run lint`, and `git diff --check` passed. The actual outbox consumer, retry/quarantine policy, and automatic Head/Council/DepartmentPlan/MissionBundle/Worker progression remain open.

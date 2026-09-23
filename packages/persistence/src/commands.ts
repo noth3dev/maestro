@@ -131,6 +131,71 @@ export function parseStartGoalOrchestrationCommand(message: GoalOutboxMessage): 
   return { eventId, commandId: eventId, type: "start_goal", projectId, goalId, taskContractId };
 }
 
+export class GoalOrchestrationBindingError extends Error {
+  readonly code = "invalid_goal_orchestration_binding";
+
+  constructor() {
+    super("Invalid Goal orchestration binding");
+    this.name = "GoalOrchestrationBindingError";
+  }
+}
+
+export interface ValidatedStartGoalOrchestrationCommand extends StartGoalOrchestrationCommand {
+  contentHash: string;
+}
+
+/** Validate a parsed command against durable Goal and launched-contract identity. */
+export async function validateStartGoalOrchestrationCommand(
+  pool: Pool,
+  message: GoalOutboxMessage,
+): Promise<ValidatedStartGoalOrchestrationCommand> {
+  const command = parseStartGoalOrchestrationCommand(message);
+  const result = await pool.query<{
+    event_type: string;
+    event_project_id: string;
+    event_goal_id: string;
+    goal_project_id: string;
+    goal_task_contract_id: string;
+    contract_project_id: string;
+    launch_state: string;
+    content: unknown;
+    content_hash: string;
+  }>(
+    `SELECT event.event_type,
+            event.project_id AS event_project_id,
+            event.goal_id AS event_goal_id,
+            goal.project_id AS goal_project_id,
+            goal.task_contract_id::text AS goal_task_contract_id,
+            contract.content->'project'->>'projectId' AS contract_project_id,
+            contract.launch_state,
+            contract.content,
+            contract.content_hash
+       FROM goal_events AS event
+       JOIN goals AS goal ON goal.goal_id = event.goal_id
+       JOIN task_contracts AS contract ON contract.contract_id = goal.task_contract_id
+      WHERE event.event_id = $1`,
+    [command.eventId],
+  );
+  const row = result.rows[0];
+  if (result.rowCount !== 1 || row === undefined) throw new GoalOrchestrationBindingError();
+  if (
+    row.event_type !== "GoalCreated" ||
+    row.event_project_id !== command.projectId ||
+    row.event_goal_id !== command.goalId ||
+    row.goal_project_id !== command.projectId ||
+    row.goal_task_contract_id !== command.taskContractId ||
+    row.contract_project_id !== command.projectId ||
+    row.launch_state !== "launched"
+  ) throw new GoalOrchestrationBindingError();
+  try {
+    assertValidTaskContractSubstance(row.content);
+    if (taskContractContentHash(row.content) !== row.content_hash.trim()) throw new Error("content hash mismatch");
+  } catch {
+    throw new GoalOrchestrationBindingError();
+  }
+  return { ...command, contentHash: row.content_hash.trim() };
+}
+
 /** Claim ready Goal outbox rows for a restart-safe consumer. */
 export async function claimGoalOutbox(
   pool: Pool,

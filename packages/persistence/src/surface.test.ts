@@ -61,6 +61,7 @@ describe("persistence surface", () => {
         "ExactConfirmationRequiredError",
         "GitIntegrationError",
         "GitIntegrationNotFoundError",
+        "GoalOrchestrationBindingError",
         "GoalOrchestrationEnvelopeError",
         "HeadActivationBindingConflictError",
         "HeadActivationBindingError",
@@ -471,6 +472,7 @@ describe("persistence surface", () => {
         "updateDurableTaskContract",
         "upsertCapacityInventory",
         "validateReleaseCandidateIdentity",
+        "validateStartGoalOrchestrationCommand",
         "verifyStoredEvidenceBundle",
       ]
     `);

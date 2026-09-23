@@ -193,3 +193,7 @@ Fresh unrestricted PostgreSQL verification after `7e0e7f82` passed **441 files /
 ## Task 16 post-parser regression (2026-09-24)
 
 Fresh unrestricted PostgreSQL verification after `7098cb5b` passed **441 files / 2,931 tests**, exit 0, duration **904.09s** (`/tmp/maestro-full-test-6.log`). Automated regression is green; live provider and downstream orchestration gates remain open.
+
+## Task 16 durable `start_goal` binding (2026-09-24)
+
+**Status: Partial.** Parsed `start_goal` identity is now checked against the durable `GoalCreated` event, Goal binding, launched Task Contract, project scope, and content hash. Focused verification passed **30 tests across 3 files**, with build/typecheck/lint/diff checks green. This is validation only, not consumption or execution; E5 remains open.

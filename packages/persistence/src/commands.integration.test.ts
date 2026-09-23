@@ -4,6 +4,7 @@ import { applyAllMigrations } from "./test-migrations.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   CommandIdReuseError,
+  GoalOrchestrationBindingError,
   LeaseUnavailableError,
   OutboxLeaseError,
   acquireGoalLease,
@@ -12,6 +13,7 @@ import {
   markGoalOutboxDelivered,
   releaseGoalOutbox,
   renewGoalLease,
+  validateStartGoalOrchestrationCommand,
 } from "./commands.js";
 import { listGoalEvents } from "./events.js";
 import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
@@ -243,6 +245,32 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
     const created = await executeGoalCommand(pool, { ...command, commandId: randomUUID() }, proof);
     expect(created).toMatchObject({ outcome: "succeeded", goalId, state: "draft" });
     expect((await pool.query("SELECT task_contract_id FROM goals WHERE goal_id = $1", [goalId])).rows[0]!.task_contract_id).toBe(contractId);
+    await pool.query(
+      "UPDATE outbox SET payload = $2::jsonb WHERE event_id = $1",
+      [created.eventId, JSON.stringify({
+        eventId: created.eventId,
+        orchestration: { commandId: created.eventId, type: "start_goal", projectId, goalId, taskContractId: contractId },
+      })],
+    );
+    const claimed = await claimGoalOutbox(pool, "goal-orchestrator");
+    expect(claimed).toHaveLength(1);
+    await expect(validateStartGoalOrchestrationCommand(pool, claimed[0]!)).resolves.toMatchObject({
+      eventId: created.eventId,
+      commandId: created.eventId,
+      projectId,
+      goalId,
+      taskContractId: contractId,
+      contentHash: contract.contentHash,
+    });
+    const tamperedPayload = {
+      ...claimed[0]!.payload,
+      orchestration: {
+        ...(claimed[0]!.payload.orchestration as Record<string, unknown>),
+        projectId: randomUUID(),
+      },
+    };
+    await expect(validateStartGoalOrchestrationCommand(pool, { ...claimed[0]!, payload: tamperedPayload }))
+      .rejects.toBeInstanceOf(GoalOrchestrationBindingError);
 
     const mismatchGoalId = randomUUID();
     const mismatchProof = await lease(mismatchGoalId, "concertmaster");
