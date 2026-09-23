@@ -217,3 +217,7 @@ Fresh unrestricted PostgreSQL verification after `5634e9d1` passed **441 files /
 ## Task 16 pre-build regression note (2026-09-24)
 
 Full run 9 was invalidated by build ordering: it started before the new stable API error code was built and the sole new mapping test loaded stale contracts dist. Result: **441 files / 2,940 passed of 2,941 tests**, exit 1, duration **980.36s** (`/tmp/maestro-full-test-9.log`). Post-build focused verification passed 20/20; fresh full verification remains pending.
+
+## Task 16 API error title follow-up (2026-09-24)
+
+Full run 10 found a renderer contract gap for the newly allowlisted error code: **441 files / 2,940 passed of 2,941 tests**, exit 1, duration **901.31s** (`/tmp/maestro-full-test-10.log`). Carnegie now provides a stable non-generic title; focused command-id/API verification passed 16/16 and build/typecheck/lint/diff passed. Fresh full verification remains pending.

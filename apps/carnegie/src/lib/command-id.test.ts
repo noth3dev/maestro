@@ -65,6 +65,11 @@ it("redacts bearer and token values before they become renderer detail", () => {
 });
 
 
+it("labels unavailable Task Contract orchestration as a service configuration problem", () => {
+  expect(classifyApiError({ name: "ApiError", status: 503, code: "task_contract_orchestration_unavailable", message: "unavailable" }).title)
+    .toBe("Task Contract orchestration is unavailable");
+});
+
 it("assigns a stable title to every contract error code", () => {
   for (const code of StableApiErrorCodeSchema.options) {
     expect(classifyApiError({ name: "ApiError", status: 400, code, message: "failure" }).title, code).not.toBe("Request failed");

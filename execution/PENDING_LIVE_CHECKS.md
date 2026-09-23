@@ -73,3 +73,5 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 - [ ] **Task 16 Launch error mapping (2026-09-24, automated only):** unavailable Goal orchestration now returns stable HTTP 503 `task_contract_orchestration_unavailable` instead of generic durable-store error. API/contracts verification passed **20 tests across 2 files**; typecheck/build passed. This does not make orchestration available or provide live evidence.
 
 - [ ] **Task 16 pre-build regression note (2026-09-24):** full run 9 exited 1 after 2,940/2,941 tests because it started before the new API error schema was built and loaded stale contracts dist; only the new API mapping test failed (`/tmp/maestro-full-test-9.log`, 980.36s). Post-build API/contracts focused verification passed 20/20; fresh full regression pending.
+
+- [ ] **Task 16 API error title follow-up (2026-09-24):** full run 10 found one missing Carnegie title for `task_contract_orchestration_unavailable` after 2,940/2,941 tests (`/tmp/maestro-full-test-10.log`, 901.31s). Stable title added; focused command-id/API tests passed 16/16 and build/typecheck/lint/diff passed. Fresh full regression pending.

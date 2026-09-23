@@ -81,6 +81,7 @@ const TITLES: Record<string, string> = {
   task_contract_conflict: "Task Contract changed elsewhere",
   exact_confirmation_required: "Exact confirmation required",
   task_contract_integrity_error: "Task Contract content does not match its hash",
+  task_contract_orchestration_unavailable: "Task Contract orchestration is unavailable",
   validation_error: "That input isn't valid",
   invalid_transition: "Invalid Goal transition",
   command_id_reused: "Command ID was already used",
