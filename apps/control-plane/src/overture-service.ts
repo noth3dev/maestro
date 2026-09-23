@@ -1,15 +1,25 @@
 import type { Pool } from "pg";
 import { ToolRegistry, type ModelGatewayPort } from "@maestro/agent-runtime";
-import type { AppendOvertureMessageInput, CreateOvertureRunInput, OvertureEvent, OvertureMessage, OvertureRun } from "@maestro/contracts";
+import type {
+  AppendOvertureMessageInput,
+  CreateOvertureRunInput,
+  OvertureArtifact,
+  OvertureEvent,
+  OvertureMessage,
+  OverturePlanManifest,
+  OvertureRun,
+} from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
 import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
   assertProjectRole,
+  readOvertureArtifacts,
   bindOvertureRoleModel,
   createOvertureRun,
   readOvertureEvents,
   readOvertureMessages,
+  readOverturePlanManifest,
   readOvertureRun,
   OvertureRunNotFoundError,
 } from "@maestro/persistence";
@@ -17,6 +27,8 @@ import {
 export interface OvertureService {
   createRun(input: CreateOvertureRunInput, operator: OperatorContext): Promise<OvertureRun>;
   appendOperatorMessage(input: AppendOvertureMessageInput, operator: OperatorContext): Promise<OvertureMessage>;
+  listArtifacts(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<readonly OvertureArtifact[]>;
+  readPlanManifest(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OverturePlanManifest>;
   listMessages(
     runId: string,
     projectId: string,
@@ -94,6 +106,14 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
           });
       }
       return message;
+    },
+    async listArtifacts(runId, projectId, conversationId, operator) {
+      await assertRole(operator, projectId);
+      return readOvertureArtifacts(pool, runId, projectId, conversationId);
+    },
+    async readPlanManifest(runId, projectId, conversationId, operator) {
+      await assertRole(operator, projectId);
+      return readOverturePlanManifest(pool, runId, projectId, conversationId);
     },
     async listMessages(runId, projectId, conversationId, afterCursor, operator) {
       await assertRole(operator, projectId);

@@ -44,6 +44,24 @@ function service(): OvertureService {
       content: input.content,
       createdAt: "2026-09-23T00:00:00.000Z",
     }),
+    listArtifacts: async () => [],
+    readPlanManifest: async () => ({
+      schemaVersion: 1,
+      projectId: ids.projectId,
+      runId: ids.runId,
+      documents: [
+        {
+          documentId: "88888888-8888-4888-8888-888888888888",
+          path: "plan00.md",
+          kind: "project" as const,
+          version: 1,
+          contentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          sourceRefs: [],
+          dependencies: [],
+        },
+      ],
+      manifestHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    }),
     listMessages: async () => [],
     getRun: async () => run,
     listEvents: async () => [],
@@ -120,6 +138,18 @@ describe("Overture routes", () => {
     });
     expect(messages.statusCode).toBe(200);
     expect(messages.json()).toEqual([]);
+    const artifacts = await fastify.inject({
+      method: "GET",
+      url: `/v1/overture/runs/${ids.runId}/artifacts?projectId=${ids.projectId}&conversationId=${ids.conversationId}`,
+    });
+    expect(artifacts.statusCode).toBe(200);
+    expect(artifacts.json()).toEqual([]);
+    const manifest = await fastify.inject({
+      method: "GET",
+      url: `/v1/overture/runs/${ids.runId}/plan-manifest?projectId=${ids.projectId}&conversationId=${ids.conversationId}`,
+    });
+    expect(manifest.statusCode).toBe(200);
+    expect(manifest.json().documents[0].path).toBe("plan00.md");
     await fastify.close();
   });
 });

@@ -11,6 +11,7 @@ import {
   createOvertureArtifact,
   createOvertureRun,
   openOvertureClarification,
+  readOvertureArtifacts,
   readOvertureEvents,
   readOvertureMessages,
   readOverturePlanManifest,
@@ -181,6 +182,8 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       commandId: randomUUID(),
     });
     expect(artifact.contentHash).toBe(overturePlanContentHash(artifact.content));
+    const artifacts = await readOvertureArtifacts(pool, runId, projectId, conversationId);
+    expect(artifacts.some((item) => item.artifactId === artifact.artifactId && item.kind === "security_finding")).toBe(true);
     const clarification = await openOvertureClarification(pool, {
       runId,
       conversationId,

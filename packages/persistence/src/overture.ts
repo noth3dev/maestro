@@ -621,6 +621,36 @@ export async function reviseOverturePlan(
   }
 }
 
+export async function readOvertureArtifacts(
+  queryable: Queryable,
+  runId: string,
+  projectId: string,
+  conversationId: string,
+): Promise<ReadonlyArray<OvertureArtifact>> {
+  const boundary = await queryable.query("SELECT 1 FROM overture_runs WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3", [
+    runId,
+    projectId,
+    conversationId,
+  ]);
+  if (boundary.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
+  const result = await queryable.query<ArtifactRow>(
+    "SELECT a.artifact_id, a.run_id, a.project_id, a.kind, a.title, a.content, a.content_hash, a.source_refs, a.created_at FROM overture_artifacts a JOIN overture_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id WHERE a.run_id = $1 AND a.project_id = $2 AND r.conversation_id = $3 ORDER BY a.created_at ASC, a.artifact_id ASC",
+    [runId, projectId, conversationId],
+  );
+  return result.rows.map((row) =>
+    OvertureArtifactSchema.parse({
+      artifactId: row.artifact_id,
+      runId: row.run_id,
+      projectId: row.project_id,
+      kind: row.kind,
+      title: row.title,
+      content: row.content,
+      contentHash: row.content_hash,
+      sourceRefs: row.source_refs,
+    }),
+  );
+}
+
 export async function bindOvertureRoleModel(
   pool: Pool,
   args: { readonly runId: string; readonly projectId: string; readonly roleId: OvertureRoleId; readonly modelRef: string },

@@ -1238,6 +1238,45 @@ describe("overture client", () => {
     );
   });
 
+  it("reads Overture artifacts and the hash-bound plan manifest", async () => {
+    const runId = "99999999-9999-4999-8999-999999999999";
+    const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const manifest = {
+      schemaVersion: 1 as const,
+      projectId,
+      runId,
+      documents: [
+        {
+          documentId: "88888888-8888-4888-8888-888888888888",
+          path: "plan00.md" as const,
+          kind: "project" as const,
+          version: 1,
+          contentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          sourceRefs: [],
+          dependencies: [],
+        },
+      ],
+      manifestHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("[]", { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(manifest), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.listOvertureArtifacts(runId, { projectId, conversationId })).resolves.toEqual([]);
+    await expect(client.getOverturePlanManifest(runId, { projectId, conversationId })).resolves.toEqual(manifest);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `https://maestro.test/v1/overture/runs/${runId}/artifacts?projectId=${projectId}&conversationId=${conversationId}`,
+      expect.anything(),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `https://maestro.test/v1/overture/runs/${runId}/plan-manifest?projectId=${projectId}&conversationId=${conversationId}`,
+      expect.anything(),
+    );
+  });
+
   it("reads durable Overture messages with the same conversation cursor", async () => {
     const runId = "99999999-9999-4999-8999-999999999999";
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";

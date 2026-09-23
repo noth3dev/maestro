@@ -198,6 +198,8 @@ export interface ApiClient {
     options?: { idempotencyKey?: string },
   ): Promise<OvertureMessage>;
   listOvertureMessages(runId: string, query: OvertureEventQuery): Promise<readonly OvertureMessage[]>;
+  listOvertureArtifacts(runId: string, query: OvertureRunQuery): Promise<readonly import("@maestro/contracts").OvertureArtifact[]>;
+  getOverturePlanManifest(runId: string, query: OvertureRunQuery): Promise<import("@maestro/contracts").OverturePlanManifest>;
   listOvertureEvents(runId: string, query: OvertureEventQuery): Promise<readonly OvertureEvent[]>;
   streamOvertureEvents(runId: string, query: OvertureEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<OvertureEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;

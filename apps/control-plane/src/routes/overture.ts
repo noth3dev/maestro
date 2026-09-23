@@ -6,8 +6,10 @@ import {
   CreateOvertureRunBodySchema,
   CreateOvertureRunInputSchema,
   OvertureEventQuerySchema,
+  OvertureArtifactSchema,
   OvertureEventSchema,
   OvertureMessageSchema,
+  OverturePlanManifestSchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
   EventCursorSchema,
@@ -53,6 +55,30 @@ export function registerOvertureRoutes(app: FastifyInstance, deps: OvertureRoute
     const input = AppendOvertureMessageInputSchema.parse({ ...body, runId, commandId, actor: "operator", modelRef: null });
     const result = await overture.appendOperatorMessage(input, requestOperator(request as { operator?: OperatorContext }));
     return reply.status(201).send(OvertureMessageSchema.parse(result));
+  });
+
+  app.get("/v1/overture/runs/:runId/artifacts", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const query = parse(OvertureRunQuerySchema, request.query);
+    const result = await overture.listArtifacts(
+      runId,
+      query.projectId,
+      query.conversationId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
+    return reply.status(200).send(result.map((artifact) => OvertureArtifactSchema.parse(artifact)));
+  });
+
+  app.get("/v1/overture/runs/:runId/plan-manifest", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const query = parse(OvertureRunQuerySchema, request.query);
+    const result = await overture.readPlanManifest(
+      runId,
+      query.projectId,
+      query.conversationId,
+      requestOperator(request as { operator?: OperatorContext }),
+    );
+    return reply.status(200).send(OverturePlanManifestSchema.parse(result));
   });
 
   app.get("/v1/overture/runs/:runId/messages", async (request, reply) => {

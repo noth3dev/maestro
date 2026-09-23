@@ -2,8 +2,10 @@ import {
   AppendOvertureOperatorMessageBodySchema,
   CreateOvertureRunBodySchema,
   OvertureEventQuerySchema,
+  OvertureArtifactSchema,
   OvertureEventSchema,
   OvertureMessageSchema,
+  OverturePlanManifestSchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
   UuidSchema,
@@ -20,6 +22,8 @@ export function createOvertureMethods(
   | "getOvertureRun"
   | "sendOvertureOperatorMessage"
   | "listOvertureMessages"
+  | "listOvertureArtifacts"
+  | "getOverturePlanManifest"
   | "listOvertureEvents"
   | "streamOvertureEvents"
 > {
@@ -63,6 +67,24 @@ export function createOvertureMethods(
           body: JSON.stringify(AppendOvertureOperatorMessageBodySchema.parse(input)),
         },
         OvertureMessageSchema,
+      );
+    },
+    listOvertureArtifacts(runId, query) {
+      const parsedRunId = UuidSchema.parse(runId);
+      const parsedQuery = OvertureRunQuerySchema.parse(query);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/artifacts?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
+        { headers },
+        OvertureArtifactSchema.array(),
+      );
+    },
+    getOverturePlanManifest(runId, query) {
+      const parsedRunId = UuidSchema.parse(runId);
+      const parsedQuery = OvertureRunQuerySchema.parse(query);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/plan-manifest?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
+        { headers },
+        OverturePlanManifestSchema,
       );
     },
     listOvertureMessages(runId, query) {
