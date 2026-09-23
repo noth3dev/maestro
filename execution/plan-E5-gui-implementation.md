@@ -1075,6 +1075,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Task 15 durable-message-read checkpoint (2026-09-23):** Added project/run/conversation-scoped persistence reads for durable Overture messages, a Control Plane message-list route, typed API-client support, and Electron/preload exposure. Focused verification passed **3 files / 53 tests**; root build/typecheck, targeted ESLint, and `git diff --check` passed. This still does not claim renderer Overture UI, provider-backed Crew turns, Task Editor, Task Contract, Goal, Worker, or post-Launch evidence.
 
+**Task 15 PostgreSQL verification note (2026-09-23):** The new durable-message assertion is present in `packages/persistence/src/overture.integration.test.ts`, but the requested real-PostgreSQL run could not start: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npx vitest run packages/persistence/src/overture.integration.test.ts` exited 1 with `connect ECONNREFUSED 127.0.0.1:55432` during migration setup. This is an environment blocker, not passing database evidence; no PostgreSQL acceptance claim is made for this slice.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

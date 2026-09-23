@@ -11,6 +11,7 @@ import {
   createOvertureRun,
   openOvertureClarification,
   readOvertureEvents,
+  readOvertureMessages,
   readOverturePlanManifest,
   readOvertureRun,
   reviseOverturePlan,
@@ -161,6 +162,8 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       commandId: randomUUID(),
     });
     expect(message.content).toContain("bounded");
+    const durableMessages = await readOvertureMessages(pool, runId, projectId, conversationId);
+    expect(durableMessages.some((item) => item.messageId === message.messageId && item.actor === "operator")).toBe(true);
     const artifact = await createOvertureArtifact(pool, {
       runId,
       conversationId,
