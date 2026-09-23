@@ -32,6 +32,7 @@ describe("agent-runtime surface", () => {
         "createLocalHostRequestHandler",
         "createMaestroAgentRuntime",
         "createNativeRefinementAdapter",
+        "createOvertureRoleRuntime",
         "createReadOnlyHostRequestHandler",
         "createTaskContractDraftingTool",
         "createUnavailableIpPythonKernel",
