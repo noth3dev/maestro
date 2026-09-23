@@ -1089,6 +1089,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Task 15 Carnegie channel-first UI checkpoint (2026-09-23):** Home now awakens a real PostgreSQL-backed Overture Run from the completed Concertmaster turn, shows the same-channel role messages and durable run state, lets the operator write and hash `plan00.md`, and exposes required boundary fields before creating the awaiting Task Contract through the exact handoff route. Confirmation and Launch remain separate existing actions; Launch now marks a linked Overture Run `launched` after the durable Task Contract launch succeeds. Carnegie build and focused Home/authoring tests passed **22 tests**, Overture PostgreSQL integration passed **6 tests**, and lint/migration/boundary/diff checks passed. Live provider and downstream Goal/Worker evidence remain blocked by the empty Model Gateway catalog.
 
+The Task Editor UI also supports adding or revising phase and slice documents with server-enforced dependency edges; stale versions and missing phase dependencies fail closed. It never creates a Task Contract until the operator supplies repository, base revision, data boundary, and organization fields.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

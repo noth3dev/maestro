@@ -107,6 +107,9 @@ export function Home({
   const [overtureMessages, setOvertureMessages] = useState<readonly OvertureMessage[]>([]);
   const [overtureManifest, setOvertureManifest] = useState<OverturePlanManifest | undefined>(undefined);
   const [overturePlanContent, setOverturePlanContent] = useState("");
+  const [overtureNextPlanPath, setOvertureNextPlanPath] = useState("plan01.md");
+  const [overtureNextPlanKind, setOvertureNextPlanKind] = useState<"phase" | "slice">("phase");
+  const [overtureNextPlanContent, setOvertureNextPlanContent] = useState("");
   const [overtureContractForm, setOvertureContractForm] = useState<OvertureContractForm>({
     desiredOutcome: "",
     successCriteria: "",
@@ -142,6 +145,9 @@ export function Home({
     setOvertureMessages([]);
     setOvertureManifest(undefined);
     setOverturePlanContent("");
+    setOvertureNextPlanPath("plan01.md");
+    setOvertureNextPlanKind("phase");
+    setOvertureNextPlanContent("");
     setOvertureContractForm({
       desiredOutcome: "",
       successCriteria: "",
@@ -267,28 +273,49 @@ export function Home({
   }, [overtureManifest]);
 
   const createOverturePlan = async () => {
-    if (config === undefined || overtureRun === undefined || overturePlanContent.trim() === "") {
-      setOvertureError("Write the project blueprint before creating plan00.md.");
+    if (config === undefined || overtureRun === undefined) return;
+    const isRoot = overtureManifest === undefined;
+    const path = isRoot ? "plan00.md" : overtureNextPlanPath.trim();
+    const kind = isRoot ? ("project" as const) : overtureNextPlanKind;
+    const content = (isRoot ? overturePlanContent : overtureNextPlanContent).trim();
+    if (content === "") {
+      setOvertureError(`Write ${path} before saving the plan.`);
       return;
+    }
+    const current = overtureManifest?.documents.find((document) => document.path === path);
+    let dependencies: string[] = [];
+    if (kind === "phase") {
+      const root = overtureManifest?.documents.find((document) => document.path === "plan00.md");
+      if (root === undefined) {
+        setOvertureError("Save plan00.md before adding a phase plan.");
+        return;
+      }
+      dependencies = [root.documentId];
+    } else if (kind === "slice") {
+      const phasePath = path.replace(/-slice(?:0[1-9]|[1-9][0-9]+)\.md$/, ".md");
+      const phase = overtureManifest?.documents.find((document) => document.path === phasePath && document.kind === "phase");
+      if (phase === undefined) {
+        setOvertureError(`Save ${phasePath} before adding a slice plan.`);
+        return;
+      }
+      dependencies = [phase.documentId];
     }
     setOvertureBusy(true);
     setOvertureError(undefined);
     try {
-      const content = overturePlanContent.trim();
-      const documentId = globalThis.crypto.randomUUID();
       await window.maestro.api.reviseOverturePlan(
         overtureRun.runId,
-        documentId,
+        current?.documentId ?? globalThis.crypto.randomUUID(),
         {
           projectId: config.projectId,
           conversationId: overtureRun.conversationId,
-          path: "plan00.md",
-          kind: "project",
+          path,
+          kind,
           content,
           contentHash: await sha256(content),
           sourceRefs: [],
-          dependencies: [],
-          expectedVersion: 0,
+          dependencies,
+          expectedVersion: current?.version ?? 0,
         },
         { idempotencyKey: globalThis.crypto.randomUUID() },
       );
@@ -297,6 +324,7 @@ export function Home({
         conversationId: overtureRun.conversationId,
       });
       setOvertureManifest(manifest);
+      setOvertureNextPlanContent("");
       setOvertureRun(
         await window.maestro.api.getOvertureRun(overtureRun.runId, {
           projectId: config.projectId,
@@ -707,6 +735,58 @@ export function Home({
                 ))}
               </ul>
             </details>
+          )}
+          {overtureManifest !== undefined && (
+            <form
+              className="home-overture-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createOverturePlan();
+              }}
+            >
+              <p className="form-hint">Task Editor · add or revise a phase or slice. Slice plans must name their phase dependency.</p>
+              <div className="home-composer-row">
+                <div className="form-field">
+                  <label className="form-label" htmlFor="overture-next-path">
+                    Plan path
+                  </label>
+                  <input
+                    id="overture-next-path"
+                    className="input"
+                    value={overtureNextPlanPath}
+                    onChange={(event) => setOvertureNextPlanPath(event.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="overture-next-kind">
+                    Kind
+                  </label>
+                  <select
+                    id="overture-next-kind"
+                    className="input"
+                    value={overtureNextPlanKind}
+                    onChange={(event) => setOvertureNextPlanKind(event.target.value as "phase" | "slice")}
+                  >
+                    <option value="phase">phase</option>
+                    <option value="slice">slice</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="overture-next-content">
+                  Plan content
+                </label>
+                <textarea
+                  id="overture-next-content"
+                  className="input textarea"
+                  value={overtureNextPlanContent}
+                  onChange={(event) => setOvertureNextPlanContent(event.target.value)}
+                />
+              </div>
+              <button className="btn" type="submit" disabled={overtureBusy || overtureNextPlanContent.trim() === ""}>
+                save plan revision
+              </button>
+            </form>
           )}
           {overtureManifest !== undefined && draft === undefined && (
             <form
