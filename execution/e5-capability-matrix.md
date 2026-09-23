@@ -158,3 +158,8 @@ A fresh Electron profile with no explicit `MAESTRO_API_URL` used Docker-backed l
 ## Heartbeat #51 automated verification update (2026-09-24)
 
 The full unrestricted PostgreSQL-backed suite passed **440 files / 2,919 tests**, exit 0, duration **912.60s** (`/tmp/maestro-full-test-3.log`) after the clarification-answer path and fail-closed event projection fix. Task 14 remains `Backend-blocked`; this does not claim live provider, Task Contract, Goal, Worker, or E5 completion.
+
+
+## Task 15 role-continuation regression checkpoint (2026-09-24)
+
+After commit `4c02785a`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,920 tests**, exit 0, duration **916.12s** (`/tmp/maestro-full-test-4.log`). This includes the Overture-owned turn and replay-safe role-continuation integration path. Automated regression is green; live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed.

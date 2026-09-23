@@ -4947,3 +4947,8 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Unrestricted PostgreSQL-backed `npm test` passed **440 files / 2,919 tests**, exit 0, duration **912.60s** (`/tmp/maestro-full-test-3.log`) after the clarification-answer seam and projection hardening.
 - Local `main` is 22 commits ahead of `origin/main`; no push was performed.
 - Automated verification is green. Live provider, automatic role continuation, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed; E6 remains gated.
+
+
+## Task 15 role-continuation regression checkpoint (2026-09-24)
+
+After commit `4c02785a`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,920 tests**, exit 0, duration **916.12s** (`/tmp/maestro-full-test-4.log`). This includes the Overture-owned turn and replay-safe role-continuation integration path. Automated regression is green; live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed.

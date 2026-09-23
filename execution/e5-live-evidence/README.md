@@ -78,3 +78,8 @@ Task 14 is **backend-blocked at provider/model availability**. The fresh rerun p
 
 - Unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,919 tests**, exit 0, duration **912.60s**. Log: `/tmp/maestro-full-test-3.log`.
 - This is automated regression evidence only; no provider, Task Contract, Goal, Worker, certification, report, or external-effect evidence was produced.
+
+
+## Task 15 role-continuation regression checkpoint (2026-09-24)
+
+After commit `4c02785a`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,920 tests**, exit 0, duration **916.12s** (`/tmp/maestro-full-test-4.log`). This includes the Overture-owned turn and replay-safe role-continuation integration path. Automated regression is green; live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed.

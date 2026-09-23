@@ -1378,3 +1378,8 @@ RED/GREEN evidence: the new route/API bridge/Home tests first failed at the miss
 ## Heartbeat #51 full regression checkpoint (2026-09-24)
 
 After the clarification answer implementation and fail-closed event projection fix (`d6913d0e`), unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,919 tests**, exit 0, duration **912.60s** (`/tmp/maestro-full-test-3.log`). This supersedes the prior 2,916-test automated count; it does not create live provider, Task Contract, Goal, Worker, or E5 evidence.
+
+
+## Task 15 role-continuation regression checkpoint (2026-09-24)
+
+After commit `4c02785a`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,920 tests**, exit 0, duration **916.12s** (`/tmp/maestro-full-test-4.log`). This includes the Overture-owned turn and replay-safe role-continuation integration path. Automated regression is green; live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed.
