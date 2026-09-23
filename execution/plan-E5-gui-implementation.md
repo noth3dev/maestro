@@ -1359,3 +1359,10 @@ The unrestricted real-PostgreSQL suite completed with **435 test files / 2,888 t
 
 
 **Provider admission probe (2026-09-24):** Native gateway startup succeeded with a probe token, but authenticated `/v1/models` returned `[]`. The gateway keychain metadata for `local-operator` was empty, and no provider API-key environment variables were present. The probe was stopped without provider execution. Live provider and downstream E5 evidence remain blocked.
+
+
+## Task 15 routing/bootstrap checkpoint (2026-09-24)
+
+Commit `ec3141a5` gates Ensemble readiness on exact live Gateway presence and host-authorized account bindings. It also propagates optional routing mode, native model, candidate catalog, account refs, and model-map configuration through local bootstrap into the Control Plane. Focused verification passed **3 files / 66 tests** (`router-catalog`, `local-bootstrap`, `connection`); root build and ESLint passed. The live provider catalog is still unavailable/authenticated-empty in this environment, so no provider, Task Contract, Goal, or Worker evidence is claimed.
+
+The next GUI usability slice is the Overture clarification answer round-trip: persistence already supports answers, but Control Plane, API client, Electron bridge, and Home do not yet expose an operator answer form.

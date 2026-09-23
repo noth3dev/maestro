@@ -11,6 +11,8 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 
 **Current verification state (2026-09-23):** The fresh real-PostgreSQL suite passed 432 test files / 2,874 tests (exit 0); root and Carnegie builds passed; exact Carnegie Playwright passed 4 tests with 5 designed CDP skips; changed-file ESLint and `git diff --check` passed; and secret/artifact scans were clean. A fresh Docker-backed Electron rerun now auto-bootstrapped PostgreSQL, Control Plane (`4310`), and Model Gateway (`4321`) and reached the authenticated Home UI; the bounded real composer request failed at the exact provider boundary with `No Concertmaster model is available`. Task 14 remains `Backend-blocked`; no row is upgraded to `Live` without durable/provider evidence.
 
+**Heartbeat #49 automated verification (2026-09-24):** A fresh unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,916 tests**, exit 0, duration **1,001.90s** (`/tmp/maestro-full-test-2.log`). This supersedes the older automated count only; Task 14 remains `Backend-blocked`, and no live provider/Task Contract/Goal/Worker evidence exists.
+
 ---
 
 ## Electron bridge (Task 1)
@@ -97,6 +99,8 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 **Attempted, not complete.** Task 14 reached the real Electron/CDP boundary and is `Backend-blocked` at existing PGlite bootstrap. Task 15 automated verification is now fresh and green: real PostgreSQL `npm test` passed 432 files / 2,874 tests (exit 0), root and Carnegie builds passed, exact Carnegie Playwright passed 4 with 5 designed skips, changed-file ESLint and `git diff --check` passed, and secret/artifact scans were clean. E5 is still not closed because the live Task 14 project progression/provider check has no usable Control Plane, database, or provider listener. See the dated entries below and `execution/PENDING_LIVE_CHECKS.md`.
 
+Heartbeat #49 correction: the latest unrestricted PostgreSQL suite passed **440 files / 2,916 tests** with exit 0 in **1,001.90s**; this is automated regression evidence and does not change the live blocker or E5 gate.
+
 ---
 
 ## Immediate next steps for whoever picks this up
@@ -134,3 +138,11 @@ A fresh Electron profile with no explicit `MAESTRO_API_URL` used Docker-backed l
 - In-app ChatGPT/Codex managed binding completed; the authenticated Gateway catalog exposed five real Codex models.
 - The visible documentation-only Home composer created conversation `a352ec21-72fe-4e14-9f23-d35f54fa0f67` and received a completed real assistant response.
 - No Task Contract draft or durable contract identity was returned by the current Home intake, so no Goal, Worker, evidence, certification, or report evidence exists. Task 14 Steps 3–6 remain backend/UI-flow open; E5 is not closed.
+
+
+## Heartbeat #50 routing and GUI-gap update (2026-09-24)
+
+- Commit `ec3141a5` gates Ensemble candidates on exact live Gateway model presence and host-authorized account bindings, and propagates routing configuration through local bootstrap. Focused verification passed **3 files / 66 tests**; root build and ESLint passed.
+- The model-selection specification was repaired at `docs/superpowers/specs/2026-09-23-carnegie-ensemble-concertmaster-model-selection.md`.
+- Static audit found a concrete Task 15 usability gap: Overture clarification answers stop at persistence. No Control Plane answer route, API-client method, Electron bridge method, or Home answer form exists yet. This remains code-level planning evidence only.
+- No live provider, Task Contract, Goal, Worker, or E5 completion claim is made; Task 14 remains `Backend-blocked` and E6 remains gated.

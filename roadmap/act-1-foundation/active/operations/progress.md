@@ -4928,3 +4928,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Fresh unrestricted verification against `maestro-local-postgres` at `127.0.0.1:55432`: `npm test` passed **440 files / 2,916 tests**, exit 0, duration **1,001.90s**. Log: `/tmp/maestro-full-test-2.log`.
 - Local `main` is 14 commits ahead of `origin/main`; no push was performed. Existing unrelated local work remains in router-catalog/local-bootstrap files and untracked planning artifacts.
 - This is automated evidence only. E5 live provider, Task Contract, Goal, Worker, evidence, certification, report, and external-effect acceptance remain unclaimed; E6 remains gated.
+
+## 2026-09-24 — E5 heartbeat #50 routing readiness and next GUI slice
+
+- Commit `ec3141a5` gates Ensemble readiness on live exact model presence and authorized account bindings, and propagates routing configuration through local bootstrap. Focused verification passed **3 files / 66 tests**; build and lint passed.
+- Repaired the corrupted model-selection spec at `docs/superpowers/specs/2026-09-23-carnegie-ensemble-concertmaster-model-selection.md`; it now records the exact router/bootstrap/conversation invariants and acceptance gates.
+- Static GUI audit found the next narrow gap: Overture clarifications can be opened and persisted, but there is no Control Plane route, API-client method, Electron bridge entry, or Home answer form. This is the next TDD vertical slice.
+- Live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed; E6 remains gated.
