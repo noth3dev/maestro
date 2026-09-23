@@ -1398,3 +1398,7 @@ The next backend prerequisite is now implemented locally: `claimGoalOutbox` uses
 ## Task 16 Launch-result Goal selection checkpoint (2026-09-24)
 
 Carnegie now refreshes the PostgreSQL-backed Goal list after a successful exact Launch response and selects the returned server-derived Goal only when that Goal is present in the refreshed list. `GoalsProvider.refresh` returns the loaded page while preserving its existing generation guard; refresh failure or a missing Goal leaves selection unchanged and keeps the durable launch acknowledgement visible. RED/GREEN focused verification passed **12 tests across 2 files**, the full Carnegie source suite passed **55 files / 249 tests**, and `npm run build`, `npm run typecheck`, `npm run lint`, and `git diff --check` passed. This improves GUI state convergence only; it does not claim Goal execution, Head/Council/DepartmentPlan/MissionBundle/Worker progression, live provider evidence, or E5 completion.
+
+## Task 16 post-Launch GUI regression checkpoint (2026-09-24)
+
+After commit `7e0e7f82`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,926 tests**, exit 0, duration **927.57s** (`/tmp/maestro-full-test-5.log`). This is fresh automated regression evidence for the Launch-result Goal selection slice and prior outbox handoff work; it does not create live provider, Task Contract, Goal execution, Worker, certification, or E5 acceptance evidence.

@@ -181,3 +181,7 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 ## Task 16 Launch-result Goal selection (2026-09-24)
 
 **Status: Partial.** Carnegie now refreshes and server-confirms the Goal returned by exact Launch before selecting it in the GUI. Focused tests, the full Carnegie suite (**55 files / 249 tests**), build/typecheck/lint/diff checks passed. This does not execute the Goal or add the missing typed outbox consumer and downstream hierarchy progression; E5 remains open.
+
+## Task 16 post-Launch GUI regression (2026-09-24)
+
+Fresh unrestricted PostgreSQL verification after `7e0e7f82` passed **441 files / 2,926 tests**, exit 0, duration **927.57s** (`/tmp/maestro-full-test-5.log`). Automated regression is green; this does not close the live provider or downstream orchestration gates.
