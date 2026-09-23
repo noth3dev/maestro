@@ -114,11 +114,17 @@ export interface ProviderDataPolicy {
   readonly regions: readonly string[];
 }
 
+export interface ModelReasoningEffortCatalog {
+  readonly supported: readonly string[];
+  readonly default: string | null;
+}
+
 export interface ModelCatalogEntry {
   readonly identity: ModelIdentity;
   readonly capabilities: ReadonlySet<ProviderCapability>;
   readonly authModes: readonly ProviderAuthMode[];
   readonly dataPolicy: ProviderDataPolicy;
+  readonly reasoningEfforts?: ModelReasoningEffortCatalog;
 }
 
 export interface ProviderAccountBinding {
@@ -131,6 +137,7 @@ export interface ProviderModelRequest {
   readonly model: ModelIdentity;
   readonly account: ProviderAccountBinding;
   readonly dataPolicyHash: string;
+  readonly reasoningEffort?: string;
 }
 
 export interface ModelProviderPort {
@@ -164,6 +171,7 @@ export interface GatewayAdmissionRequest {
   readonly model: ModelIdentity;
   readonly accountRef: string;
   readonly dataPolicyHash: string;
+  readonly reasoningEffort?: string;
 }
 
 export interface GatewayCredentialBinding {
@@ -226,6 +234,7 @@ export interface GatewayBinding {
   readonly provider: ModelIdentity;
   readonly account: ProviderAccountBinding;
   readonly dataPolicyHash: string;
+  readonly reasoningEffort?: string;
 }
 
 export interface GatewayTurnRequest extends ModelTurnRequest {

@@ -5,7 +5,16 @@ import {
   MAX_PERSISTED_TEXT_BYTES,
   terminalEventType,
   turnStatus,
+  ConversationSchema,
+  CreateConversationInputSchema,
 } from "./schemas/conversation.js";
+
+describe("conversation reasoning effort contract", () => {
+  it("accepts an optional provider-native effort on creation and exposes the persisted value", () => {
+    expect(CreateConversationInputSchema.parse({ projectId: "11111111-1111-4111-8111-111111111111", goalId: null, model: "openai-codex/gpt-5.6-sol", reasoningEffort: "high" }).reasoningEffort).toBe("high");
+    expect(ConversationSchema.parse({ conversationId: "22222222-2222-4222-8222-222222222222", projectId: "11111111-1111-4111-8111-111111111111", goalId: null, model: "openai-codex/gpt-5.6-sol", reasoningEffort: null, status: "active", version: 1 }).reasoningEffort).toBeNull();
+  });
+});
 
 describe("conversation text bounds", () => {
   it("keeps short text intact", () => {

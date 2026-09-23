@@ -9,6 +9,7 @@ const BindingSchema = z.object({
   provider: IdentitySchema,
   account: z.object({ providerId: z.string().min(1).max(64), accountRef: z.string().min(1).max(256), authMode: z.enum(["api-key", "managed-subscription"]) }).strict(),
   dataPolicyHash: z.string().min(1).max(256),
+  reasoningEffort: z.string().min(1).max(64).optional(),
 }).strict();
 const LimitsSchema = z.object({
   maxModelTurns: z.number().int().nonnegative().max(100), maxToolCalls: z.number().int().nonnegative().max(1_000), maxChildCalls: z.number().int().nonnegative().max(100),
@@ -16,7 +17,7 @@ const LimitsSchema = z.object({
   providerTimeoutMs: z.number().int().positive().max(600_000), wallTimeMs: z.number().int().positive().max(3_600_000),
 }).strict();
 const AdmitSchema = z.object({
-  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.string().min(1).max(64), model: IdentitySchema, accountRef: z.string().min(1).max(256), dataPolicyHash: z.string().min(1).max(256),
+  requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.string().min(1).max(64), model: IdentitySchema, accountRef: z.string().min(1).max(256), dataPolicyHash: z.string().min(1).max(256), reasoningEffort: z.string().min(1).max(64).optional(),
 }).strict();
 const CredentialBindSchema = z.object({
   requestId: z.string().min(1).max(128), operatorId: z.string().min(1).max(128), providerId: z.enum(["openai", "anthropic"]), authMode: z.literal("api-key"), secret: z.string().min(1).max(512),

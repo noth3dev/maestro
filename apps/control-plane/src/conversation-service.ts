@@ -310,6 +310,8 @@ export function createPostgresConversationService(options: {
         const models = await options.gateway.listModels({ operatorId: options.gatewayOperatorId });
         const catalog = models.find((item) => item.identity.provider === parsed.provider && item.identity.id === parsed.id);
         if (catalog === undefined || !catalog.capabilities.has("text")) throw new ConversationModelNotAllowedError();
+        if (input.reasoningEffort !== undefined && !catalog.reasoningEfforts?.supported.includes(input.reasoningEffort))
+          throw new ConversationModelNotAllowedError();
         // Intentional wart: gateway admit stays inside this txn because the
         // gateway performs no requestId dedup, so hoisting admit out could
         // leak orphan provider sessions on concurrent same-key creates.
@@ -323,6 +325,7 @@ export function createPostgresConversationService(options: {
           model: parsed,
           accountRef,
           dataPolicyHash: policyHash,
+          ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
         });
         await client.query(
           "INSERT INTO conversations (conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding, create_request_id) VALUES ($1, $2, $3, $4, $5, $6, 'active', 1, $7, $8)",
@@ -396,7 +399,7 @@ export function createPostgresConversationService(options: {
         throw new ConversationUnavailableError("conversation runtime admission failed");
       }
       runtimes.set(conversationId, { execution: spawned.execution, invocation: spawned.invocation, runtime, binding: binding!, stream });
-      return { conversationId, projectId: input.projectId, goalId, model: input.model, status: "active", version: 1 };
+      return { conversationId, projectId: input.projectId, goalId, model: input.model, reasoningEffort: binding!.reasoningEffort ?? null, status: "active", version: 1 };
     },
     async get(conversationId, projectId, operator) {
       return modelFromRow(await read(conversationId, projectId, operator.operatorId));

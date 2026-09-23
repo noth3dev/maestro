@@ -46,6 +46,7 @@ export function modelFromRow(row: ConversationRow): Conversation {
     projectId: UuidSchema.parse(row.project_id),
     goalId: row.goal_id === null ? null : UuidSchema.parse(row.goal_id),
     model: formatModelRef({ provider: row.model_provider, id: row.model_id }),
+    reasoningEffort: row.binding.reasoningEffort ?? null,
     status: row.status,
     version: row.version,
   };

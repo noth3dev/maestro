@@ -150,6 +150,7 @@ function fakeGateway(onTurn?: (request: ModelTurnRequest) => void): ModelGateway
         capabilities: new Set(["text"]),
         authModes: ["api-key"],
         dataPolicy: { allowedDataClasses: ["public"], retention: "provider-policy", trainsOnCustomerData: false, regions: ["US"] },
+        reasoningEfforts: { supported: ["low", "high"], default: "high" },
       },
     ],
     admit: async () => binding,
@@ -172,6 +173,21 @@ function fakeGateway(onTurn?: (request: ModelTurnRequest) => void): ModelGateway
 }
 
 describe("postgres conversation service", () => {
+  it("persists a supported reasoning effort on the new conversation binding", async () => {
+    const pool = new FakePool();
+    const gateway = fakeGateway();
+    const originalAdmit = gateway.admit;
+    gateway.admit = async (request) => {
+      const binding = await originalAdmit!(request);
+      return { ...binding, ...(request.reasoningEffort === undefined ? {} : { reasoningEffort: request.reasoningEffort }) };
+    };
+    const service = createPostgresConversationService({ pool: pool as never, gateway, gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    const conversation = await service.create({ projectId, goalId: null, model: "openai/gpt-5", reasoningEffort: "low" }, operator);
+    expect(conversation.reasoningEffort).toBe("low");
+    expect(pool.conversation?.binding).toMatchObject({ reasoningEffort: "low" });
+    const invalidService = createPostgresConversationService({ pool: new FakePool() as never, gateway: fakeGateway(), gatewayOperatorId: "gateway-operator", accountRefs: { openai: "acct-1" } });
+    await expect(invalidService.create({ projectId, goalId: null, model: "openai/gpt-5", reasoningEffort: "medium" }, operator)).rejects.toBeInstanceOf(Error);
+  });
   it("admits an exact model and persists the assistant result without exposing account refs", async () => {
     const pool = new FakePool();
     const service = createPostgresConversationService({

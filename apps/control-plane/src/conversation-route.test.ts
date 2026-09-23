@@ -8,7 +8,7 @@ const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
 const goalId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02";
 const conversationId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f03";
 const operator = { operatorId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f05", credentialId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f06" };
-const conversation = { conversationId, projectId, goalId, model: "openai/gpt-5", status: "active" as const, version: 1 };
+const conversation = { conversationId, projectId, goalId, model: "openai/gpt-5", reasoningEffort: null, status: "active" as const, version: 1 };
 
 const goalService = { createGoal: vi.fn(), transitionGoal: vi.fn(), pauseGoal: vi.fn(), stopGoal: vi.fn(), resumeGoal: vi.fn(), emergencyStopGoal: vi.fn(), getGoal: vi.fn() } as unknown as GoalService;
 const authenticator: OperatorAuthenticator = { authenticateBearerSecret: async () => ({ outcome: "authenticated", operator }) };

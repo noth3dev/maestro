@@ -191,10 +191,14 @@ export class ModelGateway implements ModelGatewayPort {
     const plugin = this.options.registry.resolve({ providerId: request.providerId, modelId: request.model.id });
     const identity = this.options.registry.resolveModel({ providerId: request.providerId, modelId: request.model.id });
     if (identity.provider !== request.model.provider || identity.id !== request.model.id) throw new Error("provider returned an unexpected model identity");
+    const catalog = plugin.listModels().find((model) => model.identity.provider === identity.provider && model.identity.id === identity.id);
+    if (catalog === undefined) throw new Error("provider model is absent from the live catalog");
+    if (request.reasoningEffort !== undefined && !catalog.reasoningEfforts?.supported.includes(request.reasoningEffort))
+      throw new Error("requested reasoning effort is not supported by the selected model");
     const account = await this.options.credentials.ensure(request.accountRef);
     if (this.closed) throw new Error("model gateway is closed");
     if (account === undefined || account.operatorId !== request.operatorId || account.providerId !== request.providerId) throw new Error("credential binding is not owned by operator");
-    const provider = await plugin.create({ model: identity, account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode }, dataPolicyHash: request.dataPolicyHash });
+    const provider = await plugin.create({ model: identity, account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode }, dataPolicyHash: request.dataPolicyHash, ...(request.reasoningEffort === undefined ? {} : { reasoningEffort: request.reasoningEffort }) });
     if (this.closed) {
       await provider.close().catch(() => undefined);
       throw new Error("model gateway is closed");
@@ -203,7 +207,7 @@ export class ModelGateway implements ModelGatewayPort {
       await provider.close().catch(() => undefined);
       throw new Error("provider identity or account binding mismatch");
     }
-    const publicBinding: GatewayBinding = { bindingId: `binding-${randomUUID()}`, gatewayInstanceId: this.options.instanceId, provider: identity, account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode }, dataPolicyHash: request.dataPolicyHash };
+    const publicBinding: GatewayBinding = { bindingId: `binding-${randomUUID()}`, gatewayInstanceId: this.options.instanceId, provider: identity, account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode }, dataPolicyHash: request.dataPolicyHash, ...(request.reasoningEffort === undefined ? {} : { reasoningEffort: request.reasoningEffort }) };
     this.bindings.set(publicBinding.bindingId, { publicBinding, operatorId: request.operatorId, provider });
     return publicBinding;
   }

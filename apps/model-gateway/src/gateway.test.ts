@@ -15,7 +15,7 @@ function fakePlugin(): ProviderPlugin {
   return {
     id: "fake", authModes: ["api-key"], capabilities: new Set(["text"]),
     dataPolicy: { allowedDataClasses: ["public"], retention: "none", trainsOnCustomerData: false, regions: ["us"] },
-    listModels: () => [{ identity, capabilities: new Set(["text"]), authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "none", trainsOnCustomerData: false, regions: ["us"] } }],
+    listModels: () => [{ identity, capabilities: new Set(["text"]), authModes: ["api-key"], dataPolicy: { allowedDataClasses: ["public"], retention: "none", trainsOnCustomerData: false, regions: ["us"] }, reasoningEfforts: { supported: ["low", "high"], default: "high" } }],
     create: async (request) => ({ ...port, accountRef: request.account.accountRef }),
   };
 }
@@ -102,6 +102,16 @@ describe("model gateway", () => {
     await closing;
     await expect(pendingAdmission).rejects.toThrow("model gateway is closed");
     expect(providerClose).toHaveBeenCalledOnce();
+  });
+
+  it("validates and carries the model-specific reasoning effort in the binding", async () => {
+    const credentials = new InMemoryCredentialStore();
+    const account = await credentials.bind({ operatorId: "operator-1", providerId: "fake", authMode: "api-key" }, "secret");
+    const registry = new ProviderRegistry();
+    registry.register(fakePlugin());
+    const gateway = createModelGateway({ registry, credentials, operatorId: "operator-1", instanceId: "gateway-1" });
+    await expect(gateway.admit({ requestId: "bad-effort", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: account.accountRef, dataPolicyHash: "policy-1", reasoningEffort: "medium" })).rejects.toThrow("reasoning effort");
+    await expect(gateway.admit({ requestId: "good-effort", operatorId: "operator-1", providerId: "fake", model: { provider: "fake", id: "model-a" }, accountRef: account.accountRef, dataPolicyHash: "policy-1", reasoningEffort: "low" })).resolves.toMatchObject({ reasoningEffort: "low" });
   });
 
   it("admits an exact provider/model/account binding and delegates turns", async () => {

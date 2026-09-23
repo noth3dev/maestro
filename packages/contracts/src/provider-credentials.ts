@@ -4,6 +4,7 @@ export const ModelCatalogEntrySchema = z.object({
   identity: z.object({ provider: z.string().min(1), id: z.string().min(1) }).strict(),
   capabilities: z.array(z.string().min(1)),
   authModes: z.array(z.enum(["api-key", "managed-subscription"])),
+  reasoningEfforts: z.object({ supported: z.array(z.string().min(1)).readonly(), default: z.string().min(1).nullable() }).strict().optional(),
   dataPolicy: z.object({
     allowedDataClasses: z.array(z.enum(["public", "workspace", "private", "pii", "phi", "secret"])),
     retention: z.enum(["none", "provider-policy", "durable"]),

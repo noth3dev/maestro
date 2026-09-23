@@ -40,8 +40,18 @@ function mapModel(model: {
   capabilities: readonly string[];
   authModes: readonly ("api-key" | "managed-subscription")[];
   dataPolicy: ModelCatalogEntry["dataPolicy"];
+  reasoningEfforts?: NonNullable<ModelCatalogEntry["reasoningEfforts"]>;
 }): ModelCatalogEntry {
-  return { ...model, capabilities: new Set(model.capabilities as readonly ProviderCapability[]) };
+  return { ...model, capabilities: new Set(model.capabilities as readonly ProviderCapability[]), ...(model.reasoningEfforts === undefined ? {} : { reasoningEfforts: model.reasoningEfforts }) };
+}
+
+function parseReasoningEfforts(value: unknown): ModelCatalogEntry["reasoningEfforts"] | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object") throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed reasoning effort metadata");
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.supported) || record.supported.some((item) => typeof item !== "string" || item.trim() === "") || (record.default !== null && typeof record.default !== "string"))
+    throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed reasoning effort metadata");
+  return { supported: record.supported, default: record.default };
 }
 
 function accountLoginStart(value: unknown): GatewayAccountLoginStartResult {
@@ -406,7 +416,8 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
       (account.authMode !== "api-key" && account.authMode !== "managed-subscription") ||
       typeof record.bindingId !== "string" ||
       typeof record.gatewayInstanceId !== "string" ||
-      typeof record.dataPolicyHash !== "string"
+      typeof record.dataPolicyHash !== "string" ||
+      (record.reasoningEffort !== undefined && (typeof record.reasoningEffort !== "string" || record.reasoningEffort.trim() === ""))
     )
       throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed binding");
     return {
@@ -415,6 +426,7 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
       provider,
       account: { providerId: account.providerId, accountRef: account.accountRef, authMode: account.authMode },
       dataPolicyHash: record.dataPolicyHash,
+      ...(record.reasoningEffort === undefined ? {} : { reasoningEffort: record.reasoningEffort }),
     };
   };
 
@@ -437,6 +449,7 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
             typeof record.dataPolicy !== "object"
           )
             throw new ModelGatewayClientError("gateway_request_failed", 502, "model gateway returned malformed model");
+          const reasoningEfforts = parseReasoningEfforts(record.reasoningEfforts);
           return mapModel({
             identity: modelIdentity,
             capabilities: record.capabilities.filter(
@@ -452,6 +465,7 @@ export function createModelGatewayClient(options: { baseUrl: string; token: stri
               (v): v is "api-key" | "managed-subscription" => v === "api-key" || v === "managed-subscription",
             ),
             dataPolicy: record.dataPolicy as ModelCatalogEntry["dataPolicy"],
+            ...(reasoningEfforts === undefined ? {} : { reasoningEfforts }),
           });
         });
       });

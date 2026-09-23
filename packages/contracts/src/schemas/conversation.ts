@@ -9,13 +9,14 @@ export const ConversationSchema = z
     projectId: UuidSchema,
     goalId: UuidSchema.nullable(),
     model: ModelRefSchema,
+    reasoningEffort: z.string().min(1).nullable(),
     status: ConversationStatusSchema,
     version: CommandVersionSchema,
   })
   .strict();
 export type Conversation = z.infer<typeof ConversationSchema>;
 export const CreateConversationInputSchema = z
-  .object({ projectId: UuidSchema, goalId: UuidSchema.nullable().default(null), model: ModelRefSchema })
+  .object({ projectId: UuidSchema, goalId: UuidSchema.nullable().default(null), model: ModelRefSchema, reasoningEffort: z.string().min(1).optional() })
   .strict();
 export type CreateConversationInput = z.input<typeof CreateConversationInputSchema>;
 export const ConversationTurnInputSchema = z.object({ projectId: UuidSchema, text: z.string().min(1).max(64_000) }).strict();
