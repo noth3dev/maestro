@@ -4921,3 +4921,10 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Verification: focused reasoning/Gateway/Control Plane/Carnegie suite **11 files / 116 tests passed**; `npm run build`, renderer typecheck, `npm run lint`, `npm run boundaries:check`, `npm run migrations:check`, and changed-scope `git diff --check` passed.
 - Full `npm test` was started against `maestro-local-postgres` at `127.0.0.1:55432` and remains in progress in `/tmp/maestro-full-test.log`; no full-suite result is claimed until the process exits.
 - E5 remains open and E6 remains gated. This slice produced no live Task Contract, Goal, Worker, evidence, or external effect.
+
+## 2026-09-24 — E5 heartbeat #49 full-suite result
+
+- The compatibility follow-up `b4d6e76a` made the new conversation `reasoningEffort` output field optional for older wire responses while preserving explicit selected effort/`null` on server-created conversations, and added stable Carnegie titles for `overture_run_not_found` and `overture_conflict`.
+- Fresh unrestricted verification against `maestro-local-postgres` at `127.0.0.1:55432`: `npm test` passed **440 files / 2,916 tests**, exit 0, duration **1,001.90s**. Log: `/tmp/maestro-full-test-2.log`.
+- Local `main` is 14 commits ahead of `origin/main`; no push was performed. Existing unrelated local work remains in router-catalog/local-bootstrap files and untracked planning artifacts.
+- This is automated evidence only. E5 live provider, Task Contract, Goal, Worker, evidence, certification, report, and external-effect acceptance remain unclaimed; E6 remains gated.

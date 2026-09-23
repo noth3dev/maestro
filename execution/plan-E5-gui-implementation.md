@@ -1093,6 +1093,8 @@ The Task Editor UI also supports adding or revising phase and slice documents wi
 
 **Task 15 model-selection/reasoning-effort checkpoint (2026-09-24):** Added provider-advertised reasoning-effort metadata from the Codex model catalog, strict Gateway admission validation, and persistence of the selected effort in the new Conversation's opaque Gateway binding. Unsupported efforts fail closed before provider admission; models without metadata remain at the provider default. Carnegie Home and Inbox now expose exact live model selection plus an accessible dial backed only by the selected model's advertised options. Commits `b4f9dce7`, `e331e1ea`, and `9a80d468` are on local `main`; focused verification passed **11 files / 116 tests**, root and renderer builds passed, ESLint, boundary, and migration checks passed. This is code-level evidence only: it does not create or claim a live Task Contract, Goal, Worker, or E5 completion.
 
+**Task 15 heartbeat #49 verification update (2026-09-24):** Conversation wire compatibility was restored for older responses by making the new `reasoningEffort` output field optional while new server-created conversations still return the selected value or `null`; missing Carnegie titles for `overture_run_not_found` and `overture_conflict` were also added. Compatibility verification passed **4 files / 93 tests**; the fresh unrestricted PostgreSQL-backed suite passed **440 files / 2,916 tests** with exit 0 in **1,001.90s** (`/tmp/maestro-full-test-2.log`). No live provider or downstream E5 evidence was created.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

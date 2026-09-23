@@ -44,6 +44,11 @@ Task 14 is **backend-blocked at provider/model availability**. The fresh rerun p
 - These results close the automated verification gap but do not close E5: Task 14 still has no usable Control Plane, embedded database, Model Gateway, or provider listener, and produced no live project/Goal records.
 - Independent no-edit review: **PASS** for the current patch with no P0/P1 findings. It confirmed the Playwright-owned exclusion is required because removing it makes Vitest collect Playwright specs and fail. A pre-existing P2 remains: `router-runtime.integration.test.ts` imports constants from `native-worker-acceptance.integration.test.ts`, registering that suite during focused runs; move shared constants to a non-test fixture module in a later cleanup.
 
+## Heartbeat #49 automated verification (2026-09-24)
+
+- After the model-selection slice and compatibility fixes, a fresh unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,916 tests**, exit 0, duration **1,001.90s**. Log: `/tmp/maestro-full-test-2.log`.
+- This closes the automated regression check only. It does not claim a live provider, Task Contract, Goal, Worker, evidence, certification, report, or E5 completion.
+
 ## Fresh Task 14 rerun (2026-09-23)
 
 - The disposable Docker PostgreSQL instance was reachable at `127.0.0.1:55432`. A fresh Carnegie profile was launched without `MAESTRO_API_URL`, with `MAESTRO_LOCAL_DB_ENGINE=docker`, and CDP on `9223`; this exercised the intended local auto-bootstrap path rather than the manual remote-connection path.
