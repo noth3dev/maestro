@@ -39,6 +39,7 @@ import {
   type CreateGoalInput,
   type CreateTaskContractInput,
   type TaskContract,
+  type TaskContractLaunchResult,
   type TaskContractConfirmationInput,
   type TaskContractQuery,
   type UpdateTaskContractInput,
@@ -146,7 +147,7 @@ export interface ApiClient {
   updateTaskContract(contractId: string, input: UpdateTaskContractInput, commandId?: string): Promise<TaskContract>;
   selectOvertureRoles(contractId: string, input: OvertureSelectionInput, commandId?: string): Promise<OvertureRoleSelectionResult>;
   confirmTaskContract(contractId: string, input: TaskContractConfirmationInput, commandId?: string): Promise<void>;
-  launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContract>;
+  launchTaskContract(contractId: string, projectId: string, commandId?: string): Promise<TaskContractLaunchResult>;
   listGoals(projectId: string): Promise<GoalList>;
   listInbox(projectId: string): Promise<InboxRead>;
   listProjects(): Promise<ProjectList>;

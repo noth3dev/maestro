@@ -365,7 +365,7 @@ export async function executeWriteCommand(context: WriteCommandContext, command:
   }
   if (key === "task-contract:launch") {
     const contractId = required(command, "contract-id"); if (typeof contractId !== "string") return contractId;
-    const launched = await context.client.launchTaskContract(contractId, context.projectId, id); return { title: "Task Contract", lines: [`${launched.contractId} · ${launched.launchState}`] };
+    const launched = await context.client.launchTaskContract(contractId, context.projectId, id); return { title: "Task Contract", lines: [`${launched.taskContract.contractId} · ${launched.taskContract.launchState} · Goal ${launched.goalId} · ${launched.scheduling}`] };
   }
   if (key === "head:activate") {
     const goalId = selectedGoal(command, context); const activation = jsonObject(command, "activation-json");

@@ -35,7 +35,7 @@ function fakeApi(): TaskContractAuthoringApi {
     getTaskContract: vi.fn(),
     updateTaskContract: vi.fn().mockResolvedValue({ ...contract, version: 2, desiredOutcome: "Updated outcome" }),
     confirmTaskContract: vi.fn().mockResolvedValue(undefined),
-    launchTaskContract: vi.fn().mockResolvedValue({ ...contract, launchState: "launched" }),
+    launchTaskContract: vi.fn().mockResolvedValue({ taskContract: { ...contract, launchState: "launched" }, goalId: contractId, scheduling: "queued" as const }),
   };
 }
 

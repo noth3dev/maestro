@@ -29,7 +29,7 @@ function service(overrides: Partial<TaskContractService> = {}): TaskContractServ
     updateTaskContract: vi.fn(async () => ({ ...contract, version: 2, desiredOutcome: "Updated" })),
     selectOvertureRoles: vi.fn(async () => ["conversation-lead", "security-evaluator", "task-editor"]),
     confirmTaskContract: vi.fn(async () => undefined),
-    launchTaskContract: vi.fn(async () => ({ ...contract, launchState: "launched" })),
+    launchTaskContract: vi.fn(async () => ({ taskContract: { ...contract, launchState: "launched" }, goalId: contractId, scheduling: "queued" as const })),
     ...overrides,
   };
 }
@@ -69,7 +69,7 @@ describe("Task Contract API routes", () => {
 
     const launched = await app.inject({ method: "POST", url: `/v1/task-contracts/${contractId}/launch`, headers: authHeaders, payload: { projectId } });
     expect(launched.statusCode).toBe(200);
-    expect(launched.json()).toMatchObject({ launchState: "launched" });
+    expect(launched.json()).toMatchObject({ taskContract: { launchState: "launched" }, goalId: contractId, scheduling: "queued" });
 
     await app.close();
   });

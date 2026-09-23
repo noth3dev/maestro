@@ -2,6 +2,7 @@ import {
   CreateTaskContractInputSchema,
   TaskContractConfirmationInputSchema,
   TaskContractQuerySchema,
+  TaskContractLaunchResultSchema,
   TaskContractSchema,
   UpdateTaskContractInputSchema,
   OvertureSelectionInputSchema,
@@ -80,7 +81,7 @@ export function createTaskContractsMethods(
           headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
           body: JSON.stringify({ projectId: parsedProjectId }),
         },
-        TaskContractSchema,
+        TaskContractLaunchResultSchema,
       );
     },
   };

@@ -130,10 +130,16 @@ export async function recordExactTaskContractConfirmation(pool: Pool, contractId
 }
 
 /** This starts no worker or session. It only durably records an exact-confirmed launch. */
-export async function launchConfirmedTaskContract(pool: Pool, contractId: string): Promise<TaskContract> {
+export async function launchConfirmedTaskContract(
+  pool: Pool,
+  contractId: string,
+  afterLaunch?: (client: PoolClient, contract: TaskContract) => Promise<void>,
+): Promise<TaskContract> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query("SET LOCAL lock_timeout = '5s'");
+    await client.query("SET LOCAL statement_timeout = '15s'");
     const row = await client.query<ContractRow>("SELECT contract_id, schema_version, version, content, content_hash, launch_state FROM task_contracts WHERE contract_id = $1 FOR UPDATE", [contractId]);
     if (row.rowCount !== 1) throw new TaskContractNotFoundError(`Task contract not found: ${contractId}`);
     const current = row.rows[0]!;
@@ -142,13 +148,20 @@ export async function launchConfirmedTaskContract(pool: Pool, contractId: string
       "SELECT decision_id, contract_id, contract_version, kind, evidence, content_hash FROM task_contract_decisions WHERE contract_id = $1 ORDER BY recorded_at, decision_id", [contractId],
     );
     assertDecisionIntegrity(current, decisions.rows);
-    if (current.launch_state === "launched") { await client.query("COMMIT"); return { ...toContract(current, decisions.rows), launchState: "launched" }; }
+    if (current.launch_state === "launched") {
+      const launchedContract = { ...toContract(current, decisions.rows), launchState: "launched" as const };
+      await afterLaunch?.(client, launchedContract);
+      await client.query("COMMIT");
+      return launchedContract;
+    }
     const confirmation = await client.query("SELECT 1 FROM task_contract_confirmations WHERE contract_id = $1 AND contract_version = $2 AND content_hash = $3", [contractId, current.version, current.content_hash]);
     if (confirmation.rowCount !== 1) throw new ExactConfirmationRequiredError("Exact current Task Contract confirmation is required before launch");
     const launched = await client.query("UPDATE task_contracts SET launch_state = 'launched', updated_at = transaction_timestamp() WHERE contract_id = $1 AND launch_state = 'awaiting_confirmation'", [contractId]);
     if (launched.rowCount !== 1) throw new ExactConfirmationRequiredError("Task Contract launch compare-and-set failed");
+    const launchedContract = { ...toContract(current, decisions.rows), launchState: "launched" as const };
+    await afterLaunch?.(client, launchedContract);
     await client.query("COMMIT");
-    return { ...toContract(current, decisions.rows), launchState: "launched" };
+    return launchedContract;
   } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
 }
 

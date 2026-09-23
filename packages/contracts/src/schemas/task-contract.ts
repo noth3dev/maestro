@@ -118,3 +118,12 @@ export const TaskContractConfirmationInputSchema = z
 export type TaskContractConfirmationInput = z.infer<typeof TaskContractConfirmationInputSchema>;
 export const OvertureRoleSelectionResultSchema = z.object({ roles: z.array(z.string().min(1)) }).strict();
 export type OvertureRoleSelectionResult = z.infer<typeof OvertureRoleSelectionResultSchema>;
+
+export const TaskContractLaunchResultSchema = z
+  .object({
+    taskContract: TaskContractSchema,
+    goalId: UuidSchema,
+    scheduling: z.literal("queued"),
+  })
+  .strict();
+export type TaskContractLaunchResult = z.infer<typeof TaskContractLaunchResultSchema>;

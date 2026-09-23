@@ -188,6 +188,7 @@ describe("contracts surface", () => {
         "StoredDiscordSignalSchema",
         "SubmitCouncilBriefInputSchema",
         "TaskContractConfirmationInputSchema",
+        "TaskContractLaunchResultSchema",
         "TaskContractQuerySchema",
         "TaskContractSchema",
         "TaskContractSubstanceSchema",

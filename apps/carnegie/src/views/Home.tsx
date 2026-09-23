@@ -160,6 +160,8 @@ export function Home({
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<TaskContract | undefined>(undefined);
   const [draftOrigin, setDraftOrigin] = useState<"goal-less" | "goal-attached" | undefined>(undefined);
+  const [launchedGoalId, setLaunchedGoalId] = useState<string | undefined>(undefined);
+  const [launchScheduling, setLaunchScheduling] = useState<"queued" | undefined>(undefined);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [conversationProjectId, setConversationProjectId] = useState<string | undefined>(undefined);
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
@@ -589,6 +591,8 @@ export function Home({
         setDraftForm(formFromContract(intake.draft));
         setConfirmed(false);
         setDraftRejected(false);
+        setLaunchedGoalId(undefined);
+        setLaunchScheduling(undefined);
       }
       setText("conversationId" in intake && !completedTurn ? submittedText : "");
     } catch (cause) {
@@ -671,7 +675,10 @@ export function Home({
     setBusy(true);
     setError(undefined);
     try {
-      setDraft(await launchTaskContractDraft(window.maestro.api, draft));
+      const launch = await launchTaskContractDraft(window.maestro.api, draft);
+      setDraft(launch.taskContract);
+      setLaunchedGoalId(launch.goalId);
+      setLaunchScheduling(launch.scheduling);
       setDraftRejected(false);
     } catch (cause) {
       setDraftRejected(true);
@@ -1030,6 +1037,11 @@ export function Home({
           <p className="form-hint" data-contract-phase={draftPhase}>
             phase: {draftPhase}
           </p>
+          {draftPhase === "launched" && launchedGoalId !== undefined && (
+            <p className="form-hint" data-launch-goal-id={launchedGoalId} data-launch-scheduling={launchScheduling ?? "unknown"} role="status">
+              Goal {launchedGoalId} · scheduling {launchScheduling ?? "unknown"}
+            </p>
+          )}
           <details className="home-draft-review" open>
             <summary>Full Task Contract review</summary>
             <pre aria-label="Full Task Contract draft">{formatTaskContractReview(draft)}</pre>

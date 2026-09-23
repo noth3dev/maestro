@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { TaskContractRouteDeps } from "./deps.js";
 import {
   UuidSchema,
+  TaskContractLaunchResultSchema,
   TaskContractSchema,
   CreateTaskContractInputSchema,
   UpdateTaskContractInputSchema,
@@ -73,6 +74,6 @@ export function registerTaskContractRoutes(app: FastifyInstance, deps: TaskContr
       requestOperator(request as { operator?: OperatorContext }),
       commandId,
     );
-    return reply.status(200).send(TaskContractSchema.parse(result));
+    return reply.status(200).send(TaskContractLaunchResultSchema.parse(result));
   });
 }

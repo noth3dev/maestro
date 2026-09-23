@@ -83,3 +83,8 @@ Task 14 is **backend-blocked at provider/model availability**. The fresh rerun p
 ## Task 15 role-continuation regression checkpoint (2026-09-24)
 
 After commit `4c02785a`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,920 tests**, exit 0, duration **916.12s** (`/tmp/maestro-full-test-4.log`). This includes the Overture-owned turn and replay-safe role-continuation integration path. Automated regression is green; live provider, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed.
+
+
+## Task 16 exact Launch → Goal handoff checkpoint (2026-09-24)
+
+The next narrow slice now couples exact Task Contract Launch to a server-derived Goal in one PostgreSQL transaction. The launch response returns `{ taskContract, goalId, scheduling: "queued" }`. The transaction writes the `GoalCreated` receipt/event, `goal_controls`, and `goal-events` outbox handoff, and marks a linked reviewed Overture Run launched. Replay with the same or a new launch command reuses the unique Task Contract→Goal binding without creating a second Goal. Focused PostgreSQL/API/UI/CLI/Overture/surface verification passed **105 tests across 9 files**; `npm run build` passed. This is automated local evidence only: legacy contracts without a linked Overture Run remain supported, while the repository still has no outbox consumer that advances Head/Council/Worker orchestration and live provider access remains unavailable; E5 and E6 are not complete.

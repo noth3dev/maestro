@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { InvalidGoalTransitionError, isTerminalGoalState, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { assertProjectRole } from "./project-membership.js";
 
 export interface GoalLeaseProof {
@@ -140,6 +140,110 @@ export async function releaseGoalLease(pool: Pool, proof: GoalLeaseProof): Promi
     [proof.goalId, proof.ownerId, proof.fencingToken],
   );
   if (result.rowCount !== 1) throw new StaleGoalLeaseError(proof.goalId);
+}
+
+/**
+ * Create the Goal projection while an outer launch transaction is open.
+ * Launch orchestration uses this to couple Task Contract launch, GoalCreated,
+ * and the first durable goal-events outbox handoff without a second operator
+ * action. The caller owns BEGIN/COMMIT and must hold the Goal lease.
+ */
+export async function executeCreateGoalCommandInTransaction(
+  client: PoolClient,
+  command: Extract<GoalCommand, { type: "CreateGoal" }> & { contractId: string },
+  proof: GoalLeaseProof,
+): Promise<CommandResult> {
+  await assertCurrentGoalLease(client, command, proof);
+  if (command.requiredRole !== undefined) await assertProjectRole(client, command.actorId, command.projectId, command.requiredRole);
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 1))", [command.commandId]);
+
+  const hash = commandHash(command);
+  const prior = await client.query<{ request_hash: Buffer; request: unknown; result: CommandResult }>(
+    "SELECT request_hash, request, result FROM command_receipts WHERE command_id = $1",
+    [command.commandId],
+  );
+  if (prior.rowCount === 1) {
+    const row = prior.rows[0]!;
+    if (!row.request_hash.equals(hash) || canonicalJson(row.request) !== canonicalJson(command)) {
+      throw new CommandIdReuseError(command.commandId);
+    }
+    return row.result;
+  }
+
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 2))", [command.goalId]);
+  const current = await client.query<{ project_id: string; version: string }>(
+    "SELECT project_id, version FROM goals WHERE goal_id = $1 AND project_id = $2 FOR UPDATE",
+    [command.goalId, command.projectId],
+  );
+  const actualVersion = current.rowCount === 1 ? Number(current.rows[0]!.version) : 0;
+  if (actualVersion !== command.expectedVersion) {
+    const result: CommandResult = {
+      outcome: "version_conflict",
+      goalId: command.goalId,
+      code: "version_conflict",
+      expectedVersion: command.expectedVersion,
+      actualVersion,
+    };
+    await insertReceipt(client, command, hash, "version_conflict", result);
+    return result;
+  }
+
+  const contract = await client.query<{ launch_state: string; project_id: string; content: TaskContractSubstance; content_hash: string }>(
+    "SELECT launch_state, content->'project'->>'projectId' AS project_id, content, content_hash FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE",
+    [command.contractId],
+  );
+  let code: string | undefined;
+  if (contract.rowCount === 0) code = "task_contract_not_found";
+  else {
+    const stored = contract.rows[0]!;
+    try {
+      assertValidTaskContractSubstance(stored.content);
+      if (taskContractContentHash(stored.content) !== stored.content_hash.trim()) code = "task_contract_integrity_error";
+    } catch {
+      code = "task_contract_integrity_error";
+    }
+    if (code === undefined && stored.project_id !== command.projectId) code = "task_contract_project_mismatch";
+    if (code === undefined && stored.launch_state !== "launched") code = "task_contract_not_launched";
+  }
+  if (code !== undefined) {
+    const result: CommandResult = { outcome: "rejected", goalId: command.goalId, code };
+    await insertReceipt(client, command, hash, "rejected", result);
+    return result;
+  }
+
+  const eventId = randomUUID();
+  const result: CommandResult = {
+    outcome: "succeeded",
+    goalId: command.goalId,
+    version: 1,
+    state: "draft",
+    eventId,
+    contractId: command.contractId,
+  };
+  await insertReceipt(client, command, hash, "succeeded", result);
+  await client.query(
+    `INSERT INTO goal_events
+     (event_id, project_id, goal_id, aggregate_version, event_type, schema_version, payload, command_id)
+     VALUES ($1, $2, $3, 1, 'GoalCreated', 1, $4::jsonb, $5)`,
+    [eventId, command.projectId, command.goalId, JSON.stringify({ state: "draft", taskContractId: command.contractId }), command.commandId],
+  );
+  await client.query(
+    `INSERT INTO goals (goal_id, project_id, state, version, task_contract_id, created_at, updated_at)
+     VALUES ($1, $2, 'draft', 1, $3, transaction_timestamp(), transaction_timestamp())`,
+    [command.goalId, command.projectId, command.contractId],
+  );
+  await client.query(
+    `INSERT INTO goal_controls (project_id, goal_id, default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [command.projectId, command.goalId, command.authorityDefaults?.spendCeilingCents ?? 5000, command.authorityDefaults?.criticalActionsRequireApproval ?? true, command.authorityDefaults?.allowFlashmob ?? true],
+  );
+  await client.query(
+    `INSERT INTO outbox (event_id, topic, payload)
+     VALUES ($1, 'goal-events', $2::jsonb)`,
+    [eventId, JSON.stringify({ eventId })],
+  );
+  await client.query("SELECT pg_notify('maestro_outbox', $1)", [eventId]);
+  return result;
 }
 
 export async function executeGoalCommand(

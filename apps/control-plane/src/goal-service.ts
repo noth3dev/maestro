@@ -33,6 +33,8 @@ export interface GoalService {
       renew?: () => Promise<import("@maestro/persistence").GoalLeaseProof>,
     ) => Promise<T>,
   ): Promise<T>;
+  /** Release an internal lease when a pre-Goal orchestration transaction aborts. */
+  releaseGoalLease?(goalId: string): Promise<void>;
 }
 
 export type GoalLeaseOperation = NonNullable<GoalService["withGoalLease"]>;
@@ -218,6 +220,10 @@ export function createDurableGoalService(options: DurableGoalServiceOptions): Go
         };
         return operation(proof, renew);
       });
+    },
+    async releaseGoalLease(goalId) {
+      const proof = leaseProofs.get(goalId);
+      if (proof !== undefined) await releaseCachedProof(goalId, proof);
     },
     async getGoal(goalId, projectId) {
       try {

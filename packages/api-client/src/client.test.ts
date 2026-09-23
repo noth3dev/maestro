@@ -689,7 +689,7 @@ it("runs the Task Contract lifecycle through typed authenticated requests", asyn
     .mockResolvedValueOnce(new Response(JSON.stringify({ ...contract, version: 2 }), { status: 200 }))
     .mockResolvedValueOnce(new Response(JSON.stringify({ roles: ["conversation-lead"] }), { status: 200 }))
     .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ ...contract, launchState: "launched" }), { status: 200 }));
+    .mockResolvedValueOnce(new Response(JSON.stringify({ taskContract: { ...contract, launchState: "launched" }, goalId: contractId, scheduling: "queued" }), { status: 200 }));
   const client = createApiClient({ baseUrl: "https://maestro.test", token: "secret", fetch });
   await expect(client.createTaskContract({ projectId, substance }, contractId)).resolves.toEqual(contract);
   await expect(client.getTaskContract(contractId, { projectId })).resolves.toEqual(contract);
@@ -700,7 +700,7 @@ it("runs the Task Contract lifecycle through typed authenticated requests", asyn
   await expect(
     client.confirmTaskContract(contractId, { projectId, version: 1, contentHash: contract.contentHash }, contractId),
   ).resolves.toBeUndefined();
-  await expect(client.launchTaskContract(contractId, projectId)).resolves.toMatchObject({ launchState: "launched" });
+  await expect(client.launchTaskContract(contractId, projectId)).resolves.toMatchObject({ taskContract: { launchState: "launched" }, goalId: contractId, scheduling: "queued" });
   expect(fetch).toHaveBeenNthCalledWith(
     1,
     `https://maestro.test/v1/task-contracts`,

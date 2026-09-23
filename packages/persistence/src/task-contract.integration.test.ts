@@ -53,6 +53,17 @@ describeDatabase("Task Contract exact confirmation with PostgreSQL", () => {
     await expect(launchConfirmedTaskContract(pool, contract.contractId)).resolves.toMatchObject({ launchState: "launched" });
   });
 
+  it("rolls back the exact launch when the durable orchestration handoff fails", async () => {
+    const contract = await createDurableTaskContract(pool, randomUUID(), substance());
+    await recordExactTaskContractConfirmation(pool, contract.contractId, contract.version, contract.contentHash, "operator");
+    await expect(
+      launchConfirmedTaskContract(pool, contract.contractId, async () => {
+        throw new Error("orchestration handoff unavailable");
+      }),
+    ).rejects.toThrow("orchestration handoff unavailable");
+    await expect(readTaskContract(pool, contract.contractId)).resolves.toMatchObject({ launchState: "awaiting_confirmation" });
+  });
+
   it("preserves an exact confirmation for a no-op update and treats launch retry as idempotent", async () => {
     const contract = await createDurableTaskContract(pool, randomUUID(), substance());
     await recordExactTaskContractConfirmation(pool, contract.contractId, contract.version, contract.contentHash, "operator");

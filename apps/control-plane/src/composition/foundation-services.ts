@@ -47,7 +47,6 @@ export function composeFoundationServices(deps: FoundationServicesDeps) {
     return result;
   }
 
-  const taskContractService = createDurableTaskContractService(pool);
   const conversationPersonaResolver = async (input: {
     readonly roleId: string;
     readonly taskClass: string;
@@ -94,6 +93,7 @@ export function composeFoundationServices(deps: FoundationServicesDeps) {
     actorId: config.actorId,
     leaseOwnerId: config.leaseOwnerId,
   });
+  const taskContractService = createDurableTaskContractService(pool, goalService);
   const withGoalLease = requireGoalLease(goalService);
   const authenticator: OperatorAuthenticator = {
     authenticateBearerSecret: (secret) => authenticateLocalOperator(pool, secret),

@@ -1,5 +1,5 @@
 import type { ApiClient } from "@maestro/api-client";
-import { type ConversationTurn, type TaskContract, type TaskContractSubstance } from "@maestro/contracts";
+import { type ConversationTurn, type TaskContract, type TaskContractLaunchResult, type TaskContractSubstance } from "@maestro/contracts";
 
 export type TaskContractAuthoringApi = Pick<
   ApiClient,
@@ -243,7 +243,7 @@ export async function launchTaskContractDraft(
   api: TaskContractAuthoringApi,
   contract: TaskContract,
   commandId = newId(),
-): Promise<TaskContract> {
+): Promise<TaskContractLaunchResult> {
   assertNotLaunched(contract);
   return api.launchTaskContract(contract.contractId, contract.project.projectId, commandId);
 }

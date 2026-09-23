@@ -23,7 +23,7 @@ describeDatabase("Task Contract control-plane API", () => {
   let setupPool: Pool;
 
   beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); setupPool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(setupPool); });
-  beforeEach(async () => { await setupPool.query("TRUNCATE task_contract_confirmations, task_contract_decisions, task_contracts, reconciler_leader_lease, local_operator_credentials, local_operators, operator_project_memberships CASCADE"); });
+  beforeEach(async () => { await setupPool.query("TRUNCATE goals, goal_controls, goal_leases, outbox, goal_events, command_receipts, task_contract_confirmations, task_contract_decisions, task_contracts, reconciler_leader_lease, local_operator_credentials, local_operators, operator_project_memberships CASCADE"); });
   afterAll(async () => { await setupPool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
 
   it("drives create, amend, role selection, exact confirmation, launch, and retry through HTTP", async () => {
@@ -33,6 +33,8 @@ describeDatabase("Task Contract control-plane API", () => {
     const contractId = randomUUID();
     await grantProjectMembership(setupPool, operatorId, projectId);
     await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
+    await setupPool.query("INSERT INTO operator_settings (operator_id) VALUES ($1) ON CONFLICT (operator_id) DO NOTHING", [operatorId]);
+    await setupPool.query("UPDATE operator_settings SET spend_ceiling_cents = 12345, critical_actions_require_approval = false, allow_flashmob = false WHERE operator_id = $1", [operatorId]);
     const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `task-contract-${randomUUID()}` });
     try {
       await controlPlane.listen();
@@ -64,12 +66,27 @@ describeDatabase("Task Contract control-plane API", () => {
       expect(confirmed.status).toBe(204);
       const launched = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers, body: JSON.stringify({ projectId }) });
       expect(launched.status).toBe(200);
-      expect(await launched.json()).toMatchObject({ contractId, version: 2, launchState: "launched" });
+      const launchedBody = await launched.json() as { taskContract: { contractId: string; version: number; launchState: string }; goalId: string; scheduling: string };
+      expect(launchedBody).toMatchObject({ taskContract: { contractId, version: 2, launchState: "launched" }, scheduling: "queued" });
+      expect(launchedBody.goalId).toMatch(/^[0-9a-f-]{36}$/);
+      expect((await setupPool.query("SELECT goal_id, project_id, task_contract_id, state, version FROM goals WHERE task_contract_id = $1", [contractId])).rows).toEqual([
+        expect.objectContaining({ goal_id: launchedBody.goalId, project_id: projectId, task_contract_id: contractId, state: "draft", version: "1" }),
+      ]);
+      expect((await setupPool.query("SELECT command_id, command_type, outcome FROM command_receipts WHERE goal_id = $1", [launchedBody.goalId])).rows).toEqual([
+        expect.objectContaining({ command_type: "CreateGoal", outcome: "succeeded" }),
+      ]);
+      expect((await setupPool.query("SELECT default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob FROM goal_controls WHERE goal_id = $1", [launchedBody.goalId])).rows).toEqual([
+        { default_spend_ceiling_cents: "12345", default_critical_actions_require_approval: false, default_allow_flashmob: false },
+      ]);
+      expect((await setupPool.query("SELECT topic FROM outbox WHERE event_id IN (SELECT event_id FROM goal_events WHERE goal_id = $1)", [launchedBody.goalId])).rows).toEqual([{ topic: "goal-events" }]);
 
-      const goalId = randomUUID();
-      const goal = await fetch(`${baseUrl}/v1/goals`, { method: "POST", headers: { ...headers, "idempotency-key": goalId }, body: JSON.stringify({ projectId, contractId }) });
-      expect(goal.status).toBe(201);
-      expect(await goal.json()).toMatchObject({ goalId, projectId, contractId, state: "draft", version: 1 });
+      const retriedLaunch = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers, body: JSON.stringify({ projectId }) });
+      expect(retriedLaunch.status).toBe(200);
+      expect(await retriedLaunch.json()).toEqual(launchedBody);
+      const retriedWithNewCommand = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers: { ...headers, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId }) });
+      expect(retriedWithNewCommand.status).toBe(200);
+      expect(await retriedWithNewCommand.json()).toEqual(launchedBody);
+      expect((await setupPool.query("SELECT count(*)::int AS count FROM goals WHERE task_contract_id = $1", [contractId])).rows[0]!.count).toBe(1);
 
       const forbiddenProject = randomUUID();
       const forbidden = await fetch(`${baseUrl}/v1/task-contracts/${contractId}?projectId=${forbiddenProject}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });

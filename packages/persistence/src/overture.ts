@@ -539,11 +539,13 @@ export async function reviseOverturePlan(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const run = await client.query<{ conversation_id: string }>(
-      "SELECT conversation_id FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
+    const run = await client.query<{ conversation_id: string; task_contract_id: string | null; state: OvertureRun["state"] }>(
+      "SELECT conversation_id, task_contract_id, state FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
       [args.runId, args.projectId],
     );
     if (run.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
+    if (run.rows[0]!.task_contract_id !== null) throw new OvertureConflictError("Overture plans cannot be revised after Task Contract attachment");
+    if (run.rows[0]!.state === "launched" || run.rows[0]!.state === "cancelled") throw new OvertureConflictError("Overture plans cannot be revised after Run launch");
     if (run.rows[0]!.conversation_id !== args.conversationId)
       throw new OvertureConflictError("Overture plan conversation does not match its Run");
     const prior = await client.query<PlanRow>(
@@ -685,6 +687,12 @@ export async function attachOvertureTaskContract(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const contract = await client.query<{ project_id: string }>(
+      "SELECT content->'project'->>'projectId' AS project_id FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE",
+      [args.contractId],
+    );
+    if (contract.rowCount !== 1 || contract.rows[0]!.project_id !== args.projectId)
+      throw new OvertureConflictError("Overture Task Contract project does not match its Run");
     const run = await client.query<{
       conversation_id: string;
       task_contract_id: string | null;
@@ -740,35 +748,36 @@ export async function attachOvertureTaskContract(
   }
 }
 
+export async function markOvertureRunLaunchedForTaskContractInTransaction(client: PoolClient, contractId: string, commandId: string = randomUUID(), expectedProjectId?: string): Promise<void> {
+  const run = await client.query<{ run_id: string; project_id: string; state: OvertureRun["state"]; attached_manifest_hash: string | null; plan_manifest_hash: string | null }>(
+    "SELECT run_id, project_id, state, task_contract_ref->>'manifestHash' AS attached_manifest_hash, plan_manifest_hash FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",
+    [contractId],
+  );
+  if (run.rowCount === 0) return;
+  const current = run.rows[0]!;
+  if (expectedProjectId !== undefined && current.project_id !== expectedProjectId) throw new OvertureConflictError("Overture Run project does not match the Task Contract");
+  if (current.attached_manifest_hash === null || current.attached_manifest_hash.trim() !== current.plan_manifest_hash?.trim())
+    throw new OvertureConflictError("Overture plan manifest changed after Task Contract attachment");
+  if (current.state === "launched") return;
+  if (current.state !== "review") throw new OvertureConflictError("Only a reviewed Overture Run may be launched");
+  await client.query(
+    "UPDATE overture_runs SET state = 'launched', version = version + 1, updated_at = transaction_timestamp() WHERE run_id = $1 AND project_id = $2",
+    [current.run_id, current.project_id],
+  );
+  await appendEvent(client, {
+    runId: current.run_id,
+    projectId: current.project_id,
+    commandId,
+    eventType: "run_state_changed",
+    payload: { state: "launched", contractId },
+  });
+}
+
 export async function markOvertureRunLaunchedForTaskContract(pool: Pool, contractId: string): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    const run = await client.query<{ run_id: string; project_id: string; state: OvertureRun["state"] }>(
-      "SELECT run_id, project_id, state FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",
-      [contractId],
-    );
-    if (run.rowCount === 0) {
-      await client.query("COMMIT");
-      return;
-    }
-    const current = run.rows[0]!;
-    if (current.state === "launched") {
-      await client.query("COMMIT");
-      return;
-    }
-    if (current.state !== "review") throw new OvertureConflictError("Only a reviewed Overture Run may be launched");
-    await client.query(
-      "UPDATE overture_runs SET state = 'launched', version = version + 1, updated_at = transaction_timestamp() WHERE run_id = $1 AND project_id = $2",
-      [current.run_id, current.project_id],
-    );
-    await appendEvent(client, {
-      runId: current.run_id,
-      projectId: current.project_id,
-      commandId: randomUUID(),
-      eventType: "run_state_changed",
-      payload: { state: "launched", contractId },
-    });
+    await markOvertureRunLaunchedForTaskContractInTransaction(client, contractId);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

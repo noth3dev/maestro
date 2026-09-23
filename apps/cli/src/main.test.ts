@@ -162,14 +162,14 @@ it("drives the Task Contract intake lifecycle through CLI commands", async () =>
     .mockResolvedValueOnce(new Response(JSON.stringify(contract), { status: 201 }))
     .mockResolvedValueOnce(new Response(JSON.stringify({ roles: ["conversation-lead"] }), { status: 200 }))
     .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    .mockResolvedValueOnce(new Response(JSON.stringify({ ...contract, launchState: "launched" }), { status: 200 }));
+    .mockResolvedValueOnce(new Response(JSON.stringify({ taskContract: { ...contract, launchState: "launched" }, goalId, scheduling: "queued" }), { status: 200 }));
   const stdout = output();
   const args = ["task-contract", "create", "--project-id", projectId, "--contract-id", contractId, "--substance-json", JSON.stringify(substance), "--json"];
   expect(await executeCli(args, env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(await executeCli(["task-contract", "select-roles", "--contract-id", contractId, "--project-id", projectId, "--outside-evidence", "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(await executeCli(["task-contract", "confirm", "--contract-id", contractId, "--project-id", projectId, "--version", "1", "--content-hash", contract.contentHash], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
   expect(await executeCli(["task-contract", "launch", "--contract-id", contractId, "--project-id", projectId, "--json"], env, { fetch, stdout: stdout.write, stderr: output().write })).toBe(0);
-  expect(JSON.parse(stdout.lines[0]!)).toEqual(contract);
+  expect(JSON.parse(stdout.lines.at(-1)!)).toMatchObject({ taskContract: { contractId, launchState: "launched" }, goalId, scheduling: "queued" });
   expect(fetch).toHaveBeenNthCalledWith(1, "https://maestro.test/v1/task-contracts", expect.anything());
 });
 

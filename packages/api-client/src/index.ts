@@ -7,6 +7,7 @@ export type {
   ProviderAccountLoginStartResult,
   ProviderAccountLoginStatus,
   TaskContract,
+  TaskContractLaunchResult,
   TaskContractConfirmationInput,
   TaskContractQuery,
   UpdateTaskContractInput,

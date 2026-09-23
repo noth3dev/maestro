@@ -311,6 +311,21 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       manifestHash: manifest.manifestHash,
       commandId: randomUUID(),
     });
+    await expect(
+      reviseOverturePlan(pool, {
+        runId,
+        conversationId,
+        projectId,
+        documentId: manifest.documents[0]!.documentId,
+        path: "plan00.md",
+        kind: "project",
+        expectedVersion: manifest.documents[0]!.version,
+        ...plan("# Changed after attachment"),
+        sourceRefs: [],
+        dependencies: [],
+        commandId: randomUUID(),
+      }),
+    ).rejects.toThrow("after Task Contract attachment");
     const run = await readOvertureRun(pool, runId, projectId, conversationId);
     expect(run?.taskContractId).toBe(contract.contractId);
     expect(run?.taskContractRef).toEqual({
