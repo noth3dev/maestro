@@ -40,6 +40,11 @@ export interface LocalControlPlaneLaunchOptions {
   modelGatewayUrl: string;
   modelGatewayToken: string;
   modelGatewayOperatorId: string;
+  modelRoutingMode?: "ensemble" | "pin";
+  nativeModelRef?: string;
+  ensembleCandidateCatalogPath?: string;
+  modelAccountRefs?: string;
+  modelMapPath?: string;
 }
 
 export interface LocalBootstrapOptions {

@@ -619,6 +619,11 @@ describe("resolveLocalConnection", () => {
         MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex/app-server",
         MAESTRO_CODEX_MODELS: "gpt-5.3-codex",
         MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator",
+        MAESTRO_MODEL_ROUTING_MODE: "pin",
+        MAESTRO_NATIVE_MODEL: "openai/gpt-5.3-codex",
+        MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: "/tmp/ensemble-candidates.json",
+        MAESTRO_MODEL_ACCOUNT_REFS: "openai=openai-local-operator",
+        MAESTRO_MODEL_MAP: "/tmp/model-map.json",
       },
       fetch,
       secretStore: secretStore(),
@@ -640,9 +645,19 @@ describe("resolveLocalConnection", () => {
       modelGatewayUrl: "http://127.0.0.1:4321",
       modelGatewayToken: expect.any(String),
       modelGatewayOperatorId: "local-operator",
+      modelRoutingMode: "pin",
+      nativeModelRef: "openai/gpt-5.3-codex",
+      ensembleCandidateCatalogPath: "/tmp/ensemble-candidates.json",
+      modelAccountRefs: "openai=openai-local-operator",
+      modelMapPath: "/tmp/model-map.json",
     });
     expect(controlPlaneOptions?.modelGatewayOperatorId).toBe((startModelGateway.mock.calls[0]?.[0] as { operatorId: string }).operatorId);
     expect(controlPlaneOptions?.modelGatewayToken).toBe((startModelGateway.mock.calls[0]?.[0] as { token: string }).token);
+  });
+
+  it("passes flexible Ensemble routing configuration to the local Control Plane", async () => {
+    const controlPlane = buildLocalControlPlaneEnvironment({ entry: "/tmp/control-plane.js", databaseUrl: "postgresql://localhost/maestro", dataDir: "/tmp/maestro", apiUrl: "http://127.0.0.1:4399", modelGatewayUrl: "http://127.0.0.1:4321", modelGatewayToken: "service-token", modelGatewayOperatorId: "local-operator", modelRoutingMode: "ensemble", ensembleCandidateCatalogPath: "/tmp/ensemble-candidates.json", modelAccountRefs: "openai-codex=openai-codex-local-operator", modelMapPath: "/tmp/model-map.json" });
+    expect(controlPlane).toMatchObject({ MAESTRO_MODEL_ROUTING_MODE: "ensemble", MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: "/tmp/ensemble-candidates.json", MAESTRO_MODEL_ACCOUNT_REFS: "openai-codex=openai-codex-local-operator", MAESTRO_MODEL_MAP: "/tmp/model-map.json" });
   });
 
   it("stops an embedded database when model-gateway startup fails", async () => {

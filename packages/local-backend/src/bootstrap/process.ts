@@ -97,6 +97,11 @@ export function buildLocalControlPlaneEnvironment(options: LocalControlPlaneLaun
     MAESTRO_MODEL_GATEWAY_URL: options.modelGatewayUrl,
     MAESTRO_MODEL_GATEWAY_TOKEN: options.modelGatewayToken,
     MAESTRO_MODEL_GATEWAY_OPERATOR_ID: options.modelGatewayOperatorId,
+    ...(options.modelRoutingMode === undefined ? {} : { MAESTRO_MODEL_ROUTING_MODE: options.modelRoutingMode }),
+    ...(options.nativeModelRef === undefined ? {} : { MAESTRO_NATIVE_MODEL: options.nativeModelRef }),
+    ...(options.ensembleCandidateCatalogPath === undefined ? {} : { MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: options.ensembleCandidateCatalogPath }),
+    ...(options.modelAccountRefs === undefined ? {} : { MAESTRO_MODEL_ACCOUNT_REFS: options.modelAccountRefs }),
+    ...(options.modelMapPath === undefined ? {} : { MAESTRO_MODEL_MAP: options.modelMapPath }),
   });
 }
 

@@ -37,6 +37,7 @@ interface CatalogSources {
   readonly modelMap: ReturnType<typeof readModelMapSource>["modelMap"];
   readonly candidates: readonly { candidateRef: string; modelRef: string; accountBinding: string }[];
   readonly candidateCatalogAvailable: boolean;
+  readonly candidateSetReady: boolean;
   readonly liveModels: readonly GatewayModel[];
   readonly liveAvailable: boolean;
   readonly reason?: string;
@@ -133,7 +134,24 @@ async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
     reason ??= "Live Gateway catalog is unavailable; provider availability cannot be confirmed.";
   }
 
-  return { modelMap, candidates, candidateCatalogAvailable, liveModels, liveAvailable, ...(reason === undefined ? {} : { reason }) };
+  let candidateSetReady = candidateCatalogAvailable && liveAvailable;
+  if (candidateSetReady) {
+    const liveRefs = new Set(liveModels.map((model) => `${model.identity.provider}/${model.identity.id}`));
+    const allCandidatesLive = candidates.every((candidate) => liveRefs.has(candidate.modelRef));
+    const allBindingsAuthorized = candidates.every((candidate) => {
+      const separator = candidate.modelRef.indexOf("/");
+      const provider = candidate.modelRef.slice(0, separator);
+      return deps.config.modelAccountRefs[provider] === candidate.accountBinding;
+    });
+    if (!allCandidatesLive) {
+      candidateSetReady = false;
+      reason ??= "Configured candidate catalog contains models unavailable from the live Gateway.";
+    } else if (!allBindingsAuthorized) {
+      candidateSetReady = false;
+      reason ??= "Configured candidate catalog contains an unauthorized account binding.";
+    }
+  }
+  return { modelMap, candidates, candidateCatalogAvailable, candidateSetReady, liveModels, liveAvailable, ...(reason === undefined ? {} : { reason }) };
 }
 
 function buildRead(deps: RouterCatalogDeps, pool: readonly string[], sources: CatalogSources): RouterCatalogRead {
@@ -159,7 +177,7 @@ function buildRead(deps: RouterCatalogDeps, pool: readonly string[], sources: Ca
       state: rowState({ baseline, candidate, live, pool, modelRef }),
     };
   });
-  const status = !sources.candidateCatalogAvailable ? "inactive" : !sources.liveAvailable ? "partial" : "ready";
+  const status = !sources.candidateCatalogAvailable ? "inactive" : !sources.liveAvailable || !sources.candidateSetReady ? "partial" : "ready";
   return {
     mode: deps.config.modelRoutingMode,
     active: deps.config.modelRoutingMode === "ensemble" && status === "ready",

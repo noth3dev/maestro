@@ -63,6 +63,8 @@ function poolWith(refs: readonly string[]): Pool {
 function config(catalogPath?: string): MaestroConfig {
   return {
     modelRoutingMode: "ensemble",
+    modelGatewayOperatorId: "operator-1",
+    modelAccountRefs: { openai: "opaque-a", "openai-codex": "opaque-codex" },
     ...(catalogPath === undefined ? {} : { ensembleCandidateCatalogPath: catalogPath }),
   } as MaestroConfig;
 }
@@ -139,6 +141,25 @@ describe("Router catalog composition", () => {
     expect(read.status).toBe("inactive");
     expect(read.reason).toMatch(/candidate catalog/i);
     expect(read.reason).not.toContain("does-not-exist");
+  });
+
+  it("does not report ready when a configured candidate is absent from the live Gateway", async () => {
+    const files = modelFiles([
+      { modelRef: "openai/model-a", candidateRef: "candidate-a", accountBinding: "opaque-a" },
+      { modelRef: "openai/model-b", candidateRef: "candidate-b", accountBinding: "opaque-a" },
+    ]);
+    const read = await composeRouterCatalogService({ pool: poolWith([]), config: config(files.catalogPath), modelGateway: { listModels: async () => [gatewayModel("openai", "model-a")] } as ModelGatewayPort, settingsService: settings([]) }).get("operator-1");
+    expect(read.status).toBe("partial");
+    expect(read.active).toBe(false);
+    expect(read.reason).toMatch(/live|available/i);
+  });
+
+  it("does not report ready when a candidate account binding is not host-authorized", async () => {
+    const files = modelFiles([{ modelRef: "openai/model-a", candidateRef: "candidate-a", accountBinding: "wrong-account" }]);
+    const read = await composeRouterCatalogService({ pool: poolWith([]), config: config(files.catalogPath), modelGateway: { listModels: async () => [gatewayModel("openai", "model-a")] } as ModelGatewayPort, settingsService: settings([]) }).get("operator-1");
+    expect(read.status).toBe("partial");
+    expect(read.active).toBe(false);
+    expect(read.reason).toMatch(/account|binding/i);
   });
 
   it("returns partial when live Gateway data is unavailable", async () => {

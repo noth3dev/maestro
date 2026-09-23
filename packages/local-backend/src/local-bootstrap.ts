@@ -216,7 +216,23 @@ async function resolveLocalConnectionInternal(
       await makeLocalDataDirectories(dataDir);
       reportSetupStep(options.onStep, "control-plane-up", "started");
       ownedControlPlane = await startOwnedProcessWithCancellation(
-        () => (options.startControlPlane ?? defaultStartControlPlane)({ entry, databaseUrl, dataDir, apiUrl, modelGatewayUrl, modelGatewayToken, modelGatewayOperatorId }),
+        () =>
+          (options.startControlPlane ?? defaultStartControlPlane)({
+            entry,
+            databaseUrl,
+            dataDir,
+            apiUrl,
+            modelGatewayUrl,
+            modelGatewayToken,
+            modelGatewayOperatorId,
+            ...(options.env.MAESTRO_MODEL_ROUTING_MODE === undefined ? {} : { modelRoutingMode: options.env.MAESTRO_MODEL_ROUTING_MODE }),
+            ...(options.env.MAESTRO_NATIVE_MODEL === undefined ? {} : { nativeModelRef: options.env.MAESTRO_NATIVE_MODEL }),
+            ...(options.env.MAESTRO_ENSEMBLE_CANDIDATE_CATALOG === undefined
+              ? {}
+              : { ensembleCandidateCatalogPath: options.env.MAESTRO_ENSEMBLE_CANDIDATE_CATALOG }),
+            ...(options.env.MAESTRO_MODEL_ACCOUNT_REFS === undefined ? {} : { modelAccountRefs: options.env.MAESTRO_MODEL_ACCOUNT_REFS }),
+            ...(options.env.MAESTRO_MODEL_MAP === undefined ? {} : { modelMapPath: options.env.MAESTRO_MODEL_MAP }),
+          }),
         options.signal,
       ) ?? undefined;
     } catch (error) {
