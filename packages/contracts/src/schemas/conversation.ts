@@ -9,7 +9,7 @@ export const ConversationSchema = z
     projectId: UuidSchema,
     goalId: UuidSchema.nullable(),
     model: ModelRefSchema,
-    reasoningEffort: z.string().min(1).nullable(),
+    reasoningEffort: z.string().min(1).nullable().optional(),
     status: ConversationStatusSchema,
     version: CommandVersionSchema,
   })

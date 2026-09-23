@@ -56,6 +56,7 @@ const RETRYABLE_CODES = new Set<string>([
   "channel_conflict",
   "task_contract_conflict",
   "head_activation_conflict",
+  "overture_conflict",
 ]);
 
 const TITLES: Record<string, string> = {
@@ -114,6 +115,8 @@ const TITLES: Record<string, string> = {
   channel_not_found: "Channel not found",
   channel_conflict: "Channel changed elsewhere",
   channel_closed: "Channel is closed",
+  overture_run_not_found: "Overture run not found",
+  overture_conflict: "Overture changed elsewhere",
 };
 
 /** Turns any thrown value from a bridged API call into stable, renderable state. Never inspects a token or header. */
