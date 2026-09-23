@@ -5,8 +5,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   CommandIdReuseError,
   LeaseUnavailableError,
+  OutboxLeaseError,
   acquireGoalLease,
+  claimGoalOutbox,
   executeGoalCommand,
+  markGoalOutboxDelivered,
+  releaseGoalOutbox,
   renewGoalLease,
 } from "./commands.js";
 import { listGoalEvents } from "./events.js";
@@ -141,6 +145,50 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
       outcome: "succeeded", goalId: command.goalId, version: 1, state: "draft",
     });
     expect(await counts()).toEqual({ receipts: 1, events: 1, goals: 1, outbox: 1 });
+  });
+
+  it("claims and acknowledges a Goal outbox command with an owner lease", async () => {
+    const command = {
+      commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
+      actorId: "concertmaster", type: "CreateGoal" as const, expectedVersion: 0,
+    };
+    const proof = await lease(command.goalId, command.actorId);
+    await expect(executeGoalCommand(pool, command, proof)).resolves.toMatchObject({ outcome: "succeeded" });
+    const outboxId = (await pool.query<{ outbox_id: string }>("SELECT outbox_id::text FROM outbox ORDER BY outbox_id DESC LIMIT 1")).rows[0]!.outbox_id;
+    await pool.query("UPDATE outbox SET topic = 'other-goal-event' WHERE outbox_id = $1", [outboxId]);
+    await expect(claimGoalOutbox(pool, "orchestrator-a", 10, 60_000)).resolves.toEqual([]);
+    await pool.query("UPDATE outbox SET topic = 'goal-events' WHERE outbox_id = $1", [outboxId]);
+
+    const claimed = await claimGoalOutbox(pool, "orchestrator-a", 10, 60_000);
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]).toMatchObject({ eventId: expect.any(String), topic: "goal-events", attempts: 1 });
+    await expect(claimGoalOutbox(pool, "orchestrator-b", 10, 60_000)).resolves.toEqual([]);
+    await expect(markGoalOutboxDelivered(pool, claimed[0]!.outboxId, "orchestrator-b")).rejects.toBeInstanceOf(OutboxLeaseError);
+    await pool.query("UPDATE outbox SET locked_until = transaction_timestamp() - interval '1 millisecond' WHERE outbox_id = $1", [claimed[0]!.outboxId]);
+    await expect(markGoalOutboxDelivered(pool, claimed[0]!.outboxId, "orchestrator-a")).rejects.toBeInstanceOf(OutboxLeaseError);
+    const reclaimed = await claimGoalOutbox(pool, "orchestrator-b", 10, 60_000);
+    expect(reclaimed).toHaveLength(1);
+    expect(reclaimed[0]).toMatchObject({ outboxId: claimed[0]!.outboxId, attempts: 2 });
+    await expect(markGoalOutboxDelivered(pool, claimed[0]!.outboxId, "orchestrator-a")).rejects.toBeInstanceOf(OutboxLeaseError);
+    await expect(markGoalOutboxDelivered(pool, claimed[0]!.outboxId, "orchestrator-b")).resolves.toBeUndefined();
+    await expect(claimGoalOutbox(pool, "orchestrator-b", 10, 60_000)).resolves.toEqual([]);
+  });
+
+  it("releases a claimed outbox row for retry only for its current owner", async () => {
+    const command = {
+      commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
+      actorId: "concertmaster", type: "CreateGoal" as const, expectedVersion: 0,
+    };
+    const proof = await lease(command.goalId, command.actorId);
+    await expect(executeGoalCommand(pool, command, proof)).resolves.toMatchObject({ outcome: "succeeded" });
+    const claimed = await claimGoalOutbox(pool, "orchestrator-a", 10, 60_000);
+    expect(claimed).toHaveLength(1);
+    await expect(releaseGoalOutbox(pool, claimed[0]!.outboxId, "orchestrator-b", 0)).rejects.toBeInstanceOf(OutboxLeaseError);
+    await expect(releaseGoalOutbox(pool, claimed[0]!.outboxId, "orchestrator-a", 0)).resolves.toBeUndefined();
+    const retried = await claimGoalOutbox(pool, "orchestrator-b", 10, 60_000);
+    expect(retried).toHaveLength(1);
+    expect(retried[0]).toMatchObject({ outboxId: claimed[0]!.outboxId, attempts: 2 });
+    await expect(markGoalOutboxDelivered(pool, retried[0]!.outboxId, "orchestrator-b")).resolves.toBeUndefined();
   });
 
   it("allows an operator-audited command under a current control-plane lease", async () => {

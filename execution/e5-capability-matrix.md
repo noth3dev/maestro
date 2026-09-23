@@ -173,3 +173,7 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 ## Task 16 first orchestration-command handoff (2026-09-24)
 
 **Status: Partial.** Exact Launch now atomically records a server-derived Goal and a scoped `start_goal` command in the existing `goal-events` outbox payload. The command is bound to the GoalCreated event ID and carries project, Goal, and Task Contract identity. PostgreSQL API/persistence/Overture tests and build/typecheck/lint checks pass. No consumer currently claims or executes this command; automatic Head/Council/Department Plan/Mission Bundle/Worker progression remains a named backend dependency.
+
+## Task 16 durable outbox lease prerequisite (2026-09-24)
+
+**Status: Partial.** The existing `goal-events` outbox now has restart-safe PostgreSQL claim, owner-fenced acknowledgement, and retry release primitives. Focused verification passed **19 tests across 2 files**, and build/typecheck/lint/diff checks passed. This does not add a typed `start_goal` consumer or advance any Head, Council, Department Plan, Mission Bundle, or Worker; E5 remains open and no live provider evidence is claimed.

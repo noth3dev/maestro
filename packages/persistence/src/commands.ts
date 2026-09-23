@@ -59,6 +59,99 @@ export class CommandIdReuseError extends Error {
   }
 }
 
+export class OutboxLeaseError extends Error {
+  constructor(outboxId: string) {
+    super(`Outbox row is not leased by this owner: ${outboxId}`);
+    this.name = "OutboxLeaseError";
+  }
+}
+
+export interface GoalOutboxMessage {
+  outboxId: string;
+  eventId: string;
+  topic: string;
+  payload: Record<string, unknown>;
+  attempts: number;
+}
+
+/** Claim ready Goal outbox rows for a restart-safe consumer. */
+export async function claimGoalOutbox(
+  pool: Pool,
+  ownerId: string,
+  limit = 32,
+  leaseDurationMs = 30_000,
+): Promise<GoalOutboxMessage[]> {
+  if (ownerId.trim() === "") throw new RangeError("ownerId must be non-empty");
+  if (!Number.isSafeInteger(limit) || limit <= 0) throw new RangeError("limit must be a positive safe integer");
+  if (!Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0) throw new RangeError("leaseDurationMs must be a positive safe integer");
+  const result = await pool.query<{
+    outbox_id: string;
+    event_id: string;
+    topic: string;
+    payload: Record<string, unknown>;
+    attempts: number;
+  }>(
+    `WITH candidates AS (
+       SELECT outbox_id
+       FROM outbox
+       WHERE topic = 'goal-events'
+         AND delivered_at IS NULL
+         AND available_at <= transaction_timestamp()
+         AND (locked_until IS NULL OR locked_until <= transaction_timestamp())
+       ORDER BY outbox_id
+       FOR UPDATE SKIP LOCKED
+       LIMIT $2
+     )
+     UPDATE outbox AS row
+     SET locked_by = $1,
+         locked_until = transaction_timestamp() + ($3 * interval '1 millisecond'),
+         attempts = row.attempts + 1
+     FROM candidates
+     WHERE row.outbox_id = candidates.outbox_id
+     RETURNING row.outbox_id::text AS outbox_id, row.event_id, row.topic, row.payload, row.attempts`,
+    [ownerId, limit, leaseDurationMs],
+  );
+  return result.rows.map((row) => ({
+    outboxId: row.outbox_id,
+    eventId: row.event_id,
+    topic: row.topic,
+    payload: row.payload,
+    attempts: row.attempts,
+  }));
+}
+
+/** Mark one claimed Goal outbox row delivered, preserving owner fencing. */
+export async function markGoalOutboxDelivered(pool: Pool, outboxId: string, ownerId: string): Promise<void> {
+  if (ownerId.trim() === "") throw new RangeError("ownerId must be non-empty");
+  const result = await pool.query(
+    `UPDATE outbox
+     SET delivered_at = transaction_timestamp(), locked_by = NULL, locked_until = NULL
+     WHERE outbox_id = $1::bigint AND locked_by = $2 AND delivered_at IS NULL
+       AND locked_until > clock_timestamp()`,
+    [outboxId, ownerId],
+  );
+  if (result.rowCount !== 1) throw new OutboxLeaseError(outboxId);
+}
+
+/** Release a claimed row for bounded retry without marking it delivered. */
+export async function releaseGoalOutbox(
+  pool: Pool,
+  outboxId: string,
+  ownerId: string,
+  retryDelayMs = 1_000,
+): Promise<void> {
+  if (ownerId.trim() === "") throw new RangeError("ownerId must be non-empty");
+  if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0) throw new RangeError("retryDelayMs must be a non-negative safe integer");
+  const result = await pool.query(
+    `UPDATE outbox
+     SET available_at = transaction_timestamp() + ($3 * interval '1 millisecond'), locked_by = NULL, locked_until = NULL
+     WHERE outbox_id = $1::bigint AND locked_by = $2 AND delivered_at IS NULL
+       AND locked_until > clock_timestamp()`,
+    [outboxId, ownerId, retryDelayMs],
+  );
+  if (result.rowCount !== 1) throw new OutboxLeaseError(outboxId);
+}
+
 /**
  * Test-only checkpoint. It is intentionally an explicit call-site dependency,
  * never read from configuration or installed by an application composition root.
