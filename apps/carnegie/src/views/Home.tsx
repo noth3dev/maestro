@@ -66,7 +66,7 @@ export function projectOpenOvertureClarification(events: readonly OvertureEvent[
     if (clarificationId === undefined) continue;
     if (event.eventType === "clarification_opened") {
       const question = typeof payload.question === "string" ? payload.question : undefined;
-      if (question !== undefined && question.trim() !== "") current = { clarificationId, question };
+      current = question !== undefined && question.trim() !== "" ? { clarificationId, question } : undefined;
     } else if (event.eventType === "clarification_answered" && current?.clarificationId === clarificationId) {
       current = undefined;
     }
