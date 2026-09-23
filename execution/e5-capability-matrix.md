@@ -197,3 +197,7 @@ Fresh unrestricted PostgreSQL verification after `7098cb5b` passed **441 files /
 ## Task 16 durable `start_goal` binding (2026-09-24)
 
 **Status: Partial.** Parsed `start_goal` identity is now checked against the durable `GoalCreated` event, Goal binding, launched Task Contract, project scope, and content hash. Focused verification passed **30 tests across 3 files**, with build/typecheck/lint/diff checks green. This is validation only, not consumption or execution; E5 remains open.
+
+## Task 16 regression follow-up: soak lock race (2026-09-24)
+
+The post-binding full PostgreSQL regression was not green: **441 files / 2,930 passed of 2,931 tests**, exit 1, duration **918.47s** (`/tmp/maestro-full-test-7.log`). The only failure exposed a concurrent soak-report lock publication race. The lock now uses complete temporary metadata plus atomic `link` publication; focused soak verification and four parallel repeats passed. Repository-wide verification remains pending.

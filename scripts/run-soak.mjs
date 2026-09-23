@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, link, mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -470,17 +470,19 @@ export function validateSoakReport(value) {
 
 async function acquireReportLock(lockPath, absolutePath) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    const temporaryLockPath = `${lockPath}.${process.pid}.${randomUUID()}.tmp`;
     try {
-      const handle = await open(lockPath, "wx", 0o600);
-      try {
-        await handle.writeFile(`${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`, "utf8");
-        return handle;
-      } catch (error) {
-        await handle.close().catch(() => {});
-        await unlink(lockPath).catch(() => {});
-        throw error;
-      }
+      await writeFile(
+        temporaryLockPath,
+        `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
+        { encoding: "utf8", mode: 0o600, flag: "wx" },
+      );
+      await chmod(temporaryLockPath, 0o600);
+      await link(temporaryLockPath, lockPath);
+      await unlink(temporaryLockPath).catch(() => {});
+      return await open(lockPath, "r");
     } catch (error) {
+      await unlink(temporaryLockPath).catch(() => {});
       if (error?.code !== "EEXIST") throw error;
       let owner;
       try {
