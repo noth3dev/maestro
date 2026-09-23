@@ -25,3 +25,4 @@ export * from "./provider-credentials.js";
 export * from "./settings.js";
 export * from "./router.js";
 export * from "./persona.js";
+export * from "./schemas/overture.js";

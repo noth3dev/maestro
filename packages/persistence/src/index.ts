@@ -80,3 +80,4 @@ export * from "./embedded-database.js";
 
 export * from "./routing-work-snapshot.js";
 export * from "./release-checkpoint.js";
+export * from "./overture.js";

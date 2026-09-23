@@ -27,3 +27,10 @@ Concertmaster owns the operator conversation. When planning is required, it awak
 A Task Contract is created only after the plan set is sufficiently complete, its manifest is hash-bound, and the operator reviews and confirms the exact version. Launch is the only boundary that may create/attach a Goal and begin automatic orchestration.
 
 Do not add a one-shot Task Contract producer, hidden batch role reports, manual downstream identity entry, or a second Overture authority path.
+
+## Current evidence checkpoint (2026-09-23)
+
+Task 14's durable foundation is implemented but remains uncommitted. Its real-PostgreSQL focused gate passed **6 files / 17 tests**, with build/typecheck, targeted lint, formatting, migration numbering, and diff checks green; an independent no-edit re-review returned **PASS**. The unrestricted `npm test` is running as the next verification item. This pointer remains archival: Task 15 must continue only through `execution/plan-E5-gui-implementation.md`, and no E6 runtime or post-Launch work may begin before E5 Task 14 is committed and reviewed. The live provider/Home boundary still has no Task Contract or downstream Goal/Worker evidence.
+
+
+The final Task 14 verification also passed the unrestricted real-PostgreSQL suite (**435 files / 2,888 tests**) and the hardened focused gate (**6 files / 17 tests**). This does not open E6: the foundation is ready for commit, but Task 15 and all former E6 runtime work remain behind the E5 Task 14 commit/review gate, and live Home/provider evidence still lacks a Task Contract and downstream execution identities.

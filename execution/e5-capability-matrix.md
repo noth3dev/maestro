@@ -104,12 +104,21 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 1. Restore a real PostgreSQL endpoint for the existing local session or provide the packaged Control Plane/database path; do not reset or rotate credentials as a shortcut.
 2. Re-run Task 14 against the real Control Plane and configured provider, using the bounded no-effect scenario and recording only real durable IDs/evidence.
 3. Re-run Task 15's unrestricted `npm test` against real PostgreSQL, then repeat the independent review and secret/artifact checks.
-4. Keep E6 gated until the E5 completion criteria pass; do not start Overture Crew runtime work from the backend-blocked UI evidence.
+4. The former E6 work is integrated into E5 Tasks 14–20. Do not create a second E6 execution path; continue from the Task 14 foundation into Task 15 role runtime only after this persistence boundary remains green.
 
 ## Bridge duplication risk (flagged during this session's plan review, still unresolved)
 
 `exposedApiMethods` lives twice — `apiBridge.ts` (ESM, used by `main.ts`'s IPC dispatch and `isExposedMethod`) and `preload.cts` (CJS, used by `contextBridge.exposeInMainWorld`) — kept in sync only by a code comment and a test that checks every method's exact quoted string appears in `preload.cts`'s source text. This test now covers the full list (this session), which closes the immediate risk, but the structural fragility (two hand-maintained lists across module systems) remains. Not fixed this session; flagging for whoever next touches Task 1.
 
+
+
+## Integrated Task 14 foundation implementation (2026-09-23)
+
+**Status: Partial, code-level foundation green; live E5 gate remains open.** Added the strict Overture domain and contract surfaces, six-role policy taxonomy, goal-less authority boundary, `plan00`/phase/slice path grammar, canonical content hashes, and deterministic plan manifest. Added PostgreSQL migration `0107_overture_runs_and_plan_sets.sql` with durable Overture Run, role assignments, same-channel messages, clarifications, artifacts, plan documents/revisions, manifest revisions, lifecycle events, and outbox rows. Added project/conversation composite foreign-key boundaries, append-only triggers, command identity uniqueness, sensitive-content rejection, and revision hash validation.
+
+**Verified:** the hardened focused gate (`packages/domain/src/overture.test.ts`, domain/contracts surface tests, `packages/contracts/src/overture.test.ts`, `packages/persistence/src/overture.integration.test.ts`, and the persistence surface test) passed **6 files / 17 tests** against real PostgreSQL. `npm run build`, targeted ESLint, Prettier, migration numbering, and `git diff --check` passed. The integration proves goal-less Run replay and `executionPhase: overture`, deterministic role activation events with outbox parity, same-channel message turn identity and per-Run cursor ordering, concurrent command replay, unassigned-role and cross-conversation rejection, artifact/clarification persistence, `plan00 → plan01 → plan01-slice01` dependency edges, stored manifest hash, cross-project read denial, append-only revision protection, and database-level provider-token rejection.
+
+**Not implemented yet:** Control Plane Overture routes, role-specific model runtime, Task Editor conversation loop, Task Contract handoff, exact Launch orchestration, and live Electron acceptance. Those are E5 Tasks 15–20.
 
 ## Task 14 live verification update (2026-09-23)
 

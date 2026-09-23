@@ -1063,6 +1063,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Acceptance:** A project-scoped conversation can own one resumable Overture Run. A phase may contain any number of ordered or safely parallel slices. Every current document and artifact is hash-bound, project-bound, and recoverable.
 
+**Task 14 hardening checkpoint (2026-09-23):** The implementation is present as uncommitted changes; `HEAD` and `origin/main` remain at `9617d6ef`. No Task 15 work has started. The focused gate passed **6 files / 17 tests** against real PostgreSQL, including concurrent command replay, same-conversation and turn binding, per-Run message cursors, role-assignment enforcement, plan dependency edges, event/outbox parity, and database-level provider-token rejection. `npm run build`/typecheck, targeted ESLint, Prettier, migration numbering, and diff checks passed. Independent no-edit re-review returned **PASS** with no blocking findings. The full unrestricted suite is the next verification item; live E5 remains open because the current Home/provider path produced no Task Contract, Goal, Worker, or downstream evidence.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.
@@ -1319,3 +1321,8 @@ The final gate is **not closed**. Evidence at commit `2c767e29` / current verifi
 Task 15 follow-up evidence: the independent Electron radial smoke passed (`pass:true`, graph/taskContract true, 3 controls, 5 source nodes); committed E5 evidence/spec secret-pattern scans returned zero matches and generated Playwright artifacts were removed.
 
 Task 13/15 follow-up at `f282458c`: active-route/mode semantics and rendered markup tests are merged; the focused UI suite passes 8 files / 35 tests, builds and Playwright checks pass as documented, and the real PostgreSQL/provider gate remains open.
+
+
+## Task 14 final verification checkpoint (2026-09-23)
+
+The unrestricted real-PostgreSQL suite completed with **435 test files / 2,888 tests passed**, exit 0, in 1027.06s. The post-hardening focused gate completed with **6 files / 17 tests passed**. `npm run build`/workspace typecheck, migration numbering, Prettier, targeted ESLint, and `git diff --check` passed. The database sensitive-content trigger now covers the same provider-token, JWT, private-key, credential, and raw-model-output classes as the application boundary. Task 14 is ready for commit; Task 15 remains gated until that commit and review. Live E5 remains open because the real Home/provider path has not produced a Task Contract or downstream Goal/Worker evidence.
