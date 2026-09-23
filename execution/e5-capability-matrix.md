@@ -185,3 +185,7 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 ## Task 16 post-Launch GUI regression (2026-09-24)
 
 Fresh unrestricted PostgreSQL verification after `7e0e7f82` passed **441 files / 2,926 tests**, exit 0, duration **927.57s** (`/tmp/maestro-full-test-5.log`). Automated regression is green; this does not close the live provider or downstream orchestration gates.
+
+## Task 16 typed `start_goal` envelope guard (2026-09-24)
+
+**Status: Partial.** A pure persistence boundary now validates the exact scoped `start_goal` envelope after claim without acknowledging or executing it. Focused verification passed **30 tests across 3 files**, with build/typecheck/lint/diff checks green. This is not a consumer and does not advance the Goal hierarchy; E5 remains open.

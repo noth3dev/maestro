@@ -74,6 +74,63 @@ export interface GoalOutboxMessage {
   attempts: number;
 }
 
+export class GoalOrchestrationEnvelopeError extends Error {
+  readonly code = "invalid_goal_orchestration_envelope";
+
+  constructor() {
+    super("Invalid Goal orchestration envelope");
+    this.name = "GoalOrchestrationEnvelopeError";
+  }
+}
+
+export interface StartGoalOrchestrationCommand {
+  eventId: string;
+  commandId: string;
+  type: "start_goal";
+  projectId: string;
+  goalId: string;
+  taskContractId: string;
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requiredString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** Parse a claimed start_goal envelope without acknowledging or executing it. */
+export function parseStartGoalOrchestrationCommand(message: GoalOutboxMessage): StartGoalOrchestrationCommand {
+  const payload = message.payload;
+  if (!isObject(payload)) throw new GoalOrchestrationEnvelopeError();
+  const orchestration = payload.orchestration;
+  const eventId = requiredString(message.eventId);
+  const payloadEventId = requiredString(payload.eventId);
+  if (
+    message.topic !== "goal-events" ||
+    eventId === undefined ||
+    !uuidPattern.test(eventId) ||
+    payloadEventId !== eventId ||
+    !isObject(orchestration) ||
+    orchestration.type !== "start_goal" ||
+    orchestration.commandId !== eventId
+  ) throw new GoalOrchestrationEnvelopeError();
+
+  const projectId = requiredString(orchestration.projectId);
+  const goalId = requiredString(orchestration.goalId);
+  const taskContractId = requiredString(orchestration.taskContractId);
+  if (
+    projectId === undefined || !uuidPattern.test(projectId) ||
+    goalId === undefined || !uuidPattern.test(goalId) ||
+    taskContractId === undefined || !uuidPattern.test(taskContractId)
+  ) throw new GoalOrchestrationEnvelopeError();
+
+  return { eventId, commandId: eventId, type: "start_goal", projectId, goalId, taskContractId };
+}
+
 /** Claim ready Goal outbox rows for a restart-safe consumer. */
 export async function claimGoalOutbox(
   pool: Pool,

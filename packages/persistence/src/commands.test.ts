@@ -1,15 +1,59 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  GoalOrchestrationEnvelopeError,
   StaleGoalLeaseError,
   executeGoalCommand,
+  parseStartGoalOrchestrationCommand,
   renewGoalLease,
   type GoalLeaseProof,
+  type GoalOutboxMessage,
 } from "./commands.js";
 
 const proof = (fencingToken: string): GoalLeaseProof => ({
   goalId: "goal-1",
   ownerId: "actor-1",
   fencingToken,
+});
+
+const validStartGoalMessage = (overrides: Partial<GoalOutboxMessage> = {}): GoalOutboxMessage => ({
+  outboxId: "1",
+  eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  topic: "goal-events",
+  payload: {
+    eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    orchestration: {
+      commandId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      type: "start_goal",
+      projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      goalId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      taskContractId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    },
+  },
+  attempts: 1,
+  ...overrides,
+});
+
+describe("Goal orchestration outbox envelope", () => {
+  it("parses the exact scoped start_goal identity without executing it", () => {
+    expect(parseStartGoalOrchestrationCommand(validStartGoalMessage())).toEqual({
+      eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      commandId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      type: "start_goal",
+      projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      goalId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      taskContractId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    });
+  });
+
+  it.each([
+    ["wrong event identity", { eventId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" }],
+    ["wrong topic", { topic: "other-events" }],
+    ["null payload", { payload: null }],
+    ["wrong orchestration type", { payload: { eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", orchestration: { type: "activate_head" } } }],
+  ])("rejects %s without exposing payload content", (_label, override) => {
+    expect(() => parseStartGoalOrchestrationCommand(validStartGoalMessage(override as Partial<GoalOutboxMessage>)))
+      .toThrow(GoalOrchestrationEnvelopeError);
+  });
 });
 
 describe("lease fencing token bounds", () => {

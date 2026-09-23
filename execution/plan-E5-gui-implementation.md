@@ -1402,3 +1402,7 @@ Carnegie now refreshes the PostgreSQL-backed Goal list after a successful exact 
 ## Task 16 post-Launch GUI regression checkpoint (2026-09-24)
 
 After commit `7e0e7f82`, unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **441 test files / 2,926 tests**, exit 0, duration **927.57s** (`/tmp/maestro-full-test-5.log`). This is fresh automated regression evidence for the Launch-result Goal selection slice and prior outbox handoff work; it does not create live provider, Task Contract, Goal execution, Worker, certification, or E5 acceptance evidence.
+
+## Task 16 typed start_goal envelope checkpoint (2026-09-24)
+
+The next safe orchestration boundary is now explicit: `parseStartGoalOrchestrationCommand` accepts only a `goal-events` envelope whose row event ID, payload event ID, and orchestration command ID agree, whose type is exactly `start_goal`, and whose project/Goal/Task Contract IDs are valid UUIDs. It returns only the typed allowlisted identity and uses a fixed redacted error for malformed input. The parser performs no database write, acknowledgement, provider call, Goal transition, or downstream progress. RED/GREEN plus PostgreSQL persistence focused verification passed **30 tests across 3 files** (`commands.test.ts`, `commands.integration.test.ts`, and `surface.test.ts`); `npm run build`, `npm run typecheck`, `npm run lint`, and `git diff --check` passed. A typed consumer, retry/quarantine policy, and automatic Head/Council/DepartmentPlan/MissionBundle/Worker progression remain open.
