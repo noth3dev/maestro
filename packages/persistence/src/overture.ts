@@ -39,6 +39,7 @@ type RunRow = {
   goal_id: null;
   execution_phase: "overture";
   task_contract_ref: Record<string, unknown> | null;
+  task_contract_id: string | null;
   state: OvertureRun["state"];
   version: string;
   role_taxonomy_version: number;
@@ -122,7 +123,7 @@ export async function createOvertureRun(
   try {
     await client.query("BEGIN");
     const existing = await client.query<RunRow>(
-      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 FOR UPDATE",
+      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 FOR UPDATE",
       [args.runId],
     );
     if (existing.rowCount === 1) {
@@ -206,7 +207,7 @@ export async function appendOvertureMessage(
   try {
     await client.query("BEGIN");
     const run = await client.query<RunRow>(
-      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
+      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
       [args.runId, args.projectId],
     );
     if (run.rowCount !== 1 || run.rows[0]!.conversation_id !== args.conversationId)
@@ -621,6 +622,77 @@ export async function reviseOverturePlan(
   }
 }
 
+export async function attachOvertureTaskContract(
+  pool: Pool,
+  args: {
+    readonly runId: string;
+    readonly projectId: string;
+    readonly conversationId: string;
+    readonly contractId: string;
+    readonly planId: string;
+    readonly planVersion: number;
+    readonly manifestHash: string;
+    readonly commandId: string;
+  },
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const run = await client.query<{
+      conversation_id: string;
+      task_contract_id: string | null;
+      plan_manifest_hash: string | null;
+      state: OvertureRun["state"];
+      version: string;
+    }>(
+      "SELECT conversation_id, task_contract_id, plan_manifest_hash, state, version FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
+      [args.runId, args.projectId],
+    );
+    if (run.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
+    const current = run.rows[0]!;
+    if (current.conversation_id !== args.conversationId)
+      throw new OvertureConflictError("Overture Task Contract conversation does not match its Run");
+    if (current.task_contract_id !== null) {
+      if (current.task_contract_id !== args.contractId)
+        throw new OvertureConflictError("Overture Run already has a different Task Contract");
+      await client.query("COMMIT");
+      return;
+    }
+    if (current.state === "launched" || current.state === "cancelled")
+      throw new OvertureConflictError("Overture Run cannot attach a Task Contract in its current state");
+    if (current.plan_manifest_hash?.trim() !== args.manifestHash)
+      throw new OvertureConflictError("Task Contract manifest hash does not match the current Overture plan");
+    const plan = await client.query<{ version: string }>(
+      "SELECT r.version FROM overture_plan_documents d JOIN overture_plan_revisions r ON r.document_id = d.document_id AND r.run_id = d.run_id AND r.project_id = d.project_id WHERE d.document_id = $1 AND d.run_id = $2 AND d.project_id = $3 ORDER BY r.version DESC LIMIT 1",
+      [args.planId, args.runId, args.projectId],
+    );
+    if (plan.rowCount !== 1 || Number(plan.rows[0]!.version) !== args.planVersion)
+      throw new OvertureConflictError("Task Contract plan reference is not the current plan revision");
+    await client.query(
+      "UPDATE overture_runs SET task_contract_id = $2, task_contract_ref = $3::jsonb, state = 'review', version = version + 1, updated_at = transaction_timestamp() WHERE run_id = $1 AND project_id = $4",
+      [
+        args.runId,
+        args.contractId,
+        JSON.stringify({ planId: args.planId, version: args.planVersion, manifestHash: args.manifestHash }),
+        args.projectId,
+      ],
+    );
+    await appendEvent(client, {
+      runId: args.runId,
+      projectId: args.projectId,
+      commandId: args.commandId,
+      eventType: "task_contract_attached",
+      payload: { contractId: args.contractId, planId: args.planId, planVersion: args.planVersion, manifestHash: args.manifestHash },
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function readOvertureArtifacts(
   queryable: Queryable,
   runId: string,
@@ -764,7 +836,7 @@ async function readRunWithinTransaction(
   conversationId: string,
 ): Promise<OvertureRun | undefined> {
   const result = await queryable.query<RunRow>(
-    "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3",
+    "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3",
     [runId, projectId, conversationId],
   );
   if (result.rowCount !== 1) return undefined;
@@ -780,11 +852,11 @@ async function readRunWithinTransaction(
     goalId: null,
     executionPhase: row.execution_phase,
     taskContractRef: row.task_contract_ref,
+    taskContractId: row.task_contract_id,
     state: row.state,
     version: Number(row.version),
     roleTaxonomyVersion: row.role_taxonomy_version,
     planManifestHash: row.plan_manifest_hash?.trim() ?? null,
-    taskContractId: null,
     roles: roles.rows.map((role) => ({ roleId: role.role_id, status: role.status, modelRef: role.model_ref })),
   });
 }

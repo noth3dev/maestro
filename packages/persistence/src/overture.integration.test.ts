@@ -7,6 +7,7 @@ import { buildOverturePlanManifest, overturePlanContentHash } from "@maestro/dom
 import {
   appendOvertureMessage,
   answerOvertureClarification,
+  attachOvertureTaskContract,
   bindOvertureRoleModel,
   createOvertureArtifact,
   createOvertureRun,
@@ -18,6 +19,7 @@ import {
   readOvertureRun,
   reviseOverturePlan,
 } from "./overture.js";
+import { createDurableTaskContract } from "./task-contract.js";
 import { applyAllMigrations } from "./test-migrations.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -247,6 +249,51 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       (await pool.query("SELECT plan_manifest_hash FROM overture_runs WHERE run_id = $1", [runId])).rows[0].plan_manifest_hash.trim(),
     ).toBe(manifest.manifestHash);
     expect(message.messageId).not.toBe(artifact.artifactId);
+  });
+
+  it("binds one awaiting Task Contract to the exact current plan manifest", async () => {
+    const manifest = await readOverturePlanManifest(pool, runId, projectId, conversationId);
+    const contractId = randomUUID();
+    const contract = await createDurableTaskContract(pool, contractId, {
+      desiredOutcome: "Ship the bounded planning console",
+      userVisibleBehavior: ["The console is visible"],
+      successCriteria: ["The console is verified"],
+      liveEvidence: ["Durable Overture run"],
+      scope: ["This project"],
+      nonGoals: ["Unrelated work"],
+      priorities: ["Safety"],
+      acceptableTradeoffs: ["Bounded scope"],
+      constraints: ["Confirmation required"],
+      knownEdgeCases: ["Retry"],
+      project: { projectId, repository: "repo", immutableBaseRevision: "base", dataBoundary: "project" },
+      evidenceReferences: [],
+      approvedPreviewReferences: [],
+      expectedGroups: ["group"],
+      expectedDepartments: ["department"],
+      criticalActionExpectations: ["Show effect"],
+      forbiddenEffects: ["Unapproved effect"],
+      environmentAssumptions: ["Local"],
+      externalServiceAssumptions: ["None"],
+      budget: { ceiling: "bounded", reportingExpectations: ["Report"], stoppingConditions: ["Stop"] },
+    });
+    await attachOvertureTaskContract(pool, {
+      runId,
+      projectId,
+      conversationId,
+      contractId: contract.contractId,
+      planId: manifest.documents[0]!.documentId,
+      planVersion: manifest.documents[0]!.version,
+      manifestHash: manifest.manifestHash,
+      commandId: randomUUID(),
+    });
+    const run = await readOvertureRun(pool, runId, projectId, conversationId);
+    expect(run?.taskContractId).toBe(contract.contractId);
+    expect(run?.taskContractRef).toEqual({
+      planId: manifest.documents[0]!.documentId,
+      version: manifest.documents[0]!.version,
+      manifestHash: manifest.manifestHash,
+    });
+    expect(run?.state).toBe("review");
   });
 
   it("rejects cross-project reads and direct revision mutation", async () => {

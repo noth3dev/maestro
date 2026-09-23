@@ -1291,6 +1291,37 @@ describe("overture client", () => {
       status: "open" as const,
       commandId: "66666666-6666-4666-8666-666666666666",
     };
+    const substance = {
+      desiredOutcome: "Ship the bounded change",
+      userVisibleBehavior: ["Visible result"],
+      successCriteria: ["Verified result"],
+      liveEvidence: ["Durable record"],
+      scope: ["Project only"],
+      nonGoals: ["Unrelated work"],
+      priorities: ["Safety"],
+      acceptableTradeoffs: ["Bounded"],
+      constraints: ["Approval"],
+      knownEdgeCases: ["Retry"],
+      project: { projectId, repository: "repo", immutableBaseRevision: "base", dataBoundary: "project" },
+      evidenceReferences: [],
+      approvedPreviewReferences: [],
+      expectedGroups: ["group"],
+      expectedDepartments: ["department"],
+      criticalActionExpectations: ["Show effect"],
+      forbiddenEffects: ["Unapproved"],
+      environmentAssumptions: ["Local"],
+      externalServiceAssumptions: ["None"],
+      budget: { ceiling: "bounded", reportingExpectations: ["Report"], stoppingConditions: ["Stop"] },
+    };
+    const contract = {
+      contractId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      schemaVersion: 1 as const,
+      version: 1,
+      decisionHistory: [{ decisionId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", kind: "created" as const, evidence: {} }],
+      contentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      launchState: "awaiting_confirmation" as const,
+      ...substance,
+    };
     const document = {
       documentId,
       projectId,
@@ -1306,7 +1337,8 @@ describe("overture client", () => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(document), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(clarification), { status: 201 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify(clarification), { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(contract), { status: 201 }));
     const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
     await expect(
       client.reviseOverturePlan(
@@ -1347,6 +1379,28 @@ describe("overture client", () => {
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({ "idempotency-key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
+      }),
+    );
+    await expect(
+      client.createOvertureTaskContract(
+        runId,
+        {
+          projectId,
+          conversationId,
+          planId: documentId,
+          planVersion: 1,
+          manifestHash: document.contentHash,
+          substance,
+        },
+        { idempotencyKey: "ffffffff-ffff-4fff-8fff-ffffffffffff" },
+      ),
+    ).resolves.toEqual(contract);
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      `https://maestro.test/v1/overture/runs/${runId}/task-contract`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "idempotency-key": "ffffffff-ffff-4fff-8fff-ffffffffffff" }),
       }),
     );
   });

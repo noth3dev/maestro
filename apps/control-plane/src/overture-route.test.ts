@@ -84,6 +84,15 @@ function service(): OvertureService {
       status: "open",
       commandId: input.commandId,
     }),
+    createTaskContract: async (input) => ({
+      contractId: input.commandId,
+      schemaVersion: 1 as const,
+      version: 1,
+      decisionHistory: [{ decisionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", kind: "created" as const, evidence: {} }],
+      contentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      launchState: "awaiting_confirmation" as const,
+      ...input.substance,
+    }),
     listMessages: async () => [],
     getRun: async () => run,
     listEvents: async () => [],
@@ -174,6 +183,47 @@ describe("Overture routes", () => {
     expect(manifest.json().documents[0].path).toBe("plan00.md");
     await fastify.close();
   });
+  it("hands an exact plan manifest to the awaiting Task Contract", async () => {
+    const fastify = await app();
+    const response = await fastify.inject({
+      method: "POST",
+      url: `/v1/overture/runs/${ids.runId}/task-contract`,
+      headers: { "idempotency-key": "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+      payload: {
+        projectId: ids.projectId,
+        conversationId: ids.conversationId,
+        planId: "88888888-8888-4888-8888-888888888888",
+        planVersion: 1,
+        manifestHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        substance: {
+          desiredOutcome: "Ship the bounded change",
+          userVisibleBehavior: ["Visible result"],
+          successCriteria: ["Verified result"],
+          liveEvidence: ["Durable record"],
+          scope: ["Project only"],
+          nonGoals: ["Unrelated work"],
+          priorities: ["Safety"],
+          acceptableTradeoffs: ["Bounded scope"],
+          constraints: ["Approval required"],
+          knownEdgeCases: ["Retry"],
+          project: { projectId: ids.projectId, repository: "repo", immutableBaseRevision: "base", dataBoundary: "project" },
+          evidenceReferences: [],
+          approvedPreviewReferences: [],
+          expectedGroups: ["group"],
+          expectedDepartments: ["department"],
+          criticalActionExpectations: ["Show effect"],
+          forbiddenEffects: ["Unapproved effect"],
+          environmentAssumptions: ["Local"],
+          externalServiceAssumptions: ["None"],
+          budget: { ceiling: "bounded", reportingExpectations: ["Report"], stoppingConditions: ["Stop"] },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().launchState).toBe("awaiting_confirmation");
+    await fastify.close();
+  });
+
   it("revises a plan document and opens a clarification with command ids", async () => {
     const fastify = await app();
     const plan = await fastify.inject({

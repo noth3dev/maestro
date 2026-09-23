@@ -49,6 +49,8 @@ describe("contracts surface", () => {
         "CreateOvertureArtifactInputSchema",
         "CreateOvertureRunBodySchema",
         "CreateOvertureRunInputSchema",
+        "CreateOvertureTaskContractBodySchema",
+        "CreateOvertureTaskContractInputSchema",
         "CreateTaskContractInputSchema",
         "CriticalActionApprovalInputSchema",
         "CriticalActionInputSchema",

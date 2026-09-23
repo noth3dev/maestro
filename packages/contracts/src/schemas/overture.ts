@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isSafeOvertureText, OVERTURE_ROLE_IDS, OVERTURE_ROLE_TAXONOMY_VERSION } from "@maestro/domain";
 import { CommandVersionSchema, ModelRefSchema, UuidSchema } from "./common.js";
+import { TaskContractSubstanceSchema } from "./task-contract.js";
 
 const HashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const SafeContentSchema = z
@@ -55,7 +56,7 @@ export const OvertureRunSchema = z
     version: CommandVersionSchema.min(1),
     roleTaxonomyVersion: z.literal(OVERTURE_ROLE_TAXONOMY_VERSION),
     planManifestHash: HashSchema.nullable(),
-    taskContractId: z.null(),
+    taskContractId: UuidSchema.nullable(),
     roles: z.array(OvertureRoleAssignmentSchema).min(1).readonly(),
   })
   .strict()
@@ -80,6 +81,7 @@ export const OvertureEventTypeSchema = z.enum([
   "review_ready",
   "launch_ready",
   "run_state_changed",
+  "task_contract_attached",
 ]);
 export const OvertureEventSchema = z
   .object({
@@ -262,6 +264,22 @@ export const ReviseOverturePlanInputSchema = z
 export type ReviseOverturePlanInput = z.infer<typeof ReviseOverturePlanInputSchema>;
 export const ReviseOverturePlanBodySchema = ReviseOverturePlanInputSchema.omit({ runId: true, documentId: true, commandId: true });
 export type ReviseOverturePlanBody = z.infer<typeof ReviseOverturePlanBodySchema>;
+export const CreateOvertureTaskContractInputSchema = z
+  .object({
+    projectId: UuidSchema,
+    runId: UuidSchema,
+    conversationId: UuidSchema,
+    planId: UuidSchema,
+    planVersion: CommandVersionSchema.min(1),
+    manifestHash: HashSchema,
+    substance: TaskContractSubstanceSchema,
+    commandId: UuidSchema,
+  })
+  .strict();
+export type CreateOvertureTaskContractInput = z.infer<typeof CreateOvertureTaskContractInputSchema>;
+export const CreateOvertureTaskContractBodySchema = CreateOvertureTaskContractInputSchema.omit({ runId: true, commandId: true });
+export type CreateOvertureTaskContractBody = z.infer<typeof CreateOvertureTaskContractBodySchema>;
+
 export const OpenOvertureClarificationInputSchema = z
   .object({ projectId: UuidSchema, runId: UuidSchema, conversationId: UuidSchema, question: SafeContentSchema, commandId: UuidSchema })
   .strict();

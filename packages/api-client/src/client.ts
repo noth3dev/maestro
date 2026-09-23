@@ -211,6 +211,11 @@ export interface ApiClient {
     input: import("@maestro/contracts").OpenOvertureClarificationBody,
     options?: { idempotencyKey?: string },
   ): Promise<import("@maestro/contracts").OvertureClarification>;
+  createOvertureTaskContract(
+    runId: string,
+    input: import("@maestro/contracts").CreateOvertureTaskContractBody,
+    options?: { idempotencyKey?: string },
+  ): Promise<import("@maestro/contracts").TaskContract>;
   listOvertureEvents(runId: string, query: OvertureEventQuery): Promise<readonly OvertureEvent[]>;
   streamOvertureEvents(runId: string, query: OvertureEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<OvertureEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;

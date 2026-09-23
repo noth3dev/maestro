@@ -10,6 +10,8 @@ import type {
   OverturePlanManifest,
   OvertureClarification,
   OvertureRun,
+  TaskContract,
+  CreateOvertureTaskContractInput,
   OpenOvertureClarificationInput,
   ReviseOverturePlanInput,
 } from "@maestro/contracts";
@@ -18,6 +20,8 @@ import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type Ov
 import {
   appendOvertureMessage,
   assertProjectRole,
+  attachOvertureTaskContract,
+  createDurableTaskContract,
   reviseOverturePlan,
   openOvertureClarification,
   readOvertureArtifacts,
@@ -36,6 +40,7 @@ export interface OvertureService {
   listArtifacts(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<readonly OvertureArtifact[]>;
   readPlanManifest(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OverturePlanManifest>;
   revisePlan(input: ReviseOverturePlanInput, operator: OperatorContext): Promise<OverturePlanDocument>;
+  createTaskContract(input: CreateOvertureTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
   openClarification(input: OpenOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   listMessages(
     runId: string,
@@ -130,6 +135,21 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
     async openClarification(input, operator) {
       await assertRole(operator, input.projectId);
       return openOvertureClarification(pool, input);
+    },
+    async createTaskContract(input, operator) {
+      await assertRole(operator, input.projectId);
+      const contract = await createDurableTaskContract(pool, input.commandId, input.substance);
+      await attachOvertureTaskContract(pool, {
+        runId: input.runId,
+        projectId: input.projectId,
+        conversationId: input.conversationId,
+        contractId: contract.contractId,
+        planId: input.planId,
+        planVersion: input.planVersion,
+        manifestHash: input.manifestHash,
+        commandId: input.commandId,
+      });
+      return contract;
     },
     async listMessages(runId, projectId, conversationId, afterCursor, operator) {
       await assertRole(operator, projectId);

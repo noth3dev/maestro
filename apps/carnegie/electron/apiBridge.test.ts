@@ -17,6 +17,7 @@ describe("Carnegie renderer API bridge", () => {
       "getOverturePlanManifest",
       "reviseOverturePlan",
       "openOvertureClarification",
+      "createOvertureTaskContract",
       "listOvertureEvents",
       "streamEvents",
     ])

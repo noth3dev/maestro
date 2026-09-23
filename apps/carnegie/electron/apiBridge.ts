@@ -60,6 +60,7 @@ export const exposedApiMethods = [
   "getOverturePlanManifest",
   "reviseOverturePlan",
   "openOvertureClarification",
+  "createOvertureTaskContract",
   "listOvertureEvents",
   "activateHead",
   "createCouncil",

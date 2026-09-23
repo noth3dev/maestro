@@ -1085,6 +1085,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Task 15 durable artifact/plan-read checkpoint (2026-09-23):** Added PostgreSQL-backed artifact reads and hash-bound plan-manifest reads, Control Plane routes, typed API-client methods, and Electron/preload exposure. RED exposed the missing artifact reader; GREEN passed **7 files / 64 tests** across Overture/API/bridge/contracts, real PostgreSQL Overture integration passed **1 file / 5 tests**, and build/typecheck, targeted ESLint, migration, boundary, and diff checks passed. Task Contract linkage, Task Editor writes, renderer Overture UI, and live provider execution remain unimplemented/unverified.
 
+**Task 15 Task Editor handoff checkpoint (2026-09-23):** Added versioned plan revision and clarification writes, then an exact Overture-to-Task-Contract handoff. The handoff verifies the current plan document version and manifest hash, creates the existing durable Task Contract producer, binds its ID/reference to the Overture Run, and moves the run to `review`; retries remain idempotent and no Goal is advanced. PostgreSQL Overture integration passed **1 file / 6 tests**; focused route/API/bridge/contracts/persistence verification passed **6 files / 63 tests**, with build/typecheck, ESLint, migration, boundary, and diff checks passing. Renderer UI, live provider evidence, confirmation/Launch wiring from this Run, and downstream orchestration remain unimplemented or unverified.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

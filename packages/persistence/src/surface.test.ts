@@ -164,6 +164,7 @@ describe("persistence surface", () => {
         "assertProjectMembership",
         "assertProjectRole",
         "attachDiscordSignalToIncident",
+        "attachOvertureTaskContract",
         "attachSignalToIncidentInTransaction",
         "authenticateLocalOperator",
         "bindHeadActivationInvocation",
