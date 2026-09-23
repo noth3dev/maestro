@@ -313,6 +313,8 @@ export const AnswerOvertureClarificationInputSchema = z
   })
   .strict();
 export type AnswerOvertureClarificationInput = z.infer<typeof AnswerOvertureClarificationInputSchema>;
+export const AnswerOvertureClarificationBodySchema = AnswerOvertureClarificationInputSchema.omit({ runId: true, clarificationId: true, commandId: true });
+export type AnswerOvertureClarificationBody = z.infer<typeof AnswerOvertureClarificationBodySchema>;
 
 export const CreateOvertureRunBodySchema = z
   .object({ runId: UuidSchema, projectId: UuidSchema, conversationId: UuidSchema, roles: z.array(RoleIdSchema).min(1).readonly() })

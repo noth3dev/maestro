@@ -10,6 +10,7 @@ import {
   OverturePlanDocumentSchema,
   OvertureClarificationSchema,
   OpenOvertureClarificationBodySchema,
+  AnswerOvertureClarificationBodySchema,
   CreateOvertureTaskContractBodySchema,
   TaskContractSchema,
   OvertureRunQuerySchema,
@@ -32,6 +33,7 @@ export function createOvertureMethods(
   | "getOverturePlanManifest"
   | "reviseOverturePlan"
   | "openOvertureClarification"
+  | "answerOvertureClarification"
   | "createOvertureTaskContract"
   | "listOvertureEvents"
   | "streamOvertureEvents"
@@ -125,6 +127,23 @@ export function createOvertureMethods(
             "idempotency-key": UuidSchema.parse(options?.idempotencyKey ?? cryptoRandomUuid()),
           },
           body: JSON.stringify(OpenOvertureClarificationBodySchema.parse(input)),
+        },
+        OvertureClarificationSchema,
+      );
+    },
+    answerOvertureClarification(runId, clarificationId, input, options) {
+      const parsedRunId = UuidSchema.parse(runId);
+      const parsedClarificationId = UuidSchema.parse(clarificationId);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/clarifications/${encodeURIComponent(parsedClarificationId)}/answer`,
+        {
+          method: "POST",
+          headers: {
+            ...headers,
+            "content-type": "application/json",
+            "idempotency-key": UuidSchema.parse(options?.idempotencyKey ?? cryptoRandomUuid()),
+          },
+          body: JSON.stringify(AnswerOvertureClarificationBodySchema.parse(input)),
         },
         OvertureClarificationSchema,
       );

@@ -400,7 +400,7 @@ export async function openOvertureClarification(
       projectId: args.projectId,
       commandId: args.commandId,
       eventType: "clarification_opened",
-      payload: { clarificationId: row.clarification_id },
+      payload: { clarificationId: row.clarification_id, question: row.question },
     });
     await client.query("COMMIT");
     return toClarification(row);
@@ -457,7 +457,7 @@ export async function answerOvertureClarification(
       projectId: args.projectId,
       commandId: args.commandId,
       eventType: "clarification_answered",
-      payload: { clarificationId: args.clarificationId },
+      payload: { clarificationId: args.clarificationId, answer: args.answer },
     });
     await client.query("COMMIT");
     return toClarification(next);

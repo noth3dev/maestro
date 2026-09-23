@@ -53,6 +53,69 @@ type OvertureContractForm = {
   expectedDepartments: string;
 };
 
+export type OvertureClarificationView = {
+  clarificationId: string;
+  question: string;
+};
+
+export function projectOpenOvertureClarification(events: readonly OvertureEvent[]): OvertureClarificationView | undefined {
+  let current: OvertureClarificationView | undefined;
+  for (const event of events) {
+    const payload = event.payload;
+    const clarificationId = typeof payload.clarificationId === "string" ? payload.clarificationId : undefined;
+    if (clarificationId === undefined) continue;
+    if (event.eventType === "clarification_opened") {
+      const question = typeof payload.question === "string" ? payload.question : undefined;
+      if (question !== undefined && question.trim() !== "") current = { clarificationId, question };
+    } else if (event.eventType === "clarification_answered" && current?.clarificationId === clarificationId) {
+      current = undefined;
+    }
+  }
+  return current;
+}
+
+export function OvertureClarificationPanel({
+  clarification,
+  answer,
+  onAnswer,
+  onSubmitAnswer,
+  busy,
+}: {
+  clarification: OvertureClarificationView;
+  answer: string;
+  onAnswer: (answer: string) => void;
+  onSubmitAnswer: (answer: string) => void;
+  busy: boolean;
+}) {
+  return (
+    <form
+      className="home-overture-editor"
+      aria-labelledby="overture-clarification-title"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const value = answer.trim();
+        if (value !== "") onSubmitAnswer(value);
+      }}
+    >
+      <h3 id="overture-clarification-title">Crew clarification needed</h3>
+      <p>{clarification.question}</p>
+      <div className="form-field">
+        <label className="form-label" htmlFor="overture-clarification-answer">Answer</label>
+        <textarea
+          id="overture-clarification-answer"
+          className="input textarea"
+          value={answer}
+          disabled={busy}
+          onChange={(event) => onAnswer(event.target.value)}
+        />
+      </div>
+      <button className="btn btn-primary" type="submit" disabled={busy || answer.trim() === ""}>
+        {busy ? "answering…" : "answer clarification"}
+      </button>
+    </form>
+  );
+}
+
 async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
@@ -111,6 +174,8 @@ export function Home({
   const [confirmed, setConfirmed] = useState(false);
   const [draftRejected, setDraftRejected] = useState(false);
   const [overtureRun, setOvertureRun] = useState<OvertureRun | undefined>(undefined);
+  const [overtureClarification, setOvertureClarification] = useState<OvertureClarificationView | undefined>(undefined);
+  const [overtureClarificationAnswer, setOvertureClarificationAnswer] = useState("");
   const [overtureMessages, setOvertureMessages] = useState<readonly OvertureMessage[]>([]);
   const [overtureManifest, setOvertureManifest] = useState<OverturePlanManifest | undefined>(undefined);
   const [overturePlanContent, setOverturePlanContent] = useState("");
@@ -150,6 +215,8 @@ export function Home({
     setConfirmed(false);
     setDraftRejected(false);
     setOvertureRun(undefined);
+    setOvertureClarification(undefined);
+    setOvertureClarificationAnswer("");
     setOvertureMessages([]);
     setOvertureManifest(undefined);
     setOverturePlanContent("");
@@ -275,6 +342,7 @@ export function Home({
         ]);
         setOvertureMessages(messages);
         setOvertureRun(updatedRun);
+        setOvertureClarification(projectOpenOvertureClarification(events));
         const hasPlan =
           updatedRun.planManifestHash !== null || events.some((event: OvertureEvent) => event.eventType === "manifest_revision_created");
         if (hasPlan) {
@@ -288,6 +356,7 @@ export function Home({
         setOvertureError(cause instanceof Error ? cause.message : String(cause));
       }
     };
+    void refresh();
     const timer = window.setInterval(() => {
       void refresh();
     }, 1000);
@@ -445,6 +514,30 @@ export function Home({
       setDraftForm(formFromContract(contract));
       setConfirmed(false);
       setDraftRejected(false);
+    } catch (cause) {
+      setOvertureError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setOvertureBusy(false);
+    }
+  };
+
+  const answerOvertureClarification = async (answer: string) => {
+    if (config === undefined || overtureRun === undefined || overtureClarification === undefined) return;
+    setOvertureBusy(true);
+    setOvertureError(undefined);
+    try {
+      await window.maestro.api.answerOvertureClarification(
+        overtureRun.runId,
+        overtureClarification.clarificationId,
+        {
+          projectId: config.projectId,
+          conversationId: overtureRun.conversationId,
+          answer,
+        },
+        { idempotencyKey: globalThis.crypto.randomUUID() },
+      );
+      setOvertureClarification(undefined);
+      setOvertureClarificationAnswer("");
     } catch (cause) {
       setOvertureError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -756,6 +849,15 @@ export function Home({
             <div className="alert alert-warning" role="alert">
               {overtureError}
             </div>
+          )}
+          {overtureClarification !== undefined && (
+            <OvertureClarificationPanel
+              clarification={overtureClarification}
+              answer={overtureClarificationAnswer}
+              onAnswer={setOvertureClarificationAnswer}
+              onSubmitAnswer={(answer) => void answerOvertureClarification(answer)}
+              busy={overtureBusy}
+            />
           )}
           <div className="home-overture-roles" aria-label="Overture roles">
             {overtureRun.roles.map((role) => (

@@ -38,7 +38,8 @@ describe("Home Concertmaster conversation", () => {
       clarificationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       question: "Which repository is in scope?",
     });
-    const html = renderToStaticMarkup(<OvertureClarificationPanel clarification={clarification} answer="" onAnswer={vi.fn()} busy={false} />);
+    if (clarification === undefined) throw new Error("expected open clarification");
+    const html = renderToStaticMarkup(<OvertureClarificationPanel clarification={clarification} answer="" onAnswer={vi.fn()} onSubmitAnswer={vi.fn()} busy={false} />);
     expect(html).toContain("Which repository is in scope?");
     expect(html).toContain('id="overture-clarification-answer"');
     expect(html).toContain("answer clarification");

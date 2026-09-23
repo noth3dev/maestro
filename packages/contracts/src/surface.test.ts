@@ -7,6 +7,7 @@ describe("contracts surface", () => {
       [
         "AcceptWorkerInputSchema",
         "ActionClassificationSchema",
+        "AnswerOvertureClarificationBodySchema",
         "AnswerOvertureClarificationInputSchema",
         "AppendOvertureMessageInputSchema",
         "AppendOvertureOperatorMessageBodySchema",

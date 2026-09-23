@@ -92,6 +92,7 @@ const exposedApiMethods = [
   "getOverturePlanManifest",
   "reviseOverturePlan",
   "openOvertureClarification",
+  "answerOvertureClarification",
   "createOvertureTaskContract",
   "listOvertureEvents",
   "activateHead",

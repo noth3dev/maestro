@@ -211,6 +211,12 @@ export interface ApiClient {
     input: import("@maestro/contracts").OpenOvertureClarificationBody,
     options?: { idempotencyKey?: string },
   ): Promise<import("@maestro/contracts").OvertureClarification>;
+  answerOvertureClarification(
+    runId: string,
+    clarificationId: string,
+    input: import("@maestro/contracts").AnswerOvertureClarificationBody,
+    options?: { idempotencyKey?: string },
+  ): Promise<import("@maestro/contracts").OvertureClarification>;
   createOvertureTaskContract(
     runId: string,
     input: import("@maestro/contracts").CreateOvertureTaskContractBody,

@@ -9,6 +9,8 @@ import {
   ReviseOverturePlanInputSchema,
   OpenOvertureClarificationBodySchema,
   OpenOvertureClarificationInputSchema,
+  AnswerOvertureClarificationBodySchema,
+  AnswerOvertureClarificationInputSchema,
   CreateOvertureTaskContractBodySchema,
   CreateOvertureTaskContractInputSchema,
   OvertureEventQuerySchema,
@@ -107,6 +109,16 @@ export function registerOvertureRoutes(app: FastifyInstance, deps: OvertureRoute
     const input = OpenOvertureClarificationInputSchema.parse({ ...body, runId, commandId });
     const result = await overture.openClarification(input, requestOperator(request as { operator?: OperatorContext }));
     return reply.status(201).send(OvertureClarificationSchema.parse(result));
+  });
+
+  app.post("/v1/overture/runs/:runId/clarifications/:clarificationId/answer", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const clarificationId = parse(UuidSchema, (request.params as { clarificationId?: unknown }).clarificationId);
+    const commandId = requiredCommandId(request.headers["idempotency-key"]);
+    const body = parse(AnswerOvertureClarificationBodySchema, request.body);
+    const input = AnswerOvertureClarificationInputSchema.parse({ ...body, runId, clarificationId, commandId });
+    const result = await overture.answerClarification(input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(OvertureClarificationSchema.parse(result));
   });
 
   app.post("/v1/overture/runs/:runId/task-contract", async (request, reply) => {

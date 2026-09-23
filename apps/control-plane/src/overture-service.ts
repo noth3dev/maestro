@@ -13,6 +13,7 @@ import type {
   TaskContract,
   CreateOvertureTaskContractInput,
   OpenOvertureClarificationInput,
+  AnswerOvertureClarificationInput,
   ReviseOverturePlanInput,
 } from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
@@ -24,6 +25,7 @@ import {
   createDurableTaskContract,
   reviseOverturePlan,
   openOvertureClarification,
+  answerOvertureClarification,
   readOvertureArtifacts,
   bindOvertureRoleModel,
   createOvertureRun,
@@ -42,6 +44,7 @@ export interface OvertureService {
   revisePlan(input: ReviseOverturePlanInput, operator: OperatorContext): Promise<OverturePlanDocument>;
   createTaskContract(input: CreateOvertureTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
   openClarification(input: OpenOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
+  answerClarification(input: AnswerOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   listMessages(
     runId: string,
     projectId: string,
@@ -135,6 +138,10 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
     async openClarification(input, operator) {
       await assertRole(operator, input.projectId);
       return openOvertureClarification(pool, input);
+    },
+    async answerClarification(input, operator) {
+      await assertRole(operator, input.projectId);
+      return answerOvertureClarification(pool, input);
     },
     async createTaskContract(input, operator) {
       await assertRole(operator, input.projectId);
