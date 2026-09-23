@@ -299,6 +299,7 @@ describe("persistence surface", () => {
         "markKnowledgeUnsupportedForDigest",
         "markKnowledgeUnsupportedForEvidence",
         "markMissingCouncilParticipantsAbsent",
+        "markOvertureRunLaunchedForTaskContract",
         "markUnboundWorkerUnknown",
         "markUnresolvedDeviceAgentCommandsUnknown",
         "markWorkerTerminal",

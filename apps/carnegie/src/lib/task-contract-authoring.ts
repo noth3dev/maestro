@@ -11,6 +11,7 @@ export type GoalLessIntakeApi = Pick<ApiClient, "listModels" | "createConversati
 export type GoalLessIntakeResult = {
   conversationId: string;
   response: string;
+  turnId: string;
   draft: TaskContract | undefined;
   message: string | undefined;
   turnStatus: ConversationTurn["status"];
@@ -43,7 +44,13 @@ export function formatTaskContractReview(contract: TaskContract): string {
 /** Send Home's no-Goal brief through the same durable conversation routes as the TUI. */
 export async function submitGoalLessBrief(
   api: GoalLessIntakeApi,
-  input: { projectId: string; text: string; goalId?: string; conversationId?: string; onConversationCreated?: (conversationId: string) => void },
+  input: {
+    projectId: string;
+    text: string;
+    goalId?: string;
+    conversationId?: string;
+    onConversationCreated?: (conversationId: string) => void;
+  },
 ): Promise<GoalLessIntakeResult> {
   const text = input.text.trim();
   if (text === "") throw new Error("A brief is required to start a Concertmaster conversation");
@@ -74,6 +81,7 @@ export async function submitGoalLessBrief(
   return {
     conversationId,
     response: result.turn.content,
+    turnId: result.turn.turnId,
     draft: undefined,
     message: undefined,
     turnStatus: result.turn.status,
@@ -131,7 +139,13 @@ export type HomeBriefApi = GoalLessIntakeApi & TaskContractAuthoringApi;
 /** Route Home through goal-less conversation intake, retaining direct authoring for attached Goals. */
 export async function submitHomeBrief(
   api: HomeBriefApi,
-  input: { projectId: string; text: string; selectedGoalId: string | undefined; conversationId?: string; onConversationCreated?: (conversationId: string) => void },
+  input: {
+    projectId: string;
+    text: string;
+    selectedGoalId: string | undefined;
+    conversationId?: string;
+    onConversationCreated?: (conversationId: string) => void;
+  },
 ): Promise<GoalLessIntakeResult> {
   return submitGoalLessBrief(api, {
     projectId: input.projectId,

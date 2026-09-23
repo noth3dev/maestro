@@ -13,13 +13,14 @@ import {
   createOvertureRun,
   openOvertureClarification,
   readOvertureArtifacts,
+  markOvertureRunLaunchedForTaskContract,
   readOvertureEvents,
   readOvertureMessages,
   readOverturePlanManifest,
   readOvertureRun,
   reviseOverturePlan,
 } from "./overture.js";
-import { createDurableTaskContract } from "./task-contract.js";
+import { createDurableTaskContract, launchConfirmedTaskContract, recordExactTaskContractConfirmation } from "./task-contract.js";
 import { applyAllMigrations } from "./test-migrations.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -294,6 +295,17 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       manifestHash: manifest.manifestHash,
     });
     expect(run?.state).toBe("review");
+    await recordExactTaskContractConfirmation(
+      pool,
+      contract.contractId,
+      contract.version,
+      contract.contentHash,
+      "operator-1",
+      randomUUID(),
+    );
+    await launchConfirmedTaskContract(pool, contract.contractId);
+    await markOvertureRunLaunchedForTaskContract(pool, contract.contractId);
+    expect((await readOvertureRun(pool, runId, projectId, conversationId))?.state).toBe("launched");
   });
 
   it("rejects cross-project reads and direct revision mutation", async () => {

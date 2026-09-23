@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { TaskContract } from "@maestro/contracts";
+import type { OvertureEvent, OvertureMessage, OverturePlanManifest, OvertureRun, TaskContract } from "@maestro/contracts";
 import { Icon } from "../icons.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
@@ -17,6 +17,15 @@ import {
 } from "../lib/task-contract-authoring.js";
 import { loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
 
+const overtureRoles = [
+  "conversation-lead",
+  "architecture-analyst",
+  "external-research-scout",
+  "security-evaluator",
+  "design-mock-specialist",
+  "task-editor",
+] as const;
+
 const homeTitles = [
   "what should the floor work on",
   "give the floor a brief",
@@ -31,6 +40,22 @@ type DraftForm = {
   immutableBaseRevision: string;
   dataBoundary: string;
 };
+
+type OvertureContractForm = {
+  desiredOutcome: string;
+  successCriteria: string;
+  repository: string;
+  immutableBaseRevision: string;
+  dataBoundary: string;
+  expectedGroups: string;
+  expectedDepartments: string;
+};
+
+async function sha256(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function lines(value: string): string[] {
   return value
@@ -49,11 +74,7 @@ function formFromContract(contract: TaskContract): DraftForm {
   };
 }
 
-export function submitHomeComposer(
-  mode: HomeMode,
-  event: Pick<React.FormEvent, "preventDefault">,
-  submit: () => void,
-): void {
+export function submitHomeComposer(mode: HomeMode, event: Pick<React.FormEvent, "preventDefault">, submit: () => void): void {
   event.preventDefault();
   if (mode === "flashmob") return;
   submit();
@@ -82,6 +103,21 @@ export function Home({
   const [draftForm, setDraftForm] = useState<DraftForm | undefined>(undefined);
   const [confirmed, setConfirmed] = useState(false);
   const [draftRejected, setDraftRejected] = useState(false);
+  const [overtureRun, setOvertureRun] = useState<OvertureRun | undefined>(undefined);
+  const [overtureMessages, setOvertureMessages] = useState<readonly OvertureMessage[]>([]);
+  const [overtureManifest, setOvertureManifest] = useState<OverturePlanManifest | undefined>(undefined);
+  const [overturePlanContent, setOverturePlanContent] = useState("");
+  const [overtureContractForm, setOvertureContractForm] = useState<OvertureContractForm>({
+    desiredOutcome: "",
+    successCriteria: "",
+    repository: "",
+    immutableBaseRevision: "",
+    dataBoundary: "",
+    expectedGroups: "",
+    expectedDepartments: "",
+  });
+  const [overtureError, setOvertureError] = useState<string | undefined>(undefined);
+  const [overtureBusy, setOvertureBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -102,6 +138,20 @@ export function Home({
     setDraftOrigin(undefined);
     setConfirmed(false);
     setDraftRejected(false);
+    setOvertureRun(undefined);
+    setOvertureMessages([]);
+    setOvertureManifest(undefined);
+    setOverturePlanContent("");
+    setOvertureContractForm({
+      desiredOutcome: "",
+      successCriteria: "",
+      repository: "",
+      immutableBaseRevision: "",
+      dataBoundary: "",
+      expectedGroups: "",
+      expectedDepartments: "",
+    });
+    setOvertureError(undefined);
     setError(undefined);
   }, [projectId]);
 
@@ -109,10 +159,231 @@ export function Home({
     if (projectId === undefined || conversationId === undefined || conversationProjectId !== projectId) return;
     let current = true;
     void loadConversation(window.maestro.api, { conversationId, projectId })
-      .then((messages) => { if (current) setConversationMessages(messages); })
-      .catch((cause) => { if (current) setError(cause instanceof Error ? cause.message : String(cause)); });
-    return () => { current = false; };
+      .then((messages) => {
+        if (current) setConversationMessages(messages);
+      })
+      .catch((cause) => {
+        if (current) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      current = false;
+    };
   }, [conversationId, conversationProjectId, projectId]);
+
+  const awakenOverture = async (input: { conversationId: string; turnId: string; content: string }) => {
+    if (config === undefined) return;
+    setOverturePlanContent((current) => (current === "" ? `# Project plan\n\n## Operator request\n\n${input.content}` : current));
+    setOvertureBusy(true);
+    setOvertureError(undefined);
+    try {
+      const runId = globalThis.crypto.randomUUID();
+      const run = await window.maestro.api.createOvertureRun(
+        { runId, projectId: config.projectId, conversationId: input.conversationId, roles: overtureRoles },
+        { idempotencyKey: globalThis.crypto.randomUUID() },
+      );
+      setOvertureRun(run);
+      await window.maestro.api.sendOvertureOperatorMessage(
+        runId,
+        { projectId: config.projectId, conversationId: input.conversationId, turnId: input.turnId, content: input.content },
+        { idempotencyKey: globalThis.crypto.randomUUID() },
+      );
+      const [messages, updatedRun] = await Promise.all([
+        window.maestro.api.listOvertureMessages(runId, {
+          projectId: config.projectId,
+          conversationId: input.conversationId,
+          afterCursor: "0",
+        }),
+        window.maestro.api.getOvertureRun(runId, { projectId: config.projectId, conversationId: input.conversationId }),
+      ]);
+      setOvertureMessages(messages);
+      setOvertureRun(updatedRun);
+      if (updatedRun.planManifestHash !== null) {
+        const manifest = await window.maestro.api.getOverturePlanManifest(runId, {
+          projectId: config.projectId,
+          conversationId: input.conversationId,
+        });
+        setOvertureManifest(manifest);
+      }
+    } catch (cause) {
+      setOvertureError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setOvertureBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (config === undefined || overtureRun === undefined) return;
+    const refresh = async () => {
+      try {
+        const [events, messages, updatedRun] = await Promise.all([
+          window.maestro.api.listOvertureEvents(overtureRun.runId, {
+            projectId: config.projectId,
+            conversationId: overtureRun.conversationId,
+            afterCursor: "0",
+          }),
+          window.maestro.api.listOvertureMessages(overtureRun.runId, {
+            projectId: config.projectId,
+            conversationId: overtureRun.conversationId,
+            afterCursor: "0",
+          }),
+          window.maestro.api.getOvertureRun(overtureRun.runId, { projectId: config.projectId, conversationId: overtureRun.conversationId }),
+        ]);
+        setOvertureMessages(messages);
+        setOvertureRun(updatedRun);
+        const hasPlan =
+          updatedRun.planManifestHash !== null || events.some((event: OvertureEvent) => event.eventType === "manifest_revision_created");
+        if (hasPlan) {
+          const manifest = await window.maestro.api.getOverturePlanManifest(overtureRun.runId, {
+            projectId: config.projectId,
+            conversationId: overtureRun.conversationId,
+          });
+          setOvertureManifest(manifest);
+        }
+      } catch (cause) {
+        setOvertureError(cause instanceof Error ? cause.message : String(cause));
+      }
+    };
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [config, overtureRun?.conversationId, overtureRun?.runId]);
+
+  useEffect(() => {
+    if (overtureManifest === undefined) return;
+    const root = overtureManifest.documents.find((document) => document.path === "plan00.md");
+    if (root === undefined) return;
+    setOvertureContractForm((current) => ({
+      ...current,
+      desiredOutcome:
+        current.desiredOutcome === ""
+          ? `Implement the reviewed plan set starting with ${root.path} at version ${root.version}`
+          : current.desiredOutcome,
+      successCriteria:
+        current.successCriteria === ""
+          ? overtureManifest.documents.map((document) => `${document.path} is reviewed at version ${document.version}`).join("\n")
+          : current.successCriteria,
+    }));
+  }, [overtureManifest]);
+
+  const createOverturePlan = async () => {
+    if (config === undefined || overtureRun === undefined || overturePlanContent.trim() === "") {
+      setOvertureError("Write the project blueprint before creating plan00.md.");
+      return;
+    }
+    setOvertureBusy(true);
+    setOvertureError(undefined);
+    try {
+      const content = overturePlanContent.trim();
+      const documentId = globalThis.crypto.randomUUID();
+      await window.maestro.api.reviseOverturePlan(
+        overtureRun.runId,
+        documentId,
+        {
+          projectId: config.projectId,
+          conversationId: overtureRun.conversationId,
+          path: "plan00.md",
+          kind: "project",
+          content,
+          contentHash: await sha256(content),
+          sourceRefs: [],
+          dependencies: [],
+          expectedVersion: 0,
+        },
+        { idempotencyKey: globalThis.crypto.randomUUID() },
+      );
+      const manifest = await window.maestro.api.getOverturePlanManifest(overtureRun.runId, {
+        projectId: config.projectId,
+        conversationId: overtureRun.conversationId,
+      });
+      setOvertureManifest(manifest);
+      setOvertureRun(
+        await window.maestro.api.getOvertureRun(overtureRun.runId, {
+          projectId: config.projectId,
+          conversationId: overtureRun.conversationId,
+        }),
+      );
+    } catch (cause) {
+      setOvertureError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setOvertureBusy(false);
+    }
+  };
+
+  const createOvertureContract = async () => {
+    if (config === undefined || overtureRun === undefined || overtureManifest === undefined) return;
+    const root = overtureManifest.documents.find((document) => document.path === "plan00.md");
+    if (root === undefined) return;
+    const required = [
+      overtureContractForm.desiredOutcome,
+      overtureContractForm.successCriteria,
+      overtureContractForm.repository,
+      overtureContractForm.immutableBaseRevision,
+      overtureContractForm.dataBoundary,
+      overtureContractForm.expectedGroups,
+      overtureContractForm.expectedDepartments,
+    ];
+    if (required.some((value) => value.trim() === "")) {
+      setOvertureError("Complete the Task Contract boundary fields before creating the awaiting contract.");
+      return;
+    }
+    setOvertureBusy(true);
+    setOvertureError(undefined);
+    try {
+      const planEvidence = overtureManifest.documents.map((document) => `${document.path}@v${document.version}#${document.contentHash}`);
+      const contract = await window.maestro.api.createOvertureTaskContract(
+        overtureRun.runId,
+        {
+          projectId: config.projectId,
+          conversationId: overtureRun.conversationId,
+          planId: root.documentId,
+          planVersion: root.version,
+          manifestHash: overtureManifest.manifestHash,
+          substance: {
+            desiredOutcome: overtureContractForm.desiredOutcome.trim(),
+            userVisibleBehavior: ["The reviewed Overture plan is visible before confirmation"],
+            successCriteria: lines(overtureContractForm.successCriteria),
+            liveEvidence: [`Overture manifest ${overtureManifest.manifestHash}`, ...planEvidence],
+            scope: [`Project ${config.projectId}`, `Plan manifest ${overtureManifest.manifestHash}`],
+            nonGoals: ["Execution before explicit confirmation and launch"],
+            priorities: ["Preserve exact plan hashes", "Keep all effects behind the existing authority path"],
+            acceptableTradeoffs: ["Remain blocked when provider or plan evidence is unavailable"],
+            constraints: ["The Task Contract references the reviewed Overture plan set"],
+            knownEdgeCases: ["Stale plan manifest", "Provider unavailable", "Concurrent revision"],
+            project: {
+              projectId: config.projectId,
+              repository: overtureContractForm.repository.trim(),
+              immutableBaseRevision: overtureContractForm.immutableBaseRevision.trim(),
+              dataBoundary: overtureContractForm.dataBoundary.trim(),
+            },
+            evidenceReferences: planEvidence,
+            approvedPreviewReferences: overtureManifest.documents.map((document) => document.path),
+            expectedGroups: lines(overtureContractForm.expectedGroups),
+            expectedDepartments: lines(overtureContractForm.expectedDepartments),
+            criticalActionExpectations: ["Show the exact effect and require explicit approval"],
+            forbiddenEffects: ["Unapproved external effects", "Self-approval"],
+            environmentAssumptions: ["PostgreSQL-backed Overture state", "Control Plane remains authoritative"],
+            externalServiceAssumptions: ["No external effect before launch"],
+            budget: {
+              ceiling: "Server-defined",
+              reportingExpectations: ["Report durable state and evidence"],
+              stoppingConditions: ["Stop on stale hashes, authority failure, or provider uncertainty"],
+            },
+          },
+        },
+        { idempotencyKey: globalThis.crypto.randomUUID() },
+      );
+      setDraft(contract);
+      setDraftOrigin("goal-less");
+      setDraftForm(formFromContract(contract));
+      setConfirmed(false);
+      setDraftRejected(false);
+    } catch (cause) {
+      setOvertureError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setOvertureBusy(false);
+    }
+  };
 
   const submitBrief = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -144,6 +415,7 @@ export function Home({
         ]);
         completedTurn = intake.turnStatus === "completed";
         setTurnStatus(completedTurn ? "completed" : intake.turnStatus === "accepted" ? "loading" : intake.turnStatus);
+        if (completedTurn) await awakenOverture({ conversationId: intake.conversationId, turnId: intake.turnId, content: submittedText });
       } else {
         setTurnStatus("idle");
       }
@@ -175,7 +447,8 @@ export function Home({
   };
 
   const cancelTurn = async () => {
-    if (config === undefined || conversationId === undefined || conversationProjectId !== config.projectId || turnStatus !== "loading") return;
+    if (config === undefined || conversationId === undefined || conversationProjectId !== config.projectId || turnStatus !== "loading")
+      return;
     setCancelBusy(true);
     setError(undefined);
     try {
@@ -247,28 +520,61 @@ export function Home({
   };
 
   const submitComposer = (event: React.FormEvent) => {
-    submitHomeComposer(mode, event, () => { void submitBrief(event); });
+    submitHomeComposer(mode, event, () => {
+      void submitBrief(event);
+    });
   };
 
   return (
     <div className="home-main">
       <div className="home-title">{title}</div>
-      {showConversationState && <section className="home-conversation" aria-label="Concertmaster conversation" role="log" aria-live="polite" aria-relevant="additions text">
-        <div>conversation {conversationId ?? "not started"}</div>
-        <div role="status" aria-live="polite" aria-atomic="true">turn {turnStatus}</div>
-        {conversationMessages.map((message) => (
-          <p key={message.id} data-role={message.role}>{message.content}</p>
-        ))}
-        <button type="button" className="btn btn-ghost btn-sm" disabled={conversationId === undefined} onClick={() => document.getElementById("home-brief")?.focus()}>
-          continue conversation
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" disabled={!(["failed", "cancelled", "unknown"] as const).includes(turnStatus as "failed" | "cancelled" | "unknown") || busy || text.trim() === ""} onClick={retryBrief}>
-          retry turn
-        </button>
-        <button type="button" className="btn btn-ghost btn-sm" disabled={conversationId === undefined || turnStatus !== "loading" || cancelBusy} onClick={() => void cancelTurn()}>
-          {cancelBusy ? "cancelling…" : "cancel turn"}
-        </button>
-      </section>}
+      {showConversationState && (
+        <section
+          className="home-conversation"
+          aria-label="Concertmaster conversation"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+        >
+          <div>conversation {conversationId ?? "not started"}</div>
+          <div role="status" aria-live="polite" aria-atomic="true">
+            turn {turnStatus}
+          </div>
+          {conversationMessages.map((message) => (
+            <p key={message.id} data-role={message.role}>
+              {message.content}
+            </p>
+          ))}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={conversationId === undefined}
+            onClick={() => document.getElementById("home-brief")?.focus()}
+          >
+            continue conversation
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={
+              !(["failed", "cancelled", "unknown"] as const).includes(turnStatus as "failed" | "cancelled" | "unknown") ||
+              busy ||
+              text.trim() === ""
+            }
+            onClick={retryBrief}
+          >
+            retry turn
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={conversationId === undefined || turnStatus !== "loading" || cancelBusy}
+            onClick={() => void cancelTurn()}
+          >
+            {cancelBusy ? "cancelling…" : "cancel turn"}
+          </button>
+        </section>
+      )}
       <form className={`home-composer${isFlashmob ? " mode-flashmob" : ""}`} onSubmit={submitComposer}>
         <label className="sr-only" htmlFor="home-brief">
           Brief the Concertmaster
@@ -283,10 +589,20 @@ export function Home({
         />
         <div className="home-composer-row">
           <div className="pill-toggle" role="group" aria-label="Home mode">
-            <button type="button" className={mode === "maestro" ? "on" : ""} aria-pressed={mode === "maestro"} onClick={() => onModeChange("maestro")}>
+            <button
+              type="button"
+              className={mode === "maestro" ? "on" : ""}
+              aria-pressed={mode === "maestro"}
+              onClick={() => onModeChange("maestro")}
+            >
               maestro
             </button>
-            <button type="button" className={isFlashmob ? "on flashmob" : ""} aria-pressed={isFlashmob} onClick={() => onModeChange("flashmob")}>
+            <button
+              type="button"
+              className={isFlashmob ? "on flashmob" : ""}
+              aria-pressed={isFlashmob}
+              onClick={() => onModeChange("flashmob")}
+            >
               flashmob
             </button>
           </div>
@@ -312,6 +628,128 @@ export function Home({
         </div>
       )}
 
+      {overtureRun !== undefined && (
+        <section className="home-draft home-overture" aria-labelledby="home-overture-title">
+          <div className="home-draft-head">
+            <div>
+              <h2 id="home-overture-title">Overture Crew</h2>
+              <p>
+                {overtureRun.runId} · {overtureRun.state} · v{overtureRun.version}
+              </p>
+            </div>
+            <span className={`badge ${overtureRun.state === "blocked" ? "badge-rust" : "badge-slate"}`}>{overtureRun.state}</span>
+          </div>
+          <p className="form-hint">
+            Same conversation · {overtureRun.roles.length} roles · no Goal or Worker is created before exact launch.
+          </p>
+          {overtureBusy && (
+            <p role="status" aria-live="polite">
+              awakening the Crew…
+            </p>
+          )}
+          {overtureError !== undefined && (
+            <div className="alert alert-warning" role="alert">
+              {overtureError}
+            </div>
+          )}
+          <div className="home-overture-roles" aria-label="Overture roles">
+            {overtureRun.roles.map((role) => (
+              <span className="badge badge-slate" key={role.roleId}>
+                {role.roleId} · {role.status}
+              </span>
+            ))}
+          </div>
+          {overtureMessages.length > 0 && (
+            <div className="home-conversation" aria-label="Overture messages">
+              {overtureMessages.map((message) => (
+                <p key={message.messageId}>
+                  <strong>{message.actor}</strong>: {message.content}
+                </p>
+              ))}
+            </div>
+          )}
+          {overtureManifest === undefined && (
+            <form
+              className="home-overture-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createOverturePlan();
+              }}
+            >
+              <p className="form-hint">
+                Task Editor · start the versioned project blueprint. The server will hash and persist this plan before any Task Contract
+                exists.
+              </p>
+              <div className="form-field">
+                <label className="form-label" htmlFor="overture-plan00">
+                  plan00.md
+                </label>
+                <textarea
+                  id="overture-plan00"
+                  className="input textarea"
+                  value={overturePlanContent}
+                  onChange={(event) => setOverturePlanContent(event.target.value)}
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={overtureBusy || overturePlanContent.trim() === ""}>
+                save plan00.md
+              </button>
+            </form>
+          )}
+          {overtureManifest !== undefined && (
+            <details open>
+              <summary>Plan set · {overtureManifest.manifestHash}</summary>
+              <ul>
+                {overtureManifest.documents.map((document) => (
+                  <li key={document.documentId}>
+                    {document.path} · v{document.version} · {document.contentHash}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {overtureManifest !== undefined && draft === undefined && (
+            <form
+              className="home-overture-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createOvertureContract();
+              }}
+            >
+              <p className="form-hint">
+                Task Editor handoff. These fields are required because the server will not invent repository or organization boundaries.
+              </p>
+              {(
+                [
+                  ["overture-outcome", "Desired outcome", "desiredOutcome"],
+                  ["overture-success", "Success criteria (one per line)", "successCriteria"],
+                  ["overture-repository", "Repository", "repository"],
+                  ["overture-base", "Immutable base revision", "immutableBaseRevision"],
+                  ["overture-boundary", "Data boundary", "dataBoundary"],
+                  ["overture-groups", "Expected groups (one per line)", "expectedGroups"],
+                  ["overture-departments", "Expected departments (one per line)", "expectedDepartments"],
+                ] as const
+              ).map(([id, label, field]) => (
+                <div className="form-field" key={id}>
+                  <label className="form-label" htmlFor={id}>
+                    {label}
+                  </label>
+                  <textarea
+                    id={id}
+                    className="input textarea"
+                    value={overtureContractForm[field]}
+                    onChange={(event) => setOvertureContractForm({ ...overtureContractForm, [field]: event.target.value })}
+                  />
+                </div>
+              ))}
+              <button className="btn btn-primary" type="submit" disabled={overtureBusy}>
+                create awaiting Task Contract
+              </button>
+            </form>
+          )}
+        </section>
+      )}
+
       {draft !== undefined && draftForm !== undefined && (
         <section className="home-draft" aria-labelledby="home-draft-title">
           <div className="home-draft-head">
@@ -330,7 +768,9 @@ export function Home({
               <span className="badge badge-slate">Single Launch Confirmation required</span>
             )}
           </div>
-          <p className="form-hint" data-contract-phase={draftPhase}>phase: {draftPhase}</p>
+          <p className="form-hint" data-contract-phase={draftPhase}>
+            phase: {draftPhase}
+          </p>
           <details className="home-draft-review" open>
             <summary>Full Task Contract review</summary>
             <pre aria-label="Full Task Contract draft">{formatTaskContractReview(draft)}</pre>
@@ -440,9 +880,7 @@ export function Home({
         <section className="home-deferred-state" id="home-flashmob-hint" aria-label="Flashmob deferred state">
           <span className="badge badge-slate">out-of-scope</span>
           <h2>Flashmob is deferred</h2>
-          <p>
-            This mode cannot create a session, Worker, Goal, or progress locally. Use maestro for the live Concertmaster path.
-          </p>
+          <p>This mode cannot create a session, Worker, Goal, or progress locally. Use maestro for the live Concertmaster path.</p>
           <p className="form-hint">Flashmob can re-enter after Act 1 certification and a durable Act 2 backend contract.</p>
         </section>
       )}
