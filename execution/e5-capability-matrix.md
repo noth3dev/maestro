@@ -177,3 +177,7 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 ## Task 16 durable outbox lease prerequisite (2026-09-24)
 
 **Status: Partial.** The existing `goal-events` outbox now has restart-safe PostgreSQL claim, owner-fenced acknowledgement, and retry release primitives. Focused verification passed **19 tests across 2 files**, and build/typecheck/lint/diff checks passed. This does not add a typed `start_goal` consumer or advance any Head, Council, Department Plan, Mission Bundle, or Worker; E5 remains open and no live provider evidence is claimed.
+
+## Task 16 Launch-result Goal selection (2026-09-24)
+
+**Status: Partial.** Carnegie now refreshes and server-confirms the Goal returned by exact Launch before selecting it in the GUI. Focused tests, the full Carnegie suite (**55 files / 249 tests**), build/typecheck/lint/diff checks passed. This does not execute the Goal or add the missing typed outbox consumer and downstream hierarchy progression; E5 remains open.

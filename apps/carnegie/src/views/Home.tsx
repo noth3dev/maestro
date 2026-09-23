@@ -17,6 +17,7 @@ import {
   updateTaskContractDraft,
 } from "../lib/task-contract-authoring.js";
 import { loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
+import { selectGoalAfterLaunch } from "../lib/goal-operations.js";
 import { modelRef, readSavedConcertmasterModelRef, resolveDefaultModelRef, saveConcertmasterModelRef, sortLiveModels } from "../lib/concertmaster-model.js";
 
 const overtureRoles = [
@@ -155,7 +156,7 @@ export function Home({
   onModeChange: (mode: HomeMode) => void;
 }) {
   const { config } = useConnection();
-  const { selectedGoalId } = useGoals();
+  const { selectedGoalId, selectGoal, refresh: refreshGoals } = useGoals();
   const [title] = useState(() => homeTitles[Math.floor(Math.random() * homeTitles.length)]);
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<TaskContract | undefined>(undefined);
@@ -679,6 +680,7 @@ export function Home({
       setDraft(launch.taskContract);
       setLaunchedGoalId(launch.goalId);
       setLaunchScheduling(launch.scheduling);
+      await selectGoalAfterLaunch({ refreshGoals }, { goalId: launch.goalId }, selectGoal);
       setDraftRejected(false);
     } catch (cause) {
       setDraftRejected(true);

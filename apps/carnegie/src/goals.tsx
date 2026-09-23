@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import type { GoalResult } from "@maestro/api-client";
+import type { GoalList, GoalResult } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
 import { loadGoalsAfterLaunch, selectedGoalIdAfterRefresh } from "./lib/goal-operations.js";
 
@@ -12,7 +12,7 @@ interface GoalsContextValue {
   goals: GoalResult[] | undefined;
   selectedGoalId: string | undefined;
   selectGoal: (goalId: string) => void;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<GoalList | undefined>;
   loadedFor: GoalLoadScope | undefined;
   loading: boolean;
   error: unknown;
@@ -38,19 +38,21 @@ export function GoalsProvider({ children, refreshKey }: { children: ReactNode; r
       setLoadedFor(undefined);
       setError(undefined);
       setLoading(false);
-      return;
+      return undefined;
     }
     setLoading(true);
     setError(undefined);
     setGoals(undefined);
     try {
       const page = await loadGoalsAfterLaunch(window.maestro.api, { projectId: config.projectId });
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current) return undefined;
       setGoals(page.goals);
       setSelectedGoalId((current) => selectedGoalIdAfterRefresh(current, page.goals));
       setLoadedFor({ projectId: config.projectId, refreshKey });
+      return page;
     } catch (cause) {
       if (generation === requestGeneration.current) setError(cause);
+      return undefined;
     } finally {
       if (generation === requestGeneration.current) setLoading(false);
     }
