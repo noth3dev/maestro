@@ -3,6 +3,7 @@ import { ModelGatewayClientError } from "./model-gateway-client.js";
 import { EnsembleRoutingShortfallError } from "./ensemble-admission.js";
 import { mapError } from "./api-error.js";
 import { OvertureRunNotFoundError } from "@maestro/persistence";
+import { OvertureProviderUnavailableError } from "./overture-role-turn.js";
 
 describe("Control Plane provider diagnostics", () => {
   it("surfaces local Codex spawn detail without changing provider_unavailable", () => {
@@ -58,6 +59,13 @@ describe("Ensemble routing shortfall diagnostics", () => {
 });
 
 describe("Overture diagnostics", () => {
+  it("maps a missing provider binding to an explicit unavailable response", () => {
+    expect(mapError(new OvertureProviderUnavailableError("No account is configured for provider anthropic"))).toEqual({
+      status: 503,
+      body: { error: { code: "provider_unavailable", message: "No account is configured for provider anthropic" } },
+    });
+  });
+
   it("does not turn a missing project-scoped run into an internal error", () => {
     expect(mapError(new OvertureRunNotFoundError("Overture run not found"))).toEqual({
       status: 404,

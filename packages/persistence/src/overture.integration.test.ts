@@ -7,6 +7,7 @@ import { buildOverturePlanManifest, overturePlanContentHash } from "@maestro/dom
 import {
   appendOvertureMessage,
   answerOvertureClarification,
+  bindOvertureRoleModel,
   createOvertureArtifact,
   createOvertureRun,
   openOvertureClarification,
@@ -99,6 +100,10 @@ describeDatabase("Overture PostgreSQL persistence", () => {
       events.length,
     );
     expect(replay).toEqual(first);
+    await bindOvertureRoleModel(pool, { runId, projectId, roleId: "conversation-lead", modelRef: "anthropic/claude-3-5-sonnet" });
+    expect(
+      (await readOvertureRun(pool, runId, projectId, conversationId))?.roles.find((role) => role.roleId === "conversation-lead")?.modelRef,
+    ).toBe("anthropic/claude-3-5-sonnet");
     expect((await readOvertureRun(pool, runId, projectId, conversationId))?.roles.map((role) => role.roleId)).toEqual([
       "conversation-lead",
       "security-evaluator",

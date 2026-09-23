@@ -15,6 +15,8 @@ export function createOvertureRoleRuntime(options: {
   readonly policy: OvertureRoleRuntimePolicy;
   readonly modelRef?: string;
   readonly tools: ToolRegistry;
+  readonly initialMessages?: readonly import("./model-provider.js").ModelMessage[];
+  readonly closeGateway?: boolean;
   readonly onModelEvent?: (event: ModelStreamEvent, turnId: string) => void;
 }): OvertureRoleRuntime {
   const modelRef = options.modelRef ?? `${options.binding.provider.provider}/${options.binding.provider.id}`;
@@ -39,6 +41,8 @@ export function createOvertureRoleRuntime(options: {
     binding: options.binding,
     tools: options.tools,
     systemPrompt: options.policy.systemPrompt,
+    ...(options.initialMessages === undefined ? {} : { initialMessages: options.initialMessages }),
+    ...(options.closeGateway === undefined ? {} : { closeGateway: options.closeGateway }),
     ...(options.onModelEvent === undefined ? {} : { onModelEvent: options.onModelEvent }),
   });
   return { runtime, grant };

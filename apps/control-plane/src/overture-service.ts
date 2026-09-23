@@ -1,9 +1,12 @@
 import type { Pool } from "pg";
+import { ToolRegistry, type ModelGatewayPort } from "@maestro/agent-runtime";
 import type { AppendOvertureMessageInput, CreateOvertureRunInput, OvertureEvent, OvertureMessage, OvertureRun } from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
+import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
   assertProjectRole,
+  bindOvertureRoleModel,
   createOvertureRun,
   readOvertureEvents,
   readOvertureMessages,
@@ -31,7 +34,39 @@ export interface OvertureService {
   ): Promise<readonly OvertureEvent[]>;
 }
 
-export function createPostgresOvertureService(pool: Pool): OvertureService {
+export interface OvertureServiceOptions {
+  readonly pool: Pool;
+  readonly gateway?: ModelGatewayPort;
+  readonly gatewayOperatorId?: string;
+  readonly accountRefs?: Readonly<Record<string, string>>;
+  readonly dataPolicyHash?: string;
+  readonly tools?: ToolRegistry;
+}
+
+export function createPostgresOvertureService(options: Pool | OvertureServiceOptions): OvertureService {
+  const pool = "query" in options ? options : options.pool;
+  const roleTurnRunner: OvertureRoleTurnRunner | undefined =
+    "query" in options || options.gateway === undefined
+      ? undefined
+      : createOvertureRoleTurnRunner({
+          gateway: options.gateway,
+          gatewayOperatorId: options.gatewayOperatorId ?? "local-operator",
+          accountRefs: options.accountRefs ?? {},
+          dataPolicyHash: options.dataPolicyHash ?? "maestro-overture-v1",
+          tools: options.tools ?? new ToolRegistry(),
+          readModel: async (projectId, conversationId) => {
+            const result = await pool.query<{ model_provider: string; model_id: string }>(
+              "SELECT model_provider, model_id FROM conversations WHERE conversation_id = $1 AND project_id = $2",
+              [conversationId, projectId],
+            );
+            if (result.rowCount !== 1) throw new OvertureProviderUnavailableError("Overture conversation model is unavailable");
+            return { provider: result.rows[0]!.model_provider, id: result.rows[0]!.model_id };
+          },
+          readMessages: (runId, projectId, conversationId) => readOvertureMessages(pool, runId, projectId, conversationId),
+          bindRoleModel: (input) => bindOvertureRoleModel(pool, input),
+          appendRoleMessage: (input) => appendOvertureMessage(pool, input),
+        });
+
   async function assertRole(operator: OperatorContext, projectId: string): Promise<void> {
     await assertProjectRole(pool, operator.operatorId, projectId, "concertmaster");
   }
@@ -44,7 +79,21 @@ export function createPostgresOvertureService(pool: Pool): OvertureService {
     async appendOperatorMessage(input, operator) {
       await assertRole(operator, input.projectId);
       if (input.actor !== "operator" || input.modelRef !== null) throw new Error("Overture operator messages must be operator-authored");
-      return appendOvertureMessage(pool, input);
+      const message = await appendOvertureMessage(pool, input);
+      if (roleTurnRunner !== undefined) {
+        const run = await readOvertureRun(pool, input.runId, input.projectId, input.conversationId);
+        if (run?.roles.some((role) => role.roleId === "conversation-lead" && role.status === "active"))
+          await roleTurnRunner.run({
+            runId: input.runId,
+            projectId: input.projectId,
+            conversationId: input.conversationId,
+            turnId: input.turnId,
+            operatorMessageId: message.messageId,
+            operatorId: operator.operatorId,
+            content: input.content,
+          });
+      }
+      return message;
     },
     async listMessages(runId, projectId, conversationId, afterCursor, operator) {
       await assertRole(operator, projectId);

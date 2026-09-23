@@ -621,6 +621,18 @@ export async function reviseOverturePlan(
   }
 }
 
+export async function bindOvertureRoleModel(
+  pool: Pool,
+  args: { readonly runId: string; readonly projectId: string; readonly roleId: OvertureRoleId; readonly modelRef: string },
+): Promise<void> {
+  if (!isSafeOvertureText(args.modelRef, 256)) throw new OvertureConflictError("Overture role model reference is invalid");
+  const result = await pool.query(
+    "UPDATE overture_role_assignments SET model_ref = $4 WHERE run_id = $1 AND project_id = $2 AND role_id = $3",
+    [args.runId, args.projectId, args.roleId, args.modelRef],
+  );
+  if (result.rowCount !== 1) throw new OvertureConflictError("Overture role assignment is not available");
+}
+
 export async function readOvertureMessages(
   queryable: Queryable,
   runId: string,
