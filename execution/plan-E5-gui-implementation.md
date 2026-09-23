@@ -1430,3 +1430,7 @@ The first active consumer slice is now composed behind explicit `MAESTRO_START_G
 ## Task 16 Launch error mapping checkpoint (2026-09-24)
 
 `TaskContractOrchestrationUnavailableError` now maps to stable HTTP 503 code `task_contract_orchestration_unavailable`; the code is allowlisted in `StableApiErrorCodeSchema`. RED: `npx vitest run apps/control-plane/src/api-error.test.ts --reporter=dot` failed because the unmapped error became generic `durable_store_unavailable`. GREEN: `npx vitest run apps/control-plane/src/api-error.test.ts packages/contracts/src/contracts.test.ts --reporter=dot` passed **20 tests across 2 files**; `npm run typecheck` and `npm run build` passed. This changes only error reporting and does not claim orchestration availability or execution.
+
+## Task 16 pre-build regression note (2026-09-24)
+
+Full run 9 was started before the Launch error-mapping source/schema change had been built. It exited 1 after **441 files / 2,940 passed tests out of 2,941**, duration **980.36s** (`/tmp/maestro-full-test-9.log`); the sole failure was the new `api-error.test.ts` mapping because Vitest loaded the stale `@maestro/contracts` dist enum without `task_contract_orchestration_unavailable`. The post-change focused API/contracts run passed **20/20**, and a fresh `npm run build` and `npm run typecheck` passed. This run is not evidence against the current built tree; a fresh unrestricted regression is required.

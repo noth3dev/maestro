@@ -213,3 +213,7 @@ Fresh unrestricted PostgreSQL verification after `5634e9d1` passed **441 files /
 ## Task 16 Launch error mapping (2026-09-24)
 
 **Status: Partial.** The missing `TaskContractOrchestrationUnavailableError` API mapping is now explicit and schema-allowlisted as HTTP 503 `task_contract_orchestration_unavailable`. API/contracts verification passed **20 tests across 2 files**; typecheck/build passed. Orchestration availability and downstream execution remain open.
+
+## Task 16 pre-build regression note (2026-09-24)
+
+Full run 9 was invalidated by build ordering: it started before the new stable API error code was built and the sole new mapping test loaded stale contracts dist. Result: **441 files / 2,940 passed of 2,941 tests**, exit 1, duration **980.36s** (`/tmp/maestro-full-test-9.log`). Post-build focused verification passed 20/20; fresh full verification remains pending.
