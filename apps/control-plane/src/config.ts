@@ -23,6 +23,8 @@ export interface MaestroConfig {
   discordSignalCredential?: string;
   /** Continuous Metronome scan interval. Absent by default: the loop does not run until explicitly configured. */
   metronomeIntervalMs?: number;
+  /** Optional typed start_goal outbox drain interval; absent by default, no consumer loop runs. */
+  startGoalOutboxIntervalMs?: number;
   /** Phase 5 capacity-model first slice: project-wide worker-slot ceiling. Absent by default: unlimited, matching current behavior. */
   maxConcurrentWorkersPerProject?: number;
   capacityProviderRate?: number;
@@ -82,6 +84,7 @@ const schema = z.object({
   MAESTRO_TLS_KEY_FILE: z.string().min(1).optional(),
   MAESTRO_DISCORD_SIGNAL_CREDENTIAL: z.string().min(1).optional(),
   MAESTRO_METRONOME_INTERVAL_MS: z.coerce.number().int().positive().optional(),
+  MAESTRO_START_GOAL_OUTBOX_INTERVAL_MS: z.coerce.number().int().positive().optional(),
   MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: z.coerce.number().int().positive().optional(),
   MAESTRO_CAPACITY_PROVIDER_RATE: z.coerce.number().int().nonnegative().optional(),
   MAESTRO_CAPACITY_SPEND_CENTS: z.coerce.number().int().nonnegative().optional(),
@@ -121,6 +124,7 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
     MAESTRO_TLS_KEY_FILE: keyFile,
     MAESTRO_DISCORD_SIGNAL_CREDENTIAL: discordSignalCredential,
     MAESTRO_METRONOME_INTERVAL_MS: metronomeIntervalMs,
+    MAESTRO_START_GOAL_OUTBOX_INTERVAL_MS: startGoalOutboxIntervalMs,
     MAESTRO_MAX_CONCURRENT_WORKERS_PER_PROJECT: maxConcurrentWorkersPerProject,
     MAESTRO_CAPACITY_PROVIDER_RATE: capacityProviderRate,
     MAESTRO_CAPACITY_SPEND_CENTS: capacitySpendCents,
@@ -182,6 +186,7 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
     ...(operatorProvisioningAdminId === undefined ? {} : { operatorProvisioningAdminId }),
     ...(discordSignalCredential === undefined ? {} : { discordSignalCredential }),
     ...(metronomeIntervalMs === undefined ? {} : { metronomeIntervalMs }),
+    ...(startGoalOutboxIntervalMs === undefined ? {} : { startGoalOutboxIntervalMs }),
     ...(maxConcurrentWorkersPerProject === undefined ? {} : { maxConcurrentWorkersPerProject }),
     ...(capacityProviderRate === undefined ? {} : { capacityProviderRate }),
     ...(capacitySpendCents === undefined ? {} : { capacitySpendCents }),

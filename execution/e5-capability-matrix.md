@@ -201,3 +201,11 @@ Fresh unrestricted PostgreSQL verification after `7098cb5b` passed **441 files /
 ## Task 16 regression follow-up: soak lock race (2026-09-24)
 
 The post-binding full PostgreSQL regression was not green: **441 files / 2,930 passed of 2,931 tests**, exit 1, duration **918.47s** (`/tmp/maestro-full-test-7.log`). The only failure exposed a concurrent soak-report lock publication race. The lock now uses complete temporary metadata plus atomic `link` publication; focused soak verification and four parallel repeats passed. Repository-wide verification remains pending.
+
+## Task 16 post-soak-fix regression (2026-09-24)
+
+Fresh unrestricted PostgreSQL verification after `5634e9d1` passed **441 files / 2,931 tests**, exit 0 (`/tmp/maestro-full-test-8.log`). This validates the repository after the atomic soak-lock fix; it does not close live provider or automatic downstream orchestration gates.
+
+## Task 16 typed start_goal consumer (2026-09-24)
+
+**Status: Partial.** An opt-in control-plane loop now drains only explicitly typed `start_goal` outbox rows after startup reconciliation. It performs envelope/binding validation and owner-fenced delivery/retry, but intentionally does not activate Heads or create downstream hierarchy records. Focused verification passed **46 tests across 4 files** plus **10 main integration tests**; build/typecheck/lint/diff passed. E5 remains open.

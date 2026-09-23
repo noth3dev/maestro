@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionKernelPort } from "@maestro/domain";
-import { bootstrapLocalOperator, createCapabilityApproval, revokeAuthorityRecord } from "@maestro/persistence";
+import { acquireGoalLease, bootstrapLocalOperator, createCapabilityApproval, executeGoalCommand, revokeAuthorityRecord } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
 import { applyAllMigrations } from "@maestro/persistence";
 import { createControlPlane } from "./main.js";
@@ -137,6 +137,42 @@ if (!databaseUrl) {
         body: JSON.stringify({ projectId }),
       });
       expect(created.status).toBe(201);
+    } finally {
+      await controlPlane.close();
+    }
+  });
+
+  it("starts the typed start_goal outbox drain after startup without downstream effects", async () => {
+    const projectId = randomUUID();
+    const goalId = randomUUID();
+    const taskContractId = randomUUID();
+    const command = { commandId: randomUUID(), projectId, goalId, actorId: "concertmaster", type: "CreateGoal" as const, expectedVersion: 0 };
+    const proof = await acquireGoalLease(setupPool, { goalId, ownerId: command.actorId, leaseDurationMs: 60_000 });
+    const created = await executeGoalCommand(setupPool, command, proof);
+    const outboxId = (await setupPool.query<{ outbox_id: string }>("SELECT outbox_id::text FROM outbox WHERE event_id = $1", [created.eventId])).rows[0]!.outbox_id;
+    await setupPool.query(
+      "UPDATE outbox SET payload = jsonb_build_object('eventId', $2::text, 'orchestration', jsonb_build_object('type', 'start_goal', 'projectId', $3::text, 'goalId', $4::text, 'taskContractId', $5::text)) WHERE outbox_id = $1",
+      [outboxId, created.eventId, projectId, goalId, taskContractId],
+    );
+
+    const controlPlane = createControlPlane({
+      databaseUrl: scopedUrl,
+      evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0,
+      actorId: "maestro-control-plane", leaseOwnerId: `start-goal-${randomUUID()}`,
+      startGoalOutboxIntervalMs: 10,
+    });
+    await controlPlane.listen();
+    try {
+      const deadline = Date.now() + 1_000;
+      let delivered = false;
+      while (Date.now() < deadline) {
+        delivered = (await setupPool.query("SELECT delivered_at FROM outbox WHERE outbox_id = $1 AND delivered_at IS NOT NULL", [outboxId])).rowCount === 1;
+        if (delivered) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(delivered).toBe(true);
+      expect((await setupPool.query("SELECT state FROM goals WHERE goal_id = $1", [goalId])).rows[0]!.state).toBe("draft");
+      expect((await setupPool.query("SELECT count(*)::int AS count FROM goal_events WHERE goal_id = $1", [goalId])).rows[0]!.count).toBe(1);
     } finally {
       await controlPlane.close();
     }

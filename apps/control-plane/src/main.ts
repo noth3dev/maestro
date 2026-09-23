@@ -33,6 +33,7 @@ import { buildServer } from "./server.js";
 import { createReadStateService } from "./read-state-service.js";
 import { createProjectionService } from "./projection-service.js";
 import { createMetronomeLoop } from "./metronome-loop.js";
+import { createStartGoalOutboxLoop } from "./start-goal-outbox-loop.js";
 import { createModelGatewayClient } from "./model-gateway-client.js";
 import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } from "./native-execution-kernel.js";
 import type { NativeAdmissionInput } from "./native-admission.js";
@@ -244,6 +245,14 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     metronomeLoop === undefined && drainCapacityQueues !== undefined
       ? createMetronomeLoop({ pool, withGoalLease, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
       : undefined;
+  const startGoalOutboxLoop =
+    config.startGoalOutboxIntervalMs === undefined
+      ? undefined
+      : createStartGoalOutboxLoop({
+          pool,
+          ownerId: `${config.leaseOwnerId}:start-goal`,
+          intervalMs: config.startGoalOutboxIntervalMs,
+        });
   let closed = false;
 
   return {
@@ -294,12 +303,14 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       await app.listen({ host: config.host, port: config.port });
       metronomeLoop?.start();
       capacityQueueLoop?.start();
+      startGoalOutboxLoop?.start();
     },
     async close() {
       if (closed) return;
       closed = true;
       metronomeLoop?.stop();
       capacityQueueLoop?.stop();
+      startGoalOutboxLoop?.stop();
       const timeoutMs = config.shutdownDrainTimeoutMs ?? 5_000;
       try {
         // Stop provider work before releasing the HTTP and database resources.

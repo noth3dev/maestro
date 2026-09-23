@@ -202,6 +202,7 @@ export async function claimGoalOutbox(
   ownerId: string,
   limit = 32,
   leaseDurationMs = 30_000,
+  orchestrationType?: "start_goal",
 ): Promise<GoalOutboxMessage[]> {
   if (ownerId.trim() === "") throw new RangeError("ownerId must be non-empty");
   if (!Number.isSafeInteger(limit) || limit <= 0) throw new RangeError("limit must be a positive safe integer");
@@ -220,6 +221,7 @@ export async function claimGoalOutbox(
          AND delivered_at IS NULL
          AND available_at <= transaction_timestamp()
          AND (locked_until IS NULL OR locked_until <= transaction_timestamp())
+         AND ($4::text IS NULL OR payload->'orchestration'->>'type' = $4)
        ORDER BY outbox_id
        FOR UPDATE SKIP LOCKED
        LIMIT $2
@@ -231,7 +233,7 @@ export async function claimGoalOutbox(
      FROM candidates
      WHERE row.outbox_id = candidates.outbox_id
      RETURNING row.outbox_id::text AS outbox_id, row.event_id, row.topic, row.payload, row.attempts`,
-    [ownerId, limit, leaseDurationMs],
+    [ownerId, limit, leaseDurationMs, orchestrationType ?? null],
   );
   return result.rows.map((row) => ({
     outboxId: row.outbox_id,
@@ -240,6 +242,16 @@ export async function claimGoalOutbox(
     payload: row.payload,
     attempts: row.attempts,
   }));
+}
+
+/** Claim only explicitly typed start_goal rows; generic Goal events remain available to other consumers. */
+export async function claimStartGoalOutbox(
+  pool: Pool,
+  ownerId: string,
+  limit = 32,
+  leaseDurationMs = 30_000,
+): Promise<GoalOutboxMessage[]> {
+  return claimGoalOutbox(pool, ownerId, limit, leaseDurationMs, "start_goal");
 }
 
 /** Mark one claimed Goal outbox row delivered, preserving owner fencing. */

@@ -9,6 +9,7 @@ import {
   OutboxLeaseError,
   acquireGoalLease,
   claimGoalOutbox,
+  claimStartGoalOutbox,
   executeGoalCommand,
   markGoalOutboxDelivered,
   releaseGoalOutbox,
@@ -174,6 +175,26 @@ describeDatabase("Goal lease fencing with PostgreSQL", () => {
     await expect(markGoalOutboxDelivered(pool, claimed[0]!.outboxId, "orchestrator-a")).rejects.toBeInstanceOf(OutboxLeaseError);
     await expect(markGoalOutboxDelivered(pool, claimed[0]!.outboxId, "orchestrator-b")).resolves.toBeUndefined();
     await expect(claimGoalOutbox(pool, "orchestrator-b", 10, 60_000)).resolves.toEqual([]);
+  });
+
+  it("claims only explicitly typed start_goal rows without consuming generic Goal events", async () => {
+    const command = {
+      commandId: randomUUID(), projectId: randomUUID(), goalId: randomUUID(),
+      actorId: "concertmaster", type: "CreateGoal" as const, expectedVersion: 0,
+    };
+    const proof = await lease(command.goalId, command.actorId);
+    const created = await executeGoalCommand(pool, command, proof);
+    const outboxId = (await pool.query<{ outbox_id: string }>("SELECT outbox_id::text FROM outbox ORDER BY outbox_id DESC LIMIT 1")).rows[0]!.outbox_id;
+
+    await expect(claimStartGoalOutbox(pool, "start-goal-loop", 10, 60_000)).resolves.toEqual([]);
+    await pool.query(
+      "UPDATE outbox SET payload = jsonb_build_object('eventId', $2::text, 'orchestration', jsonb_build_object('type', 'start_goal')) WHERE outbox_id = $1",
+      [outboxId, created.eventId],
+    );
+
+    const claimed = await claimStartGoalOutbox(pool, "start-goal-loop", 10, 60_000);
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]).toMatchObject({ outboxId, eventId: created.eventId, topic: "goal-events", attempts: 1 });
   });
 
   it("releases a claimed outbox row for retry only for its current owner", async () => {

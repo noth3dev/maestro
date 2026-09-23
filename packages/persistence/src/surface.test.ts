@@ -188,6 +188,7 @@ describe("persistence surface", () => {
         "claimDeviceAgentCommand",
         "claimGoalOutbox",
         "claimQueuedCapacity",
+        "claimStartGoalOutbox",
         "closeDeviceAgentSession",
         "closeDiscordIncident",
         "completeDeviceAgentCommand",
