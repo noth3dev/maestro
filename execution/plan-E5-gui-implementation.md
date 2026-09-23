@@ -1069,6 +1069,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Task 15 Control Plane/API slice checkpoint (2026-09-23):** Added persistence-backed `OvertureService` composition, guarded Control Plane routes for run create/read, operator-message append, and event listing, stable Overture API error mapping, and typed `@maestro/api-client` methods. Focused verification passed **6 files / 50 tests** (`apps/control-plane/src/overture-route.test.ts`, `apps/control-plane/src/api-error.test.ts`, `packages/api-client/src/client.test.ts`, contracts Overture/surface tests, and API-client surface); root `npm run build`, targeted ESLint, Prettier, migration numbering, boundary checks, and `git diff --check` passed. The route slice is persistence/API plumbing only: it does not yet admit provider-backed Crew turns, stream SSE, expose artifacts/plans/linked Task Contract, wire Electron, or produce a Task Contract/Goal/Worker. Live E5 remains open.
 
+**Task 15 Electron bridge checkpoint (2026-09-23):** Added the four typed Overture API methods to Carnegie's main-process allow-list and CommonJS preload allow-list. Focused verification passed **3 files / 51 tests** (`apiBridge`, API client, and Overture route); root build/typecheck passed. The bridge exposes persistence/API plumbing only; it does not claim renderer Overture UI, provider-backed role turns, SSE, Task Editor, Task Contract, Goal, or Worker evidence.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

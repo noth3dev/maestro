@@ -4,7 +4,18 @@ import { exposedApiMethods, isExposedMethod } from "./apiBridge.js";
 
 describe("Carnegie renderer API bridge", () => {
   it("exposes durable Inbox approvals and the existing Concertmaster conversation path", () => {
-    for (const method of ["listInbox", "denyCriticalAction", "createConversation", "sendConversationTurn", "streamEvents"]) expect(isExposedMethod(method)).toBe(true);
+    for (const method of [
+      "listInbox",
+      "denyCriticalAction",
+      "createConversation",
+      "sendConversationTurn",
+      "createOvertureRun",
+      "getOvertureRun",
+      "sendOvertureOperatorMessage",
+      "listOvertureEvents",
+      "streamEvents",
+    ])
+      expect(isExposedMethod(method)).toBe(true);
   });
 
   it("exposes every method used by the full project execution path", () => {
@@ -19,16 +30,34 @@ describe("Carnegie renderer API bridge", () => {
 
   it("exposes the full E5 API surface: workspace, conversation, goal, planning, worker, git, evidence, oversight, and reporting methods", () => {
     const required = [
-      "createGoal", "listProjects", "getOrganization", "provisionProjectAccess",
-      "getConversation", "cancelConversation", "listConversationEvents",
-      "transitionGoal", "activateHead",
-      "getCouncil", "getDepartmentPlan", "getMissionBundle",
-      "getWorker", "observeWorker", "sendWorkerMessage",
-      "freezeGoalIntegrationRevision", "advanceWorkerIntegration",
-      "captureEvidence", "getEvidenceDump",
-      "scanMetronome", "raiseMetronomeChallenge", "resolveMetronomeChallenge", "runEncoreReview",
+      "createGoal",
+      "listProjects",
+      "getOrganization",
+      "provisionProjectAccess",
+      "getConversation",
+      "cancelConversation",
+      "listConversationEvents",
+      "transitionGoal",
+      "activateHead",
+      "getCouncil",
+      "getDepartmentPlan",
+      "getMissionBundle",
+      "getWorker",
+      "observeWorker",
+      "sendWorkerMessage",
+      "freezeGoalIntegrationRevision",
+      "advanceWorkerIntegration",
+      "captureEvidence",
+      "getEvidenceDump",
+      "scanMetronome",
+      "raiseMetronomeChallenge",
+      "resolveMetronomeChallenge",
+      "runEncoreReview",
       "generateConcertmasterReport",
-      "startAccountLogin", "accountLoginStatus", "cancelAccountLogin", "logoutAccount",
+      "startAccountLogin",
+      "accountLoginStatus",
+      "cancelAccountLogin",
+      "logoutAccount",
     ];
     for (const method of required) expect(isExposedMethod(method)).toBe(true);
   });
@@ -40,7 +69,8 @@ describe("Carnegie renderer API bridge", () => {
 
   it("keeps the CommonJS preload allow-list in sync for these renderer calls", () => {
     const preload = readFileSync(new URL("./preload.cts", import.meta.url), "utf8");
-    for (const method of ["listInbox", "denyCriticalAction", "createConversation", "sendConversationTurn", "streamEvents"]) expect(preload).toContain(`"${method}"`);
+    for (const method of ["listInbox", "denyCriticalAction", "createConversation", "sendConversationTurn", "streamEvents"])
+      expect(preload).toContain(`"${method}"`);
   });
 
   it("keeps every exposed method in sync with the duplicated preload allow-list", () => {
