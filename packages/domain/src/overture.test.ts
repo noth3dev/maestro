@@ -6,6 +6,7 @@ import {
   buildOverturePlanManifest,
   overturePlanContentHash,
   isSafeOvertureText,
+  createOvertureRoleRuntimePolicy,
   type OverturePlanDocument,
 } from "./overture.js";
 
@@ -62,6 +63,25 @@ describe("Overture domain foundation", () => {
     expect(() =>
       buildOverturePlanManifest({ projectId, runId, documents: [document("plan00.md", "project", "tampered"), ...docs.slice(1)] }),
     ).toThrow("duplicate");
+  });
+
+  it("builds distinct bounded role policies with one project/run/conversation boundary", () => {
+    const policies = OVERTURE_ROLE_IDS.map((roleId) =>
+      createOvertureRoleRuntimePolicy({ roleId, projectId, runId, conversationId: "33333333-3333-4333-8333-333333333333" }),
+    );
+    expect(new Set(policies.map((policy) => policy.systemPrompt)).size).toBe(OVERTURE_ROLE_IDS.length);
+    expect(policies.every((policy) => policy.contextBoundary.projectId === projectId && policy.contextBoundary.runId === runId)).toBe(true);
+    expect(policies.every((policy) => policy.outputTokenBudget > 0 && policy.systemPrompt.includes("never return private reasoning"))).toBe(
+      true,
+    );
+    expect(() =>
+      createOvertureRoleRuntimePolicy({
+        roleId: "not-a-role" as never,
+        projectId,
+        runId,
+        conversationId: "33333333-3333-4333-8333-333333333333",
+      }),
+    ).toThrow("unknown Overture role");
   });
 
   it("requires every slice to name its phase dependency and rejects provider/raw output", () => {

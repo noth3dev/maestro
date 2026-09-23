@@ -38,6 +38,31 @@ const COMMON_FORBIDDEN_ACTIONS = [
 ] as const;
 
 /** Stable role policies. A runtime may choose a provider/model that meets these capabilities. */
+export interface OvertureRoleRuntimeContext {
+  readonly roleId: OvertureRoleId;
+  readonly projectId: string;
+  readonly runId: string;
+  readonly conversationId: string;
+}
+
+export interface OvertureRoleRuntimePolicy {
+  readonly roleId: OvertureRoleId;
+  readonly taskClass: OvertureRoleDefinition["taskClass"];
+  readonly systemPrompt: string;
+  readonly modelCapabilityAxes: readonly ModelCapabilityAxis[];
+  readonly allowedTools: readonly string[];
+  readonly forbiddenActions: readonly string[];
+  readonly outputTokenBudget: number;
+  readonly contextBoundary: { readonly projectId: string; readonly runId: string; readonly conversationId: string };
+}
+
+export class InvalidOvertureRoleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidOvertureRoleError";
+  }
+}
+
 export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Object.freeze([
   {
     id: "conversation-lead",
@@ -88,6 +113,39 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
 ]);
+
+const ROLE_OUTPUT_BUDGETS: Readonly<Record<OvertureRoleId, number>> = Object.freeze({
+  "conversation-lead": 2_048,
+  "architecture-analyst": 4_096,
+  "external-research-scout": 3_072,
+  "security-evaluator": 3_072,
+  "design-mock-specialist": 3_072,
+  "task-editor": 4_096,
+});
+
+export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeContext): OvertureRoleRuntimePolicy {
+  const definition = OVERTURE_ROLE_DEFINITIONS.find((role) => role.id === context.roleId);
+  if (definition === undefined) throw new InvalidOvertureRoleError(`unknown Overture role: ${context.roleId}`);
+  if ([context.projectId, context.runId, context.conversationId].some((value) => typeof value !== "string" || value.trim() === ""))
+    throw new InvalidOvertureRoleError("Overture role runtime requires project, run, and conversation boundaries");
+  return Object.freeze({
+    roleId: definition.id,
+    taskClass: definition.taskClass,
+    systemPrompt: [
+      `You are the ${definition.displayName} in an interactive Overture Crew.`,
+      `Your task class is ${definition.taskClass}.`,
+      "Work only from the durable conversation and the explicitly granted project context.",
+      `You may use: ${definition.allowedTools.join(", ") || "no tools"}.`,
+      `You must never: ${definition.forbiddenActions.join(", ")}.`,
+      "Return bounded findings, decisions, or clarification questions; never return private reasoning or raw tool arguments.",
+    ].join(" "),
+    modelCapabilityAxes: [...definition.modelCapabilityAxes],
+    allowedTools: [...definition.allowedTools],
+    forbiddenActions: [...definition.forbiddenActions],
+    outputTokenBudget: ROLE_OUTPUT_BUDGETS[definition.id],
+    contextBoundary: { projectId: context.projectId, runId: context.runId, conversationId: context.conversationId },
+  });
+}
 
 export interface OverturePlanDocument {
   readonly documentId: string;
