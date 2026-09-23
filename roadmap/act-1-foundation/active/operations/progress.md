@@ -4941,3 +4941,9 @@ The security review identified that `grantProjectMembership` and `grantProjectRo
 - Implemented and committed `11e11429`: operator answers now travel through the existing safe PostgreSQL clarification state, a scoped/idempotent Control Plane route, typed API client, Electron bridge, and Carnegie Home form.
 - Clarification event payloads include only safe question/answer text so the GUI can reconstruct the open question from durable events. Focused verification passed **7 files / 75 tests**, including Overture PostgreSQL integration (**6 tests**); build/lint/diff checks passed.
 - The code-level answer round-trip is green. Live provider, automatic role continuation, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed; E6 remains gated.
+
+## 2026-09-24 — E5 heartbeat #51 full regression
+
+- Unrestricted PostgreSQL-backed `npm test` passed **440 files / 2,919 tests**, exit 0, duration **912.60s** (`/tmp/maestro-full-test-3.log`) after the clarification-answer seam and projection hardening.
+- Local `main` is 22 commits ahead of `origin/main`; no push was performed.
+- Automated verification is green. Live provider, automatic role continuation, Task Contract, Goal, Worker, and E5 acceptance remain unclaimed; E6 remains gated.

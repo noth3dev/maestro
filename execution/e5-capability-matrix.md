@@ -153,3 +153,8 @@ A fresh Electron profile with no explicit `MAESTRO_API_URL` used Docker-backed l
 - Commit `11e11429` closes the operator-facing Overture clarification answer seam: safe question/answer event payloads, Control Plane answer route, API client, Electron allow-list, and Carnegie Home form.
 - RED/GREEN focused evidence: **7 files / 75 tests passed**, with real PostgreSQL Overture persistence **6 tests passed**; build, renderer typecheck, lint, and diff checks passed.
 - This proves the code-level round-trip only. The role-runtime continuation and live provider boundary remain unverified; Task 14 stays `Backend-blocked`, E5 remains open, and E6 remains gated.
+
+
+## Heartbeat #51 automated verification update (2026-09-24)
+
+The full unrestricted PostgreSQL-backed suite passed **440 files / 2,919 tests**, exit 0, duration **912.60s** (`/tmp/maestro-full-test-3.log`) after the clarification-answer path and fail-closed event projection fix. Task 14 remains `Backend-blocked`; this does not claim live provider, Task Contract, Goal, Worker, or E5 completion.

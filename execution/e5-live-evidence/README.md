@@ -72,3 +72,9 @@ Task 14 is **backend-blocked at provider/model availability**. The fresh rerun p
 - Commit `11e11429` adds the code-level Overture clarification answer round-trip from durable safe events through Control Plane, API client, Electron bridge, and Carnegie Home.
 - Focused verification passed **7 files / 75 tests**, including real PostgreSQL Overture persistence (**6 tests**); build, lint, and diff checks passed.
 - This is not live provider evidence and does not create a Task Contract, Goal, Worker, report, or external effect.
+
+
+## Heartbeat #51 automated regression (2026-09-24)
+
+- Unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,919 tests**, exit 0, duration **912.60s**. Log: `/tmp/maestro-full-test-3.log`.
+- This is automated regression evidence only; no provider, Task Contract, Goal, Worker, certification, report, or external-effect evidence was produced.

@@ -1373,3 +1373,8 @@ The next GUI usability slice is the Overture clarification answer round-trip: pe
 The missing operator answer path is now implemented in commit `11e11429`. `AnswerOvertureClarificationBodySchema` and the typed API method feed a scoped, idempotent Control Plane route backed by the existing PostgreSQL `answerOvertureClarification` function. Clarification event payloads now carry only the already-safe question/answer text so Home can reconstruct the open question from the durable event stream. Carnegie exposes an accessible answer form and clears it after a successful answer.
 
 RED/GREEN evidence: the new route/API bridge/Home tests first failed at the missing method/route, then focused verification passed **7 files / 75 tests**, including the real PostgreSQL `overture.integration.test.ts` (**6 tests**). Root build, renderer typecheck, ESLint, and `git diff --check` passed. This enables the operator-facing clarification round-trip but does not claim a live provider or E5 completion.
+
+
+## Heartbeat #51 full regression checkpoint (2026-09-24)
+
+After the clarification answer implementation and fail-closed event projection fix (`d6913d0e`), unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,919 tests**, exit 0, duration **912.60s** (`/tmp/maestro-full-test-3.log`). This supersedes the prior 2,916-test automated count; it does not create live provider, Task Contract, Goal, Worker, or E5 evidence.
