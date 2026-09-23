@@ -3,6 +3,7 @@ export * from "./execution-kernel.js";
 export * from "./persona.js";
 export * from "./organization.js";
 export * from "./task-contract.js";
+export * from "./head-activation-plan.js";
 export * from "./head-participation.js";
 export * from "./sealed-submission.js";
 export * from "./council.js";

@@ -1,5 +1,29 @@
+import { headActivationPlanContentHash } from "@maestro/domain";
 import { z } from "zod";
 import { CommandVersionSchema, NonEmptyStringListSchema, UuidSchema } from "./common.js";
+const HeadActivationBriefSchema = z
+  .object({
+    departmentId: z.string().min(1),
+    requestedContribution: z.string().min(1),
+    urgency: z.string().min(1),
+    contextScope: NonEmptyStringListSchema,
+    budgetEffect: z.string().min(1),
+    reason: z.string().min(1),
+  })
+  .strict();
+export const HeadActivationPlanSchema = z
+  .object({
+    version: z.literal(1),
+    departments: z.array(HeadActivationBriefSchema).min(1).readonly(),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (headActivationPlanContentHash(value) !== value.contentHash) {
+      context.addIssue({ code: "custom", path: ["contentHash"], message: "Head activation plan content hash does not match its content" });
+    }
+  });
+export type HeadActivationPlan = z.infer<typeof HeadActivationPlanSchema>;
 
 const OrganizationGroupSchema = z
   .object({
@@ -63,6 +87,7 @@ export const TaskContractSubstanceSchema = z
     environmentAssumptions: NonEmptyStringListSchema,
     externalServiceAssumptions: NonEmptyStringListSchema,
     budget: TaskContractBudgetSchema,
+    headActivationPlan: HeadActivationPlanSchema.optional(),
   })
   .strict();
 export type TaskContractSubstance = z.infer<typeof TaskContractSubstanceSchema>;

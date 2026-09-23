@@ -33,8 +33,16 @@ export * from "./conversation.js";
 export * from "./environment.js";
 export * from "./device.js";
 export {
-  DeviceGrantError, DeviceGrantNotFoundError, DeviceGrantAuthorizationError, DeviceGrantRevokedError, DeviceGrantExpiredError,
-  createDeviceGrant, readDeviceGrant, listDeviceGrantsForGoal, revokeDeviceGrant, listDeviceCommandResults,
+  DeviceGrantError,
+  DeviceGrantNotFoundError,
+  DeviceGrantAuthorizationError,
+  DeviceGrantRevokedError,
+  DeviceGrantExpiredError,
+  createDeviceGrant,
+  readDeviceGrant,
+  listDeviceGrantsForGoal,
+  revokeDeviceGrant,
+  listDeviceCommandResults,
 } from "./device-grant.js";
 export type { DeviceCommandResultInput, DeviceCommandResultRecord } from "./device-grant.js";
 export * from "./discord.js";
@@ -42,9 +50,18 @@ export * from "./discord-incident.js";
 export * from "./test-migrations.js";
 export * from "./migrate.js";
 export {
-  ProjectMembershipError, ProjectMembershipRequiredError, ProjectRoleRequiredError, ProjectAccessAdminRequiredError,
-  ProjectAccessTargetNotFoundError, ProjectAccessRoleNotFoundError, assertProjectMembership, assertProjectRole, listProjectMemberships,
-  revokeProjectMembership, revokeProjectRole, provisionProjectAccess,
+  ProjectMembershipError,
+  ProjectMembershipRequiredError,
+  ProjectRoleRequiredError,
+  ProjectAccessAdminRequiredError,
+  ProjectAccessTargetNotFoundError,
+  ProjectAccessRoleNotFoundError,
+  assertProjectMembership,
+  assertProjectRole,
+  listProjectMemberships,
+  revokeProjectMembership,
+  revokeProjectRole,
+  provisionProjectAccess,
 } from "./project-membership.js";
 export * from "./device-session.js";
 export * from "./device-agent-runtime.js";
@@ -81,3 +98,5 @@ export * from "./embedded-database.js";
 export * from "./routing-work-snapshot.js";
 export * from "./release-checkpoint.js";
 export * from "./overture.js";
+
+export * from "./start-goal-orchestration.js";

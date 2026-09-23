@@ -7,6 +7,7 @@ import {
   releaseGoalOutbox,
   validateStartGoalOrchestrationCommand,
   type GoalOutboxMessage,
+  type ValidatedStartGoalOrchestrationCommand,
 } from "@maestro/persistence";
 
 export interface StartGoalOutboxLoopScheduler {
@@ -19,7 +20,8 @@ const systemScheduler: StartGoalOutboxLoopScheduler = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-type StartGoalOutboxOutcome = "delivered" | "invalid_envelope" | "invalid_binding" | "retry" | "error";
+type StartGoalOutboxOutcome =
+  "delivered" | "running" | "completed" | "blocked" | "unknown" | "invalid_envelope" | "invalid_binding" | "retry" | "error";
 
 type StartGoalOutboxTick = {
   outboxId: string;
@@ -38,6 +40,7 @@ export interface StartGoalOutboxLoopDependencies {
   scheduler?: StartGoalOutboxLoopScheduler;
   claim?: typeof claimStartGoalOutbox;
   validate?: typeof validateStartGoalOrchestrationCommand;
+  execute?: (command: ValidatedStartGoalOrchestrationCommand) => Promise<{ state: "running" | "blocked" | "unknown" | "completed" }>;
   markDelivered?: typeof markGoalOutboxDelivered;
   release?: typeof releaseGoalOutbox;
   onTick?: (result: StartGoalOutboxTick | { outcome: "claim_error"; error: unknown }) => void;
@@ -50,9 +53,10 @@ export interface StartGoalOutboxLoop {
 }
 
 /**
- * Drains only the first durable start_goal handoff. Validation failures are terminal
+ * Drains the first durable start_goal handoff. Validation failures are terminal
  * poison messages; transient persistence failures are released for bounded retry.
- * This loop intentionally creates no Head, Council, Worker, provider, or external effect.
+ * When configured with execute, the loop may create the bounded Head-stage/provider
+ * effect before acknowledging the outbox row; it does not advance Council or later stages.
  */
 export function createStartGoalOutboxLoop(deps: StartGoalOutboxLoopDependencies): StartGoalOutboxLoop {
   const scheduler = deps.scheduler ?? systemScheduler;
@@ -77,8 +81,9 @@ export function createStartGoalOutboxLoop(deps: StartGoalOutboxLoopDependencies)
   }
 
   async function processOne(message: GoalOutboxMessage): Promise<void> {
+    let validated: ValidatedStartGoalOrchestrationCommand;
     try {
-      await validate(deps.pool, message);
+      validated = await validate(deps.pool, message);
     } catch (error) {
       if (error instanceof GoalOrchestrationEnvelopeError) return markPoison(message, "invalid_envelope");
       if (error instanceof GoalOrchestrationBindingError) return markPoison(message, "invalid_binding");
@@ -91,10 +96,16 @@ export function createStartGoalOutboxLoop(deps: StartGoalOutboxLoopDependencies)
       return;
     }
     try {
+      const outcome = deps.execute === undefined ? undefined : await deps.execute(validated);
       await markDelivered(deps.pool, message.outboxId, deps.ownerId);
-      report(message, "delivered");
+      report(message, outcome?.state ?? "delivered");
     } catch (error) {
-      report(message, "error", error);
+      try {
+        await release(deps.pool, message.outboxId, deps.ownerId, deps.retryDelayMs);
+        report(message, "retry", error);
+      } catch (releaseError) {
+        report(message, "error", releaseError);
+      }
     }
   }
 
@@ -118,7 +129,9 @@ export function createStartGoalOutboxLoop(deps: StartGoalOutboxLoopDependencies)
   return {
     start() {
       if (handle !== undefined) return;
-      handle = scheduler.setInterval(() => { void runOnce(); }, deps.intervalMs);
+      handle = scheduler.setInterval(() => {
+        void runOnce();
+      }, deps.intervalMs);
     },
     stop() {
       if (handle === undefined) return;

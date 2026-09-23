@@ -225,3 +225,13 @@ Full run 10 found a renderer contract gap for the newly allowlisted error code: 
 ## Task 16 full regression run 11 timing note (2026-09-24)
 
 Run 11 was not green: **441 files / 2,941 passed of 2,942 tests**, exit 1, duration **898.53s** (`/tmp/maestro-full-test-11.log`). The sole failure was a short-lease worker cancellation race; diagnostics show the cancellation path correctly rejected a stale Goal proof while the successor takeover fulfilled. The test passed five isolated repetitions and the complete worker integration file (46/46). No production change was made; fresh full verification remains pending.
+
+
+## Task 16 full regression run 12
+
+**Status: Partial.** Fresh PostgreSQL `npm test` passed **442 files / 2,942 tests**, exit 0, duration **963.28s** (`/tmp/maestro-full-test-12.log`). The explicit Head activation plan/controller slice remains automated-only; it does not establish live provider or downstream E5 evidence.
+
+
+## Task 16 regression runs 13–14
+
+Run 13 was non-green (**445 files / 2,952 tests**, 5 failures, exit 1, **1034.66s**) because it began before the final hardening, surface snapshot updates, and persistence fixture update. Fresh run 14 after those changes passed **446 files / 2,954 tests**, exit 0, **949.77s** (`/tmp/maestro-full-test-14.log`). This confirms automated regression only; live downstream evidence and E5 acceptance remain open.

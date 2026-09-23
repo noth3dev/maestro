@@ -77,3 +77,13 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 - [ ] **Task 16 API error title follow-up (2026-09-24):** full run 10 found one missing Carnegie title for `task_contract_orchestration_unavailable` after 2,940/2,941 tests (`/tmp/maestro-full-test-10.log`, 901.31s). Stable title added; focused command-id/API tests passed 16/16 and build/typecheck/lint/diff passed. Fresh full regression pending.
 
 - [ ] **Task 16 full regression run 11 timing note (2026-09-24):** unrestricted PostgreSQL `npm test` exited 1 after **441 files / 2,941 of 2,942 tests**, 898.53s (`/tmp/maestro-full-test-11.log`). The only failure was the worker owner-claim cancellation test with an intentionally 250ms lease; `cancelWorker` correctly failed closed with `StaleGoalLeaseError` before its second claim under full-suite DB load, while takeover fulfilled. Five isolated repetitions and the full worker integration file passed (46/46). No production change made; fresh full regression pending.
+
+
+- [ ] **Task 16 full regression run 12 (2026-09-24):** unrestricted PostgreSQL `npm test` passed **442 test files / 2,942 tests**, exit 0, duration **963.28s** (`/tmp/maestro-full-test-12.log`). This closes the prior automated regression requirement after run 11's timing-sensitive failure; live provider, downstream orchestration, and E5 acceptance remain open.
+
+- [ ] **Task 16 explicit Head activation plan/controller slice (2026-09-24):** code-level focused tests cover hash-bound explicit department briefs, durable `running|blocked|unknown|completed` Head-stage state/history, draft-to-active lifecycle, deterministic per-department command IDs, and execute-before-ack retry behavior. Missing plans fail closed as durable `blocked`; non-active Head outcomes fail closed as durable `unknown`. No live provider or downstream evidence exists.
+
+
+- [x] **Task 16 run 13 investigation (2026-09-24):** non-green because the run started before the final hardening and surface snapshot/persistence-fixture updates: **445 files / 2,952 tests**, 5 failures, exit 1, **1034.66s** (`/tmp/maestro-full-test-13.log`).
+
+- [ ] **Task 16 fresh run 14 (2026-09-24):** unrestricted PostgreSQL `npm test` passed **446 files / 2,954 tests**, exit 0, **949.77s** (`/tmp/maestro-full-test-14.log`). Automated gates are green; live provider, downstream stage, certification/report, and E5 acceptance evidence remain pending.

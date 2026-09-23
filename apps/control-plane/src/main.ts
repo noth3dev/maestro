@@ -34,6 +34,7 @@ import { createReadStateService } from "./read-state-service.js";
 import { createProjectionService } from "./projection-service.js";
 import { createMetronomeLoop } from "./metronome-loop.js";
 import { createStartGoalOutboxLoop } from "./start-goal-outbox-loop.js";
+import { createStartGoalOrchestrationController } from "./start-goal-orchestration-controller.js";
 import { createModelGatewayClient } from "./model-gateway-client.js";
 import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } from "./native-execution-kernel.js";
 import type { NativeAdmissionInput } from "./native-admission.js";
@@ -245,6 +246,11 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     metronomeLoop === undefined && drainCapacityQueues !== undefined
       ? createMetronomeLoop({ pool, withGoalLease, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
       : undefined;
+  const startGoalOrchestrationController = createStartGoalOrchestrationController({
+    pool,
+    goalService,
+    headParticipationService,
+  });
   const startGoalOutboxLoop =
     config.startGoalOutboxIntervalMs === undefined
       ? undefined
@@ -252,6 +258,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
           pool,
           ownerId: `${config.leaseOwnerId}:start-goal`,
           intervalMs: config.startGoalOutboxIntervalMs,
+          execute: (command) => startGoalOrchestrationController.execute(command),
         });
   let closed = false;
 

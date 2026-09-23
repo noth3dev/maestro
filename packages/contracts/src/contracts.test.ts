@@ -1,3 +1,4 @@
+import { headActivationPlanContentHash } from "@maestro/domain";
 import { describe, expect, it } from "vitest";
 import {
   CreateGoalInputSchema,
@@ -17,6 +18,7 @@ import {
   ConversationSchema,
   CreateConversationInputSchema,
   ConversationActivityEventSchema,
+  HeadActivationPlanSchema,
 } from "./index.js";
 
 const projectId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f01";
@@ -166,6 +168,29 @@ describe("conversation intake contracts", () => {
   it("keeps the conversation wire shape strict", () => {
     expect(CreateConversationInputSchema.parse({ ...input, goalId: undefined })).toEqual(input);
     expect(ConversationSchema.safeParse({ ...conversation, scope: "project" }).success).toBe(false);
+  });
+});
+
+describe("Head activation plan contracts", () => {
+  it("requires explicit hash-bound department briefs and rejects unknown fields", () => {
+    const planWithoutHash = {
+      version: 1 as const,
+      departments: [
+        {
+          departmentId: "product",
+          requestedContribution: "boundary",
+          urgency: "normal",
+          contextScope: ["task-contract"],
+          budgetEffect: "none",
+          reason: "required",
+        },
+      ],
+    };
+    const plan = { ...planWithoutHash, contentHash: headActivationPlanContentHash(planWithoutHash) };
+    expect(HeadActivationPlanSchema.parse(plan)).toEqual(plan);
+    expect(HeadActivationPlanSchema.safeParse({ ...plan, contentHash: "a".repeat(64) }).success).toBe(false);
+    expect(HeadActivationPlanSchema.safeParse({ ...plan, departments: [] }).success).toBe(false);
+    expect(HeadActivationPlanSchema.safeParse({ ...plan, extra: true }).success).toBe(false);
   });
 });
 

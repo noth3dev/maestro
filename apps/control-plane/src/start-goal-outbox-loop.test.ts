@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  GoalOrchestrationBindingError,
-  GoalOrchestrationEnvelopeError,
-  type GoalOutboxMessage,
-} from "@maestro/persistence";
+import { GoalOrchestrationBindingError, GoalOrchestrationEnvelopeError, type GoalOutboxMessage } from "@maestro/persistence";
 import { createStartGoalOutboxLoop, type StartGoalOutboxLoopScheduler } from "./start-goal-outbox-loop.js";
 
 function fakeScheduler(): StartGoalOutboxLoopScheduler & { fire: () => void; intervalMs?: number; cleared: boolean } {
@@ -49,7 +45,9 @@ describe("createStartGoalOutboxLoop", () => {
     const markDelivered = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
     const ticks: unknown[] = [];
-    const loop = createStartGoalOutboxLoop(loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }));
+    const loop = createStartGoalOutboxLoop(
+      loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }),
+    );
 
     await loop.runOnce();
 
@@ -59,14 +57,34 @@ describe("createStartGoalOutboxLoop", () => {
     expect(ticks).toEqual([{ outboxId: "1", eventId: "event-1", outcome: "delivered" }]);
   });
 
+  it("executes the validated command before acknowledging the outbox row", async () => {
+    const claimed = message("execution");
+    const claim = vi.fn(async () => [claimed]);
+    const validated = { type: "start_goal", goalId: "goal", projectId: "project", taskContractId: "contract" };
+    const validate = vi.fn(async () => validated);
+    const execute = vi.fn(async () => ({ state: "completed" as const }));
+    const markDelivered = vi.fn(async () => undefined);
+    const release = vi.fn(async () => undefined);
+    const loop = createStartGoalOutboxLoop(loopDependencies({ claim, validate, execute, markDelivered, release }));
+
+    await loop.runOnce();
+
+    expect(execute).toHaveBeenCalledWith(validated);
+    expect(markDelivered).toHaveBeenCalledWith(pool, "execution", "start-goal-loop");
+  });
+
   it("marks a malformed envelope delivered as a terminal poison message", async () => {
     const claimed = message("2");
     const claim = vi.fn(async () => [claimed]);
-    const validate = vi.fn(async () => { throw new GoalOrchestrationEnvelopeError(); });
+    const validate = vi.fn(async () => {
+      throw new GoalOrchestrationEnvelopeError();
+    });
     const markDelivered = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
     const ticks: unknown[] = [];
-    const loop = createStartGoalOutboxLoop(loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }));
+    const loop = createStartGoalOutboxLoop(
+      loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }),
+    );
 
     await loop.runOnce();
 
@@ -78,11 +96,15 @@ describe("createStartGoalOutboxLoop", () => {
   it("marks a durable binding mismatch delivered without retrying it", async () => {
     const claimed = message("3");
     const claim = vi.fn(async () => [claimed]);
-    const validate = vi.fn(async () => { throw new GoalOrchestrationBindingError(); });
+    const validate = vi.fn(async () => {
+      throw new GoalOrchestrationBindingError();
+    });
     const markDelivered = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
     const ticks: unknown[] = [];
-    const loop = createStartGoalOutboxLoop(loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }));
+    const loop = createStartGoalOutboxLoop(
+      loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }),
+    );
 
     await loop.runOnce();
 
@@ -94,11 +116,15 @@ describe("createStartGoalOutboxLoop", () => {
   it("releases a transient validation failure for bounded retry", async () => {
     const claimed = message("4");
     const claim = vi.fn(async () => [claimed]);
-    const validate = vi.fn(async () => { throw new Error("database unavailable"); });
+    const validate = vi.fn(async () => {
+      throw new Error("database unavailable");
+    });
     const markDelivered = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
     const ticks: unknown[] = [];
-    const loop = createStartGoalOutboxLoop(loopDependencies({ retryDelayMs: 777, claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }));
+    const loop = createStartGoalOutboxLoop(
+      loopDependencies({ retryDelayMs: 777, claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }),
+    );
 
     await loop.runOnce();
 
@@ -118,7 +144,9 @@ describe("createStartGoalOutboxLoop", () => {
     const markDelivered = vi.fn(async () => undefined);
     const release = vi.fn(async () => undefined);
     const ticks: unknown[] = [];
-    const loop = createStartGoalOutboxLoop(loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }));
+    const loop = createStartGoalOutboxLoop(
+      loopDependencies({ claim, validate, markDelivered, release, onTick: (result: unknown) => ticks.push(result) }),
+    );
 
     await loop.runOnce();
 
@@ -129,8 +157,13 @@ describe("createStartGoalOutboxLoop", () => {
   it("does not overlap passes and starts/stops its interval idempotently", async () => {
     const scheduler = fakeScheduler();
     let releasePass!: () => void;
-    const pass = new Promise<void>((resolve) => { releasePass = resolve; });
-    const claim = vi.fn(async () => { await pass; return []; });
+    const pass = new Promise<void>((resolve) => {
+      releasePass = resolve;
+    });
+    const claim = vi.fn(async () => {
+      await pass;
+      return [];
+    });
     const loop = createStartGoalOutboxLoop(loopDependencies({ scheduler, claim }));
 
     loop.start();

@@ -1442,3 +1442,18 @@ Full run 10 exposed the required Carnegie renderer contract for the new API code
 ## Task 16 full regression run 11 timing note (2026-09-24)
 
 Fresh unrestricted PostgreSQL `npm test` reached **441 files / 2,941 passed tests out of 2,942**, exit 1, duration **898.53s** (`/tmp/maestro-full-test-11.log`). The sole failure was the existing `packages/persistence/src/worker.integration.test.ts` case `holds the owner claim through provider cancellation before allowing takeover`: under full-suite database load, the test's deliberately short 250ms Goal lease expired before `cancelWorker` entered its second owner-claim transaction, so `lockGoalLease` correctly raised `StaleGoalLeaseError`; the takeover itself fulfilled. The case passed five consecutive isolated runs and a complete isolated worker integration file run (46/46). No production change is justified; this is recorded as timing-sensitive evidence and a fresh full regression is required.
+
+## Task 16 full regression run 12 (2026-09-24)
+
+Fresh unrestricted PostgreSQL verification after the typed `start_goal` consumer and Launch error/title mapping passed **442 test files / 2,942 tests**, exit 0, duration **963.28s** (`/tmp/maestro-full-test-12.log`). This is automated evidence only; no live provider, downstream Head/Council/DepartmentPlan/MissionBundle/Worker execution, certification, report, or E5 completion is claimed.
+
+## Task 16 explicit Head activation plan slice (2026-09-24)
+
+The next bounded slice adds an optional, explicit, content-hash-bound `headActivationPlan` to Task Contract substance. Each department brief contains only bounded activation fields; the server resolves the permanent `headRoleId`. Missing plans are durably recorded as `blocked`, and provider/Head outcomes that are not durably `active` are recorded as `unknown`; no expected-department list is treated as an activation brief. The restart-safe outbox loop now executes the validated controller before acknowledgement and releases the lease on execution failure. Council and later stages remain intentionally unimplemented in this slice.
+
+
+## Task 16 regression runs 13–14 (2026-09-24)
+
+Run 13 ended non-green: **445 test files / 2,952 tests**, with 5 failures, exit 1, duration **1034.66s** (`/tmp/maestro-full-test-13.log`). It was started before the final hardening and before the three public surface snapshots and persistence fixture were updated; its failures were the stale snapshots, the pre-hardening hash assertion, and the pre-binding-fixture replay test.
+
+Fresh unrestricted PostgreSQL run 14 after all hardening and snapshot updates passed **446 test files / 2,954 tests**, exit 0, duration **949.77s** (`/tmp/maestro-full-test-14.log`). This is automated evidence only. No live provider, downstream Council/DepartmentPlan/MissionBundle/Worker execution, certification, report, external-effect, or E5 completion is claimed; E6 remains gated.

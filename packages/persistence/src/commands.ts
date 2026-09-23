@@ -1,5 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
-import { InvalidGoalTransitionError, isTerminalGoalState, assertValidTaskContractSubstance, taskContractContentHash, transitionGoal, type GoalState, type TaskContractSubstance } from "@maestro/domain";
+import {
+  InvalidGoalTransitionError,
+  isTerminalGoalState,
+  assertValidTaskContractSubstance,
+  taskContractContentHash,
+  transitionGoal,
+  type GoalState,
+  type HeadActivationPlan,
+  type TaskContractSubstance,
+} from "@maestro/domain";
 import type { Pool, PoolClient } from "pg";
 import { assertProjectRole } from "./project-membership.js";
 
@@ -35,10 +44,37 @@ export class StaleGoalLeaseError extends Error {
 export type GoalAuthorityDefaults = { spendCeilingCents: number; criticalActionsRequireApproval: boolean; allowFlashmob: boolean };
 
 export type GoalCommand =
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "CreateGoal"; expectedVersion: 0; contractId?: string; requiredRole?: string; authorityDefaults?: GoalAuthorityDefaults }
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "TransitionGoal"; expectedVersion: number; to: GoalState; requiredRole?: string }
+  | {
+      commandId: string;
+      projectId: string;
+      goalId: string;
+      actorId: string;
+      type: "CreateGoal";
+      expectedVersion: 0;
+      contractId?: string;
+      requiredRole?: string;
+      authorityDefaults?: GoalAuthorityDefaults;
+    }
+  | {
+      commandId: string;
+      projectId: string;
+      goalId: string;
+      actorId: string;
+      type: "TransitionGoal";
+      expectedVersion: number;
+      to: GoalState;
+      requiredRole?: string;
+    }
   /** Emergency stop is a narrow terminal command, not an arbitrary transition. */
-  | { commandId: string; projectId: string; goalId: string; actorId: string; type: "EmergencyStopGoal"; expectedVersion: number; requiredRole?: string };
+  | {
+      commandId: string;
+      projectId: string;
+      goalId: string;
+      actorId: string;
+      type: "EmergencyStopGoal";
+      expectedVersion: number;
+      requiredRole?: string;
+    };
 
 export interface CommandResult {
   outcome: "succeeded" | "version_conflict" | "rejected";
@@ -90,6 +126,8 @@ export interface StartGoalOrchestrationCommand {
   projectId: string;
   goalId: string;
   taskContractId: string;
+  /** Original authenticated operator identity, when emitted by current Launch code. */
+  actorId?: string;
 }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -117,18 +155,32 @@ export function parseStartGoalOrchestrationCommand(message: GoalOutboxMessage): 
     !isObject(orchestration) ||
     orchestration.type !== "start_goal" ||
     orchestration.commandId !== eventId
-  ) throw new GoalOrchestrationEnvelopeError();
+  )
+    throw new GoalOrchestrationEnvelopeError();
 
   const projectId = requiredString(orchestration.projectId);
   const goalId = requiredString(orchestration.goalId);
   const taskContractId = requiredString(orchestration.taskContractId);
+  const actorId = orchestration.actorId === undefined ? undefined : requiredString(orchestration.actorId);
   if (
-    projectId === undefined || !uuidPattern.test(projectId) ||
-    goalId === undefined || !uuidPattern.test(goalId) ||
-    taskContractId === undefined || !uuidPattern.test(taskContractId)
-  ) throw new GoalOrchestrationEnvelopeError();
+    projectId === undefined ||
+    !uuidPattern.test(projectId) ||
+    goalId === undefined ||
+    !uuidPattern.test(goalId) ||
+    taskContractId === undefined ||
+    !uuidPattern.test(taskContractId)
+  )
+    throw new GoalOrchestrationEnvelopeError();
 
-  return { eventId, commandId: eventId, type: "start_goal", projectId, goalId, taskContractId };
+  return {
+    eventId,
+    commandId: eventId,
+    type: "start_goal",
+    projectId,
+    goalId,
+    taskContractId,
+    ...(actorId === undefined ? {} : { actorId }),
+  };
 }
 
 export class GoalOrchestrationBindingError extends Error {
@@ -142,6 +194,7 @@ export class GoalOrchestrationBindingError extends Error {
 
 export interface ValidatedStartGoalOrchestrationCommand extends StartGoalOrchestrationCommand {
   contentHash: string;
+  headActivationPlan?: HeadActivationPlan;
 }
 
 /** Validate a parsed command against durable Goal and launched-contract identity. */
@@ -186,14 +239,20 @@ export async function validateStartGoalOrchestrationCommand(
     row.goal_task_contract_id !== command.taskContractId ||
     row.contract_project_id !== command.projectId ||
     row.launch_state !== "launched"
-  ) throw new GoalOrchestrationBindingError();
+  )
+    throw new GoalOrchestrationBindingError();
   try {
     assertValidTaskContractSubstance(row.content);
     if (taskContractContentHash(row.content) !== row.content_hash.trim()) throw new Error("content hash mismatch");
   } catch {
     throw new GoalOrchestrationBindingError();
   }
-  return { ...command, contentHash: row.content_hash.trim() };
+  const substance = row.content as TaskContractSubstance;
+  return {
+    ...command,
+    contentHash: row.content_hash.trim(),
+    ...(substance.headActivationPlan === undefined ? {} : { headActivationPlan: substance.headActivationPlan }),
+  };
 }
 
 /** Claim ready Goal outbox rows for a restart-safe consumer. */
@@ -206,7 +265,8 @@ export async function claimGoalOutbox(
 ): Promise<GoalOutboxMessage[]> {
   if (ownerId.trim() === "") throw new RangeError("ownerId must be non-empty");
   if (!Number.isSafeInteger(limit) || limit <= 0) throw new RangeError("limit must be a positive safe integer");
-  if (!Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0) throw new RangeError("leaseDurationMs must be a positive safe integer");
+  if (!Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0)
+    throw new RangeError("leaseDurationMs must be a positive safe integer");
   const result = await pool.query<{
     outbox_id: string;
     event_id: string;
@@ -268,12 +328,7 @@ export async function markGoalOutboxDelivered(pool: Pool, outboxId: string, owne
 }
 
 /** Release a claimed row for bounded retry without marking it delivered. */
-export async function releaseGoalOutbox(
-  pool: Pool,
-  outboxId: string,
-  ownerId: string,
-  retryDelayMs = 1_000,
-): Promise<void> {
+export async function releaseGoalOutbox(pool: Pool, outboxId: string, ownerId: string, retryDelayMs = 1_000): Promise<void> {
   if (ownerId.trim() === "") throw new RangeError("ownerId must be non-empty");
   if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0) throw new RangeError("retryDelayMs must be a non-negative safe integer");
   const result = await pool.query(
@@ -299,17 +354,17 @@ function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .join(",")}}`;
 }
 
 function commandHash(command: GoalCommand): Buffer {
   return createHash("sha256").update(canonicalJson(command)).digest();
 }
 
-export async function acquireGoalLease(
-  pool: Pool,
-  request: AcquireGoalLeaseRequest,
-): Promise<GoalLeaseProof> {
+export async function acquireGoalLease(pool: Pool, request: AcquireGoalLeaseRequest): Promise<GoalLeaseProof> {
   if (!Number.isSafeInteger(request.leaseDurationMs) || request.leaseDurationMs <= 0) {
     throw new RangeError("leaseDurationMs must be a positive safe integer");
   }
@@ -334,11 +389,7 @@ export async function acquireGoalLease(
  * Extend a lease only when this exact proof is still current. The UPDATE is
  * atomic and deliberately leaves fencing_token unchanged.
  */
-export async function renewGoalLease(
-  pool: Pool,
-  proof: GoalLeaseProof,
-  leaseDurationMs: number,
-): Promise<GoalLeaseProof> {
+export async function renewGoalLease(pool: Pool, proof: GoalLeaseProof, leaseDurationMs: number): Promise<GoalLeaseProof> {
   if (!isValidLeaseProof(proof) || !Number.isSafeInteger(leaseDurationMs) || leaseDurationMs <= 0) {
     throw new StaleGoalLeaseError(proof.goalId);
   }
@@ -463,21 +514,31 @@ export async function executeCreateGoalCommandInTransaction(
   await client.query(
     `INSERT INTO goal_controls (project_id, goal_id, default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob)
      VALUES ($1, $2, $3, $4, $5)`,
-    [command.projectId, command.goalId, command.authorityDefaults?.spendCeilingCents ?? 5000, command.authorityDefaults?.criticalActionsRequireApproval ?? true, command.authorityDefaults?.allowFlashmob ?? true],
+    [
+      command.projectId,
+      command.goalId,
+      command.authorityDefaults?.spendCeilingCents ?? 5000,
+      command.authorityDefaults?.criticalActionsRequireApproval ?? true,
+      command.authorityDefaults?.allowFlashmob ?? true,
+    ],
   );
   await client.query(
     `INSERT INTO outbox (event_id, topic, payload)
      VALUES ($1, 'goal-events', $2::jsonb)`,
-    [eventId, JSON.stringify({
+    [
       eventId,
-      orchestration: {
-        commandId: eventId,
-        type: "start_goal",
-        projectId: command.projectId,
-        goalId: command.goalId,
-        taskContractId: command.contractId,
-      },
-    })],
+      JSON.stringify({
+        eventId,
+        orchestration: {
+          commandId: eventId,
+          type: "start_goal",
+          actorId: command.actorId,
+          projectId: command.projectId,
+          goalId: command.goalId,
+          taskContractId: command.contractId,
+        },
+      }),
+    ],
   );
   await client.query("SELECT pg_notify('maestro_outbox', $1)", [eventId]);
   return result;
@@ -540,7 +601,12 @@ export async function executeGoalCommand(
     }
 
     if (command.type === "CreateGoal" && command.contractId !== undefined) {
-      const contract = await client.query<{ launch_state: string; project_id: string; content: TaskContractSubstance; content_hash: string }>(
+      const contract = await client.query<{
+        launch_state: string;
+        project_id: string;
+        content: TaskContractSubstance;
+        content_hash: string;
+      }>(
         "SELECT launch_state, content->'project'->>'projectId' AS project_id, content, content_hash FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE",
         [command.contractId],
       );
@@ -621,8 +687,11 @@ export async function executeGoalCommand(
     const nextVersion = command.expectedVersion + 1;
     const eventId = randomUUID();
     const result: CommandResult = {
-      outcome: "succeeded", goalId: command.goalId, version: nextVersion,
-      state: nextState, eventId,
+      outcome: "succeeded",
+      goalId: command.goalId,
+      version: nextVersion,
+      state: nextState,
+      eventId,
       ...(command.type === "CreateGoal" && command.contractId !== undefined ? { contractId: command.contractId } : {}),
     };
     await insertReceipt(client, command, hash, "succeeded", result);
@@ -630,7 +699,18 @@ export async function executeGoalCommand(
       `INSERT INTO goal_events
        (event_id, project_id, goal_id, aggregate_version, event_type, schema_version, payload, command_id)
        VALUES ($1, $2, $3, $4, $5, 1, $6::jsonb, $7)`,
-      [eventId, command.projectId, command.goalId, nextVersion, eventType, JSON.stringify({ state: nextState, ...(command.type === "CreateGoal" && command.contractId !== undefined ? { taskContractId: command.contractId } : {}) }), command.commandId],
+      [
+        eventId,
+        command.projectId,
+        command.goalId,
+        nextVersion,
+        eventType,
+        JSON.stringify({
+          state: nextState,
+          ...(command.type === "CreateGoal" && command.contractId !== undefined ? { taskContractId: command.contractId } : {}),
+        }),
+        command.commandId,
+      ],
     );
 
     if (command.type === "CreateGoal") {
@@ -642,7 +722,13 @@ export async function executeGoalCommand(
       await client.query(
         `INSERT INTO goal_controls (project_id, goal_id, default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob)
          VALUES ($1, $2, $3, $4, $5)`,
-        [command.projectId, command.goalId, command.authorityDefaults?.spendCeilingCents ?? 5000, command.authorityDefaults?.criticalActionsRequireApproval ?? true, command.authorityDefaults?.allowFlashmob ?? true],
+        [
+          command.projectId,
+          command.goalId,
+          command.authorityDefaults?.spendCeilingCents ?? 5000,
+          command.authorityDefaults?.criticalActionsRequireApproval ?? true,
+          command.authorityDefaults?.allowFlashmob ?? true,
+        ],
       );
     } else {
       const updated = await client.query(
@@ -654,7 +740,10 @@ export async function executeGoalCommand(
     }
 
     if (isTerminalGoalState(nextState)) {
-      await client.query(`UPDATE capacity_reservations SET status = 'released', released_at = transaction_timestamp(), queue_reason = NULL WHERE goal_id = $1 AND status = 'queued'`, [command.goalId]);
+      await client.query(
+        `UPDATE capacity_reservations SET status = 'released', released_at = transaction_timestamp(), queue_reason = NULL WHERE goal_id = $1 AND status = 'queued'`,
+        [command.goalId],
+      );
     }
 
     await client.query(
@@ -674,7 +763,6 @@ export async function executeGoalCommand(
     client.release();
   }
 }
-
 
 type StoredGoalControlForTransition = {
   emergency_stopped_at: Date | null;
@@ -862,8 +950,10 @@ async function applyGoalControlTransition(
     );
     return;
   }
-  if (["emergency_stopped", "stopped", "stopping", "paused", "pause_requested"].includes(mode) &&
-      (to === "active" || to === "certifying" || to === "succeeded" || to === "failed")) {
+  if (
+    ["emergency_stopped", "stopped", "stopping", "paused", "pause_requested"].includes(mode) &&
+    (to === "active" || to === "certifying" || to === "succeeded" || to === "failed")
+  ) {
     throw new InvalidGoalTransitionError(from, to);
   }
 }
@@ -900,10 +990,11 @@ function isValidLeaseProof(proof: GoalLeaseProof): boolean {
  */
 export function isValidFencingToken(fencingToken: string): boolean {
   const maxFencingToken = "9223372036854775807";
-  return typeof fencingToken === "string" &&
+  return (
+    typeof fencingToken === "string" &&
     /^[1-9][0-9]*$/.test(fencingToken) &&
-    (fencingToken.length < maxFencingToken.length ||
-      (fencingToken.length === maxFencingToken.length && fencingToken <= maxFencingToken));
+    (fencingToken.length < maxFencingToken.length || (fencingToken.length === maxFencingToken.length && fencingToken <= maxFencingToken))
+  );
 }
 
 async function insertReceipt(
@@ -917,7 +1008,17 @@ async function insertReceipt(
     `INSERT INTO command_receipts
      (command_id, project_id, goal_id, actor_id, command_type, expected_version, request_hash, request, outcome, result)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10::jsonb)`,
-    [command.commandId, command.projectId, command.goalId, command.actorId, command.type,
-      command.expectedVersion, hash, JSON.stringify(command), outcome, JSON.stringify(result)],
+    [
+      command.commandId,
+      command.projectId,
+      command.goalId,
+      command.actorId,
+      command.type,
+      command.expectedVersion,
+      hash,
+      JSON.stringify(command),
+      outcome,
+      JSON.stringify(result),
+    ],
   );
 }

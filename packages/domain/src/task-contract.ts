@@ -1,4 +1,5 @@
 import { sha256Hex } from "./hash.js";
+import { assertValidHeadActivationPlan, type HeadActivationPlan } from "./head-activation-plan.js";
 
 export const TASK_CONTRACT_SCHEMA_VERSION = 1;
 export const OVERTURE_ROLE_TAXONOMY_VERSION = 2;
@@ -12,7 +13,7 @@ export const OVERTURE_ROLE_IDS = [
   "design-mock-specialist",
   "task-editor",
 ] as const;
-export type OvertureRoleId = typeof OVERTURE_ROLE_IDS[number];
+export type OvertureRoleId = (typeof OVERTURE_ROLE_IDS)[number];
 
 /** IDs written by the first Task Contract implementation, retained for migration. */
 const LEGACY_OVERTURE_ROLE_ALIASES: Readonly<Record<string, OvertureRoleId>> = Object.freeze({
@@ -33,7 +34,12 @@ export interface TaskContractSubstance {
   readonly acceptableTradeoffs: readonly string[];
   readonly constraints: readonly string[];
   readonly knownEdgeCases: readonly string[];
-  readonly project: { readonly projectId: string; readonly repository: string; readonly immutableBaseRevision: string; readonly dataBoundary: string };
+  readonly project: {
+    readonly projectId: string;
+    readonly repository: string;
+    readonly immutableBaseRevision: string;
+    readonly dataBoundary: string;
+  };
   readonly evidenceReferences: readonly string[];
   readonly approvedPreviewReferences: readonly string[];
   readonly expectedGroups: readonly string[];
@@ -42,7 +48,13 @@ export interface TaskContractSubstance {
   readonly forbiddenEffects: readonly string[];
   readonly environmentAssumptions: readonly string[];
   readonly externalServiceAssumptions: readonly string[];
-  readonly budget: { readonly ceiling: string; readonly reportingExpectations: readonly string[]; readonly stoppingConditions: readonly string[] };
+  readonly budget: {
+    readonly ceiling: string;
+    readonly reportingExpectations: readonly string[];
+    readonly stoppingConditions: readonly string[];
+  };
+  /** Optional explicit plan; absence must block automatic Head activation. */
+  readonly headActivationPlan?: HeadActivationPlan | undefined;
 }
 
 export interface TaskContract extends TaskContractSubstance {
@@ -61,7 +73,10 @@ export interface TaskContractDecision {
 }
 
 export class InvalidTaskContractError extends Error {
-  constructor(message: string) { super(message); this.name = "InvalidTaskContractError"; }
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidTaskContractError";
+  }
 }
 
 export interface OvertureSelectionInput {
@@ -98,9 +113,9 @@ export function selectOvertureRoles(input: OvertureSelectionInput): readonly Ove
   return [
     "conversation-lead",
     "architecture-analyst",
-    ...(input.outsideEvidenceRequested ? ["external-research-scout"] as const : []),
+    ...(input.outsideEvidenceRequested ? (["external-research-scout"] as const) : []),
     "security-evaluator",
-    ...(input.previewNeeded ? ["design-mock-specialist"] as const : []),
+    ...(input.previewNeeded ? (["design-mock-specialist"] as const) : []),
     "task-editor",
   ];
 }
@@ -111,22 +126,65 @@ export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
+    .join(",")}}`;
 }
 
 export function assertValidTaskContractSubstance(value: unknown): asserts value is TaskContractSubstance {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new InvalidTaskContractError("Task Contract substance must be an object");
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new InvalidTaskContractError("Task Contract substance must be an object");
   const record = value as Record<string, unknown>;
   const textFields = ["desiredOutcome"];
-  const listFields = ["userVisibleBehavior", "successCriteria", "liveEvidence", "scope", "nonGoals", "priorities", "acceptableTradeoffs", "constraints", "knownEdgeCases", "evidenceReferences", "approvedPreviewReferences", "expectedGroups", "expectedDepartments", "criticalActionExpectations", "forbiddenEffects", "environmentAssumptions", "externalServiceAssumptions"];
-  for (const field of textFields) if (typeof record[field] !== "string" || record[field].trim() === "") throw new InvalidTaskContractError(`Task Contract ${field} is required`);
+  const listFields = [
+    "userVisibleBehavior",
+    "successCriteria",
+    "liveEvidence",
+    "scope",
+    "nonGoals",
+    "priorities",
+    "acceptableTradeoffs",
+    "constraints",
+    "knownEdgeCases",
+    "evidenceReferences",
+    "approvedPreviewReferences",
+    "expectedGroups",
+    "expectedDepartments",
+    "criticalActionExpectations",
+    "forbiddenEffects",
+    "environmentAssumptions",
+    "externalServiceAssumptions",
+  ];
+  for (const field of textFields)
+    if (typeof record[field] !== "string" || record[field].trim() === "")
+      throw new InvalidTaskContractError(`Task Contract ${field} is required`);
   for (const field of listFields) {
-    if (!Array.isArray(record[field]) || !record[field].every((item) => typeof item === "string" && item.trim() !== "")) throw new InvalidTaskContractError(`Task Contract ${field} must be a string list`);
+    if (!Array.isArray(record[field]) || !record[field].every((item) => typeof item === "string" && item.trim() !== ""))
+      throw new InvalidTaskContractError(`Task Contract ${field} must be a string list`);
   }
   const project = record.project as Record<string, unknown> | null;
-  if (!project || typeof project !== "object" || ["projectId", "repository", "immutableBaseRevision", "dataBoundary"].some((field) => typeof project[field] !== "string" || (project[field] as string).trim() === "")) throw new InvalidTaskContractError("Task Contract project boundary is required");
+  if (
+    !project ||
+    typeof project !== "object" ||
+    ["projectId", "repository", "immutableBaseRevision", "dataBoundary"].some(
+      (field) => typeof project[field] !== "string" || (project[field] as string).trim() === "",
+    )
+  )
+    throw new InvalidTaskContractError("Task Contract project boundary is required");
+  if (record.headActivationPlan !== undefined) assertValidHeadActivationPlan(record.headActivationPlan);
   const budget = record.budget as Record<string, unknown> | null;
-  if (!budget || typeof budget !== "object" || typeof budget.ceiling !== "string" || budget.ceiling.trim() === "" || !Array.isArray(budget.reportingExpectations) || !Array.isArray(budget.stoppingConditions) || !budget.reportingExpectations.every((item) => typeof item === "string" && item.trim() !== "") || !budget.stoppingConditions.every((item) => typeof item === "string" && item.trim() !== "")) throw new InvalidTaskContractError("Task Contract budget is required");
+  if (
+    !budget ||
+    typeof budget !== "object" ||
+    typeof budget.ceiling !== "string" ||
+    budget.ceiling.trim() === "" ||
+    !Array.isArray(budget.reportingExpectations) ||
+    !Array.isArray(budget.stoppingConditions) ||
+    !budget.reportingExpectations.every((item) => typeof item === "string" && item.trim() !== "") ||
+    !budget.stoppingConditions.every((item) => typeof item === "string" && item.trim() !== "")
+  )
+    throw new InvalidTaskContractError("Task Contract budget is required");
 }
 
 export function taskContractContentHash(substance: TaskContractSubstance): string;
@@ -135,18 +193,31 @@ export function taskContractContentHash(substance: TaskContractSubstance | Reado
   return sha256Hex(canonicalJson(substance));
 }
 
-export function createTaskContract(contractId: string, substance: TaskContractSubstance, decisionHistory: readonly TaskContractDecision[] = []): TaskContract {
+export function createTaskContract(
+  contractId: string,
+  substance: TaskContractSubstance,
+  decisionHistory: readonly TaskContractDecision[] = [],
+): TaskContract {
   return {
-    contractId, schemaVersion: TASK_CONTRACT_SCHEMA_VERSION, version: 1, ...substance, decisionHistory,
-    contentHash: taskContractContentHash(substance), launchState: "awaiting_confirmation",
+    contractId,
+    schemaVersion: TASK_CONTRACT_SCHEMA_VERSION,
+    version: 1,
+    ...substance,
+    decisionHistory,
+    contentHash: taskContractContentHash(substance),
+    launchState: "awaiting_confirmation",
   };
 }
 
 /** Any substantive edit yields a new identity and must obtain a new exact confirmation. */
 export function amendTaskContract(current: TaskContract, substance: TaskContractSubstance, decision: TaskContractDecision): TaskContract {
   return {
-    contractId: current.contractId, schemaVersion: TASK_CONTRACT_SCHEMA_VERSION, version: current.version + 1,
-    ...substance, decisionHistory: [...current.decisionHistory, decision],
-    contentHash: taskContractContentHash(substance), launchState: "awaiting_confirmation",
+    contractId: current.contractId,
+    schemaVersion: TASK_CONTRACT_SCHEMA_VERSION,
+    version: current.version + 1,
+    ...substance,
+    decisionHistory: [...current.decisionHistory, decision],
+    contentHash: taskContractContentHash(substance),
+    launchState: "awaiting_confirmation",
   };
 }

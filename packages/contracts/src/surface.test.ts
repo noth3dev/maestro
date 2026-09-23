@@ -84,6 +84,7 @@ describe("contracts surface", () => {
         "GoalResultSchema",
         "GoalScopedReadQuerySchema",
         "GoalStateSchema",
+        "HeadActivationPlanSchema",
         "HeadCouncilDecisionInputSchema",
         "HeadCouncilSchema",
         "HeadParticipationInputSchema",

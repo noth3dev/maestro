@@ -4964,3 +4964,25 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 Added a RED assertion to `apps/control-plane/src/task-contract-api.integration.test.ts` requiring the atomic Launch-created `goal-events` outbox payload to carry an explicit `start_goal` orchestration command (`commandId` = GoalCreated event ID, project/Goal/Task Contract scope). RED failed because the payload only contained `{ eventId }`. The minimal persistence change in `packages/persistence/src/commands.ts` now writes that scoped command metadata in the same transaction; no outbox consumer or downstream Head/Council/Worker progression was invented.
 
 Verification: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npx vitest run apps/control-plane/src/task-contract-api.integration.test.ts --reporter=dot` passed **1 file / 1 test** after the RED failure; `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npx vitest run packages/persistence/src/commands.integration.test.ts --reporter=dot` passed **1 file / 16 tests**; Overture integration passed **1 file / 6 tests** (`/tmp/task16-orchestration-overture.log`); `npm run build`, `npm run typecheck`, `npm run lint`, and `git diff --check` all exited 0. E5 remains partial: the durable first handoff now exists, but its consumer and automatic downstream progression remain open; no live provider or Goal/Worker evidence is claimed.
+
+
+## Task 16 full regression run 12 and explicit Head activation plan slice — 2026-09-24
+
+- Fresh unrestricted PostgreSQL `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/maestro_local npm test` passed **442 test files / 2,942 tests**, exit 0, duration **963.28s** (`/tmp/maestro-full-test-12.log`). This is automated evidence only.
+- Added optional, explicit, content-hash-bound `headActivationPlan` briefs to Task Contract substance. Added durable PostgreSQL Head-stage orchestration state/history with `running|blocked|unknown|completed`, fail-closed missing-plan handling, deterministic per-department Head command IDs, and execute-before-ack outbox wiring. The controller advances only the existing Goal lifecycle and Head service; Council and later stages remain untouched.
+- Focused RED/GREEN plus API/Control Plane/persistence verification passed **10 files / 78 tests** before the final controller hardening; the controller regression now passes **3/3**, build, lint, migration numbering, boundary checks, and `git diff --check` pass. Run 13 was started before the final hardening and ended non-green; a fresh full PostgreSQL run 14 was then completed after the hardening.
+- E5 remains partial and E6 remains archival/gated. No live provider, downstream Goal/Worker, certification, report, or external-effect evidence is claimed.
+
+
+## Task 16 adversarial hardening — 2026-09-24
+
+- A read-only review found and the implementation corrected terminal-state mutation, event-key payload drift, syntactically valid but wrong plan hashes, missing initial Goal/project/launched Task Contract binding at the persistence boundary, and stale outbox side-effect documentation.
+- `start-goal-orchestration-controller.integration.test.ts` now covers real PostgreSQL durable blocking for a missing plan, explicit lifecycle advancement, deterministic Head command identity, and replay without duplicate effects.
+- Focused review-fix verification passed **4 files / 28 tests**, plus the controller integration suite **2/2**; build, lint, migration numbering, boundary, and targeted Prettier checks pass. Full run 13 was started before these final fixes and is not authoritative for this hardened slice; a fresh unrestricted PostgreSQL regression is required.
+
+
+## Task 16 final automated regression — 2026-09-24
+
+- Run 13 ended non-green before the final hardening: **445 files / 2,952 tests**, 5 failures, exit 1, **1034.66s**.
+- Fresh unrestricted PostgreSQL run 14 after hardening and snapshot/fixture updates passed **446 files / 2,954 tests**, exit 0, **949.77s** (`/tmp/maestro-full-test-14.log`).
+- E5 remains partial and E6 remains archival/gated. This proves automated local behavior only; no live provider, downstream Council/Worker, certification, report, or external-effect evidence is claimed.

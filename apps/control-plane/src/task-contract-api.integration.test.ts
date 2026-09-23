@@ -9,22 +9,56 @@ const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
 
 const substance = (projectId: string) => ({
-  desiredOutcome: "Ship the feature", userVisibleBehavior: ["Users can use it"], successCriteria: ["The check passes"], liveEvidence: ["A live request"],
-  scope: ["The feature"], nonGoals: ["Unrelated work"], priorities: ["Safety"], acceptableTradeoffs: ["Slower launch"], constraints: ["Local only"], knownEdgeCases: ["Retry"],
-  project: { projectId, repository: "/repo", immutableBaseRevision: "abc123", dataBoundary: "repository files only" }, evidenceReferences: ["docs/spec.md"], approvedPreviewReferences: [],
-  expectedGroups: ["Product Group"], expectedDepartments: ["Product Department"], criticalActionExpectations: ["Exact confirmation"], forbiddenEffects: ["Deploy"], environmentAssumptions: ["PostgreSQL"], externalServiceAssumptions: ["None"],
+  desiredOutcome: "Ship the feature",
+  userVisibleBehavior: ["Users can use it"],
+  successCriteria: ["The check passes"],
+  liveEvidence: ["A live request"],
+  scope: ["The feature"],
+  nonGoals: ["Unrelated work"],
+  priorities: ["Safety"],
+  acceptableTradeoffs: ["Slower launch"],
+  constraints: ["Local only"],
+  knownEdgeCases: ["Retry"],
+  project: { projectId, repository: "/repo", immutableBaseRevision: "abc123", dataBoundary: "repository files only" },
+  evidenceReferences: ["docs/spec.md"],
+  approvedPreviewReferences: [],
+  expectedGroups: ["Product Group"],
+  expectedDepartments: ["Product Department"],
+  criticalActionExpectations: ["Exact confirmation"],
+  forbiddenEffects: ["Deploy"],
+  environmentAssumptions: ["PostgreSQL"],
+  externalServiceAssumptions: ["None"],
   budget: { ceiling: "100 USD", reportingExpectations: ["Report spend"], stoppingConditions: ["Stop at ceiling"] },
 });
 
 describeDatabase("Task Contract control-plane API", () => {
   const schema = `task_contract_api_${randomUUID().replaceAll("-", "")}`;
   const basePool = new Pool({ connectionString: databaseUrl });
-  const scopedUrl = databaseUrl === undefined ? "postgresql://127.0.0.1/maestro_test" : (() => { const url = new URL(databaseUrl); url.searchParams.set("options", `-c search_path=${schema}`); return url.toString(); })();
+  const scopedUrl =
+    databaseUrl === undefined
+      ? "postgresql://127.0.0.1/maestro_test"
+      : (() => {
+          const url = new URL(databaseUrl);
+          url.searchParams.set("options", `-c search_path=${schema}`);
+          return url.toString();
+        })();
   let setupPool: Pool;
 
-  beforeAll(async () => { await basePool.query(`CREATE SCHEMA ${schema}`); setupPool = new Pool({ connectionString: scopedUrl }); await applyAllMigrations(setupPool); });
-  beforeEach(async () => { await setupPool.query("TRUNCATE goals, goal_controls, goal_leases, outbox, goal_events, command_receipts, task_contract_confirmations, task_contract_decisions, task_contracts, reconciler_leader_lease, local_operator_credentials, local_operators, operator_project_memberships CASCADE"); });
-  afterAll(async () => { await setupPool.end(); await basePool.query(`DROP SCHEMA ${schema} CASCADE`); await basePool.end(); });
+  beforeAll(async () => {
+    await basePool.query(`CREATE SCHEMA ${schema}`);
+    setupPool = new Pool({ connectionString: scopedUrl });
+    await applyAllMigrations(setupPool);
+  });
+  beforeEach(async () => {
+    await setupPool.query(
+      "TRUNCATE goals, goal_controls, goal_leases, outbox, goal_events, command_receipts, task_contract_confirmations, task_contract_decisions, task_contracts, reconciler_leader_lease, local_operator_credentials, local_operators, operator_project_memberships CASCADE",
+    );
+  });
+  afterAll(async () => {
+    await setupPool.end();
+    await basePool.query(`DROP SCHEMA ${schema} CASCADE`);
+    await basePool.end();
+  });
 
   it("drives create, amend, role selection, exact confirmation, launch, and retry through HTTP", async () => {
     const secret = `task-contract-secret-${randomUUID()}`;
@@ -34,8 +68,19 @@ describeDatabase("Task Contract control-plane API", () => {
     await grantProjectMembership(setupPool, operatorId, projectId);
     await grantProjectRole(setupPool, operatorId, projectId, "concertmaster");
     await setupPool.query("INSERT INTO operator_settings (operator_id) VALUES ($1) ON CONFLICT (operator_id) DO NOTHING", [operatorId]);
-    await setupPool.query("UPDATE operator_settings SET spend_ceiling_cents = 12345, critical_actions_require_approval = false, allow_flashmob = false WHERE operator_id = $1", [operatorId]);
-    const controlPlane = createControlPlane({ databaseUrl: scopedUrl, evidenceDir: "/tmp/maestro-evidence", worktreeRoot: "/tmp", host: "127.0.0.1", port: 0, actorId: "maestro-control-plane", leaseOwnerId: `task-contract-${randomUUID()}` });
+    await setupPool.query(
+      "UPDATE operator_settings SET spend_ceiling_cents = 12345, critical_actions_require_approval = false, allow_flashmob = false WHERE operator_id = $1",
+      [operatorId],
+    );
+    const controlPlane = createControlPlane({
+      databaseUrl: scopedUrl,
+      evidenceDir: "/tmp/maestro-evidence",
+      worktreeRoot: "/tmp",
+      host: "127.0.0.1",
+      port: 0,
+      actorId: "maestro-control-plane",
+      leaseOwnerId: `task-contract-${randomUUID()}`,
+    });
     try {
       await controlPlane.listen();
       const address = controlPlane.app.server.address();
@@ -43,69 +88,149 @@ describeDatabase("Task Contract control-plane API", () => {
       const baseUrl = `http://127.0.0.1:${address.port}`;
       const headers = { authorization: `Bearer ${credentialId}.${secret}`, "content-type": "application/json" };
       const originalSubstance = substance(projectId);
-      const create = async () => fetch(`${baseUrl}/v1/task-contracts`, { method: "POST", headers: { ...headers, "idempotency-key": contractId }, body: JSON.stringify({ projectId, substance: originalSubstance }) });
+      const create = async () =>
+        fetch(`${baseUrl}/v1/task-contracts`, {
+          method: "POST",
+          headers: { ...headers, "idempotency-key": contractId },
+          body: JSON.stringify({ projectId, substance: originalSubstance }),
+        });
       const created = await create();
       expect(created.status).toBe(201);
-      const createdBody = await created.json() as { contentHash: string; version: number; launchState: string };
+      const createdBody = (await created.json()) as { contentHash: string; version: number; launchState: string };
       expect(createdBody).toMatchObject({ version: 1, launchState: "awaiting_confirmation" });
       const retried = await create();
       expect(retried.status).toBe(201);
       expect(await retried.json()).toEqual(createdBody);
 
       const amendedSubstance = { ...originalSubstance, desiredOutcome: "Ship the amended feature" };
-      const amended = await fetch(`${baseUrl}/v1/task-contracts/${contractId}`, { method: "PUT", headers, body: JSON.stringify({ projectId, expectedVersion: 1, substance: amendedSubstance }) });
+      const amended = await fetch(`${baseUrl}/v1/task-contracts/${contractId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ projectId, expectedVersion: 1, substance: amendedSubstance }),
+      });
       expect(amended.status).toBe(200);
-      const amendedBody = await amended.json() as { contentHash: string; version: number; launchState: string };
+      const amendedBody = (await amended.json()) as { contentHash: string; version: number; launchState: string };
       expect(amendedBody).toMatchObject({ version: 2, launchState: "awaiting_confirmation" });
       expect(amendedBody.contentHash).not.toBe(createdBody.contentHash);
 
-      const roles = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/overture-selection`, { method: "POST", headers: { ...headers, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, outsideEvidenceRequested: true, previewNeeded: true }) });
+      const roles = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/overture-selection`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": randomUUID() },
+        body: JSON.stringify({ projectId, outsideEvidenceRequested: true, previewNeeded: true }),
+      });
       expect(roles.status).toBe(200);
-      expect(await roles.json()).toEqual({ roles: ["conversation-lead", "architecture-analyst", "external-research-scout", "security-evaluator", "design-mock-specialist", "task-editor"] });
-      const confirmed = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/confirmation`, { method: "POST", headers: { ...headers, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId, version: 2, contentHash: amendedBody.contentHash }) });
+      expect(await roles.json()).toEqual({
+        roles: [
+          "conversation-lead",
+          "architecture-analyst",
+          "external-research-scout",
+          "security-evaluator",
+          "design-mock-specialist",
+          "task-editor",
+        ],
+      });
+      const confirmed = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/confirmation`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": randomUUID() },
+        body: JSON.stringify({ projectId, version: 2, contentHash: amendedBody.contentHash }),
+      });
       expect(confirmed.status).toBe(204);
-      const launched = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers, body: JSON.stringify({ projectId }) });
+      const launched = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ projectId }),
+      });
       expect(launched.status).toBe(200);
-      const launchedBody = await launched.json() as { taskContract: { contractId: string; version: number; launchState: string }; goalId: string; scheduling: string };
+      const launchedBody = (await launched.json()) as {
+        taskContract: { contractId: string; version: number; launchState: string };
+        goalId: string;
+        scheduling: string;
+      };
       expect(launchedBody).toMatchObject({ taskContract: { contractId, version: 2, launchState: "launched" }, scheduling: "queued" });
       expect(launchedBody.goalId).toMatch(/^[0-9a-f-]{36}$/);
-      expect((await setupPool.query("SELECT goal_id, project_id, task_contract_id, state, version FROM goals WHERE task_contract_id = $1", [contractId])).rows).toEqual([
-        expect.objectContaining({ goal_id: launchedBody.goalId, project_id: projectId, task_contract_id: contractId, state: "draft", version: "1" }),
+      expect(
+        (
+          await setupPool.query("SELECT goal_id, project_id, task_contract_id, state, version FROM goals WHERE task_contract_id = $1", [
+            contractId,
+          ])
+        ).rows,
+      ).toEqual([
+        expect.objectContaining({
+          goal_id: launchedBody.goalId,
+          project_id: projectId,
+          task_contract_id: contractId,
+          state: "draft",
+          version: "1",
+        }),
       ]);
-      expect((await setupPool.query("SELECT command_id, command_type, outcome FROM command_receipts WHERE goal_id = $1", [launchedBody.goalId])).rows).toEqual([
-        expect.objectContaining({ command_type: "CreateGoal", outcome: "succeeded" }),
-      ]);
-      expect((await setupPool.query("SELECT default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob FROM goal_controls WHERE goal_id = $1", [launchedBody.goalId])).rows).toEqual([
+      expect(
+        (await setupPool.query("SELECT command_id, command_type, outcome FROM command_receipts WHERE goal_id = $1", [launchedBody.goalId]))
+          .rows,
+      ).toEqual([expect.objectContaining({ command_type: "CreateGoal", outcome: "succeeded" })]);
+      expect(
+        (
+          await setupPool.query(
+            "SELECT default_spend_ceiling_cents, default_critical_actions_require_approval, default_allow_flashmob FROM goal_controls WHERE goal_id = $1",
+            [launchedBody.goalId],
+          )
+        ).rows,
+      ).toEqual([
         { default_spend_ceiling_cents: "12345", default_critical_actions_require_approval: false, default_allow_flashmob: false },
       ]);
-      const goalEvent = await setupPool.query<{ event_id: string; command_id: string }>("SELECT event_id, command_id FROM goal_events WHERE goal_id = $1", [launchedBody.goalId]);
+      const goalEvent = await setupPool.query<{ event_id: string; command_id: string }>(
+        "SELECT event_id, command_id FROM goal_events WHERE goal_id = $1",
+        [launchedBody.goalId],
+      );
       expect(goalEvent.rows).toHaveLength(1);
-      const outbox = await setupPool.query<{ topic: string; payload: { eventId: string; orchestration?: { commandId: string; type: string; projectId: string; goalId: string; taskContractId: string } } }>("SELECT topic, payload FROM outbox WHERE event_id = $1", [goalEvent.rows[0]!.event_id]);
-      expect(outbox.rows).toEqual([{
-        topic: "goal-events",
+      const outbox = await setupPool.query<{
+        topic: string;
         payload: {
-          eventId: goalEvent.rows[0]!.event_id,
-          orchestration: {
-            commandId: goalEvent.rows[0]!.event_id,
-            type: "start_goal",
-            projectId,
-            goalId: launchedBody.goalId,
-            taskContractId: contractId,
+          eventId: string;
+          orchestration?: { actorId: string; commandId: string; type: string; projectId: string; goalId: string; taskContractId: string };
+        };
+      }>("SELECT topic, payload FROM outbox WHERE event_id = $1", [goalEvent.rows[0]!.event_id]);
+      expect(outbox.rows).toEqual([
+        {
+          topic: "goal-events",
+          payload: {
+            eventId: goalEvent.rows[0]!.event_id,
+            orchestration: {
+              actorId: operatorId,
+              commandId: goalEvent.rows[0]!.event_id,
+              type: "start_goal",
+              projectId,
+              goalId: launchedBody.goalId,
+              taskContractId: contractId,
+            },
           },
         },
-      }]);
+      ]);
 
-      const retriedLaunch = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers, body: JSON.stringify({ projectId }) });
+      const retriedLaunch = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ projectId }),
+      });
       expect(retriedLaunch.status).toBe(200);
       expect(await retriedLaunch.json()).toEqual(launchedBody);
-      const retriedWithNewCommand = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, { method: "POST", headers: { ...headers, "idempotency-key": randomUUID() }, body: JSON.stringify({ projectId }) });
+      const retriedWithNewCommand = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/launch`, {
+        method: "POST",
+        headers: { ...headers, "idempotency-key": randomUUID() },
+        body: JSON.stringify({ projectId }),
+      });
       expect(retriedWithNewCommand.status).toBe(200);
       expect(await retriedWithNewCommand.json()).toEqual(launchedBody);
-      expect((await setupPool.query("SELECT count(*)::int AS count FROM goals WHERE task_contract_id = $1", [contractId])).rows[0]!.count).toBe(1);
+      expect(
+        (await setupPool.query("SELECT count(*)::int AS count FROM goals WHERE task_contract_id = $1", [contractId])).rows[0]!.count,
+      ).toBe(1);
 
       const forbiddenProject = randomUUID();
-      const forbidden = await fetch(`${baseUrl}/v1/task-contracts/${contractId}?projectId=${forbiddenProject}`, { headers: { authorization: `Bearer ${credentialId}.${secret}` } });
+      const forbidden = await fetch(`${baseUrl}/v1/task-contracts/${contractId}?projectId=${forbiddenProject}`, {
+        headers: { authorization: `Bearer ${credentialId}.${secret}` },
+      });
       expect(forbidden.status).toBe(403);
-    } finally { await controlPlane.close(); }
+    } finally {
+      await controlPlane.close();
+    }
   });
 });
