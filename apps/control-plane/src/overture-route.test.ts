@@ -62,6 +62,28 @@ function service(): OvertureService {
       ],
       manifestHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     }),
+    revisePlan: async (input) => ({
+      documentId: input.documentId,
+      projectId: input.projectId,
+      runId: input.runId,
+      path: input.path,
+      kind: input.kind,
+      version: input.expectedVersion + 1,
+      content: input.content,
+      contentHash: input.contentHash,
+      sourceRefs: input.sourceRefs,
+      dependencies: input.dependencies,
+    }),
+    openClarification: async (input) => ({
+      clarificationId: "99999999-9999-4999-8999-999999999999",
+      runId: input.runId,
+      projectId: input.projectId,
+      question: input.question,
+      answer: null,
+      answerCommandId: null,
+      status: "open",
+      commandId: input.commandId,
+    }),
     listMessages: async () => [],
     getRun: async () => run,
     listEvents: async () => [],
@@ -150,6 +172,36 @@ describe("Overture routes", () => {
     });
     expect(manifest.statusCode).toBe(200);
     expect(manifest.json().documents[0].path).toBe("plan00.md");
+    await fastify.close();
+  });
+  it("revises a plan document and opens a clarification with command ids", async () => {
+    const fastify = await app();
+    const plan = await fastify.inject({
+      method: "PUT",
+      url: `/v1/overture/runs/${ids.runId}/plan-documents/88888888-8888-4888-8888-888888888888`,
+      headers: { "idempotency-key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      payload: {
+        projectId: ids.projectId,
+        conversationId: ids.conversationId,
+        path: "plan00.md",
+        kind: "project",
+        content: "Plan boundary",
+        contentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        sourceRefs: [],
+        dependencies: [],
+        expectedVersion: 0,
+      },
+    });
+    expect(plan.statusCode).toBe(200);
+    expect(plan.json().version).toBe(1);
+    const clarification = await fastify.inject({
+      method: "POST",
+      url: `/v1/overture/runs/${ids.runId}/clarifications`,
+      headers: { "idempotency-key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+      payload: { projectId: ids.projectId, conversationId: ids.conversationId, question: "What is out of scope?" },
+    });
+    expect(clarification.statusCode).toBe(201);
+    expect(clarification.json().status).toBe("open");
     await fastify.close();
   });
 });

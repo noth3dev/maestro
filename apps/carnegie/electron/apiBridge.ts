@@ -58,6 +58,8 @@ export const exposedApiMethods = [
   "listOvertureMessages",
   "listOvertureArtifacts",
   "getOverturePlanManifest",
+  "reviseOverturePlan",
+  "openOvertureClarification",
   "listOvertureEvents",
   "activateHead",
   "createCouncil",

@@ -5,11 +5,17 @@ import {
   AppendOvertureOperatorMessageBodySchema,
   CreateOvertureRunBodySchema,
   CreateOvertureRunInputSchema,
+  ReviseOverturePlanBodySchema,
+  ReviseOverturePlanInputSchema,
+  OpenOvertureClarificationBodySchema,
+  OpenOvertureClarificationInputSchema,
   OvertureEventQuerySchema,
   OvertureArtifactSchema,
   OvertureEventSchema,
   OvertureMessageSchema,
   OverturePlanManifestSchema,
+  OverturePlanDocumentSchema,
+  OvertureClarificationSchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
   EventCursorSchema,
@@ -79,6 +85,25 @@ export function registerOvertureRoutes(app: FastifyInstance, deps: OvertureRoute
       requestOperator(request as { operator?: OperatorContext }),
     );
     return reply.status(200).send(OverturePlanManifestSchema.parse(result));
+  });
+
+  app.put("/v1/overture/runs/:runId/plan-documents/:documentId", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const documentId = parse(UuidSchema, (request.params as { documentId?: unknown }).documentId);
+    const commandId = requiredCommandId(request.headers["idempotency-key"]);
+    const body = parse(ReviseOverturePlanBodySchema, request.body);
+    const input = ReviseOverturePlanInputSchema.parse({ ...body, runId, documentId, commandId });
+    const result = await overture.revisePlan(input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(OverturePlanDocumentSchema.parse(result));
+  });
+
+  app.post("/v1/overture/runs/:runId/clarifications", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const commandId = requiredCommandId(request.headers["idempotency-key"]);
+    const body = parse(OpenOvertureClarificationBodySchema, request.body);
+    const input = OpenOvertureClarificationInputSchema.parse({ ...body, runId, commandId });
+    const result = await overture.openClarification(input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(OvertureClarificationSchema.parse(result));
   });
 
   app.get("/v1/overture/runs/:runId/messages", async (request, reply) => {

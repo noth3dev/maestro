@@ -260,10 +260,14 @@ export const ReviseOverturePlanInputSchema = z
   })
   .strict();
 export type ReviseOverturePlanInput = z.infer<typeof ReviseOverturePlanInputSchema>;
+export const ReviseOverturePlanBodySchema = ReviseOverturePlanInputSchema.omit({ runId: true, documentId: true, commandId: true });
+export type ReviseOverturePlanBody = z.infer<typeof ReviseOverturePlanBodySchema>;
 export const OpenOvertureClarificationInputSchema = z
   .object({ projectId: UuidSchema, runId: UuidSchema, conversationId: UuidSchema, question: SafeContentSchema, commandId: UuidSchema })
   .strict();
 export type OpenOvertureClarificationInput = z.infer<typeof OpenOvertureClarificationInputSchema>;
+export const OpenOvertureClarificationBodySchema = OpenOvertureClarificationInputSchema.omit({ runId: true, commandId: true });
+export type OpenOvertureClarificationBody = z.infer<typeof OpenOvertureClarificationBodySchema>;
 export const ReadOvertureRunInputSchema = z.object({ projectId: UuidSchema, conversationId: UuidSchema, runId: UuidSchema }).strict();
 export const ReadOverturePlanManifestInputSchema = z
   .object({ projectId: UuidSchema, conversationId: UuidSchema, runId: UuidSchema })

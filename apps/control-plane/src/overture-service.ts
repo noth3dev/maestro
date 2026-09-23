@@ -6,14 +6,20 @@ import type {
   OvertureArtifact,
   OvertureEvent,
   OvertureMessage,
+  OverturePlanDocument,
   OverturePlanManifest,
+  OvertureClarification,
   OvertureRun,
+  OpenOvertureClarificationInput,
+  ReviseOverturePlanInput,
 } from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
 import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
   assertProjectRole,
+  reviseOverturePlan,
+  openOvertureClarification,
   readOvertureArtifacts,
   bindOvertureRoleModel,
   createOvertureRun,
@@ -29,6 +35,8 @@ export interface OvertureService {
   appendOperatorMessage(input: AppendOvertureMessageInput, operator: OperatorContext): Promise<OvertureMessage>;
   listArtifacts(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<readonly OvertureArtifact[]>;
   readPlanManifest(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OverturePlanManifest>;
+  revisePlan(input: ReviseOverturePlanInput, operator: OperatorContext): Promise<OverturePlanDocument>;
+  openClarification(input: OpenOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   listMessages(
     runId: string,
     projectId: string,
@@ -114,6 +122,14 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
     async readPlanManifest(runId, projectId, conversationId, operator) {
       await assertRole(operator, projectId);
       return readOverturePlanManifest(pool, runId, projectId, conversationId);
+    },
+    async revisePlan(input, operator) {
+      await assertRole(operator, input.projectId);
+      return reviseOverturePlan(pool, input);
+    },
+    async openClarification(input, operator) {
+      await assertRole(operator, input.projectId);
+      return openOvertureClarification(pool, input);
     },
     async listMessages(runId, projectId, conversationId, afterCursor, operator) {
       await assertRole(operator, projectId);

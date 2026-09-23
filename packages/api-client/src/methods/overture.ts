@@ -1,11 +1,15 @@
 import {
   AppendOvertureOperatorMessageBodySchema,
   CreateOvertureRunBodySchema,
+  ReviseOverturePlanBodySchema,
   OvertureEventQuerySchema,
   OvertureArtifactSchema,
   OvertureEventSchema,
   OvertureMessageSchema,
   OverturePlanManifestSchema,
+  OverturePlanDocumentSchema,
+  OvertureClarificationSchema,
+  OpenOvertureClarificationBodySchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
   UuidSchema,
@@ -24,6 +28,8 @@ export function createOvertureMethods(
   | "listOvertureMessages"
   | "listOvertureArtifacts"
   | "getOverturePlanManifest"
+  | "reviseOverturePlan"
+  | "openOvertureClarification"
   | "listOvertureEvents"
   | "streamOvertureEvents"
 > {
@@ -85,6 +91,39 @@ export function createOvertureMethods(
         `v1/overture/runs/${encodeURIComponent(parsedRunId)}/plan-manifest?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
         { headers },
         OverturePlanManifestSchema,
+      );
+    },
+    reviseOverturePlan(runId, documentId, input, options) {
+      const parsedRunId = UuidSchema.parse(runId);
+      const parsedDocumentId = UuidSchema.parse(documentId);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/plan-documents/${encodeURIComponent(parsedDocumentId)}`,
+        {
+          method: "PUT",
+          headers: {
+            ...headers,
+            "content-type": "application/json",
+            "idempotency-key": UuidSchema.parse(options?.idempotencyKey ?? cryptoRandomUuid()),
+          },
+          body: JSON.stringify(ReviseOverturePlanBodySchema.parse(input)),
+        },
+        OverturePlanDocumentSchema,
+      );
+    },
+    openOvertureClarification(runId, input, options) {
+      const parsedRunId = UuidSchema.parse(runId);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/clarifications`,
+        {
+          method: "POST",
+          headers: {
+            ...headers,
+            "content-type": "application/json",
+            "idempotency-key": UuidSchema.parse(options?.idempotencyKey ?? cryptoRandomUuid()),
+          },
+          body: JSON.stringify(OpenOvertureClarificationBodySchema.parse(input)),
+        },
+        OvertureClarificationSchema,
       );
     },
     listOvertureMessages(runId, query) {

@@ -1277,6 +1277,80 @@ describe("overture client", () => {
     );
   });
 
+  it("writes a plan revision and opens a clarification with idempotency keys", async () => {
+    const runId = "99999999-9999-4999-8999-999999999999";
+    const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const documentId = "88888888-8888-4888-8888-888888888888";
+    const clarification = {
+      clarificationId: "77777777-7777-4777-8777-777777777777",
+      runId,
+      projectId,
+      question: "What is out of scope?",
+      answer: null,
+      answerCommandId: null,
+      status: "open" as const,
+      commandId: "66666666-6666-4666-8666-666666666666",
+    };
+    const document = {
+      documentId,
+      projectId,
+      runId,
+      path: "plan00.md" as const,
+      kind: "project" as const,
+      version: 1,
+      content: "Plan boundary",
+      contentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sourceRefs: [],
+      dependencies: [],
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(document), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(clarification), { status: 201 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(
+      client.reviseOverturePlan(
+        runId,
+        documentId,
+        {
+          projectId,
+          conversationId,
+          path: "plan00.md",
+          kind: "project",
+          content: "Plan boundary",
+          contentHash: document.contentHash,
+          sourceRefs: [],
+          dependencies: [],
+          expectedVersion: 0,
+        },
+        { idempotencyKey: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      ),
+    ).resolves.toEqual(document);
+    await expect(
+      client.openOvertureClarification(
+        runId,
+        { projectId, conversationId, question: "What is out of scope?" },
+        { idempotencyKey: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+      ),
+    ).resolves.toEqual(clarification);
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      `https://maestro.test/v1/overture/runs/${runId}/plan-documents/${documentId}`,
+      expect.objectContaining({
+        method: "PUT",
+        headers: expect.objectContaining({ "idempotency-key": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
+      }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      `https://maestro.test/v1/overture/runs/${runId}/clarifications`,
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "idempotency-key": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }),
+      }),
+    );
+  });
+
   it("reads durable Overture messages with the same conversation cursor", async () => {
     const runId = "99999999-9999-4999-8999-999999999999";
     const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
