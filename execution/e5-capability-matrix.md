@@ -221,3 +221,7 @@ Full run 9 was invalidated by build ordering: it started before the new stable A
 ## Task 16 API error title follow-up (2026-09-24)
 
 Full run 10 found a renderer contract gap for the newly allowlisted error code: **441 files / 2,940 passed of 2,941 tests**, exit 1, duration **901.31s** (`/tmp/maestro-full-test-10.log`). Carnegie now provides a stable non-generic title; focused command-id/API verification passed 16/16 and build/typecheck/lint/diff passed. Fresh full verification remains pending.
+
+## Task 16 full regression run 11 timing note (2026-09-24)
+
+Run 11 was not green: **441 files / 2,941 passed of 2,942 tests**, exit 1, duration **898.53s** (`/tmp/maestro-full-test-11.log`). The sole failure was a short-lease worker cancellation race; diagnostics show the cancellation path correctly rejected a stale Goal proof while the successor takeover fulfilled. The test passed five isolated repetitions and the complete worker integration file (46/46). No production change was made; fresh full verification remains pending.

@@ -1438,3 +1438,7 @@ Full run 9 was started before the Launch error-mapping source/schema change had 
 ## Task 16 API error title follow-up (2026-09-24)
 
 Full run 10 exposed the required Carnegie renderer contract for the new API code: **441 files / 2,940 passed tests out of 2,941**, exit 1, duration **901.31s** (`/tmp/maestro-full-test-10.log`). The sole failure was the exhaustive `apps/carnegie/src/lib/command-id.test.ts` title check for `task_contract_orchestration_unavailable`, which still returned generic `Request failed`. Added the stable title `Task Contract orchestration is unavailable`; focused command-id/API verification passed **16 tests across 2 files**, and build/typecheck/lint/diff passed.
+
+## Task 16 full regression run 11 timing note (2026-09-24)
+
+Fresh unrestricted PostgreSQL `npm test` reached **441 files / 2,941 passed tests out of 2,942**, exit 1, duration **898.53s** (`/tmp/maestro-full-test-11.log`). The sole failure was the existing `packages/persistence/src/worker.integration.test.ts` case `holds the owner claim through provider cancellation before allowing takeover`: under full-suite database load, the test's deliberately short 250ms Goal lease expired before `cancelWorker` entered its second owner-claim transaction, so `lockGoalLease` correctly raised `StaleGoalLeaseError`; the takeover itself fulfilled. The case passed five consecutive isolated runs and a complete isolated worker integration file run (46/46). No production change is justified; this is recorded as timing-sensitive evidence and a fresh full regression is required.
