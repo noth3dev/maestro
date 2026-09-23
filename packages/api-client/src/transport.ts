@@ -3,6 +3,8 @@ import {
   ConversationEventQuerySchema,
   ConversationEventSchema,
   ConversationActivityEventSchema,
+  OvertureEventQuerySchema,
+  OvertureEventSchema,
   EventQuerySchema,
   GoalEventSchema,
   StableApiErrorSchema,
@@ -10,6 +12,8 @@ import {
   type ConversationEvent,
   type ConversationActivityEvent,
   type ConversationEventQuery,
+  type OvertureEvent,
+  type OvertureEventQuery,
   type EventQuery,
   type GoalEvent,
 } from "@maestro/contracts";
@@ -132,6 +136,58 @@ export async function* readConversationEventStream(
         const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
         if (data !== undefined) yield ConversationEventSchema.parse(JSON.parse(data));
       }
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+}
+
+export async function* readOvertureEventStream(
+  fetch: Fetch,
+  base: URL,
+  headers: Record<string, string>,
+  runId: string,
+  query: OvertureEventQuery,
+  signal?: AbortSignal,
+): AsyncGenerator<OvertureEvent> {
+  const parsed = OvertureEventQuerySchema.parse(query);
+  const url = new URL(`v1/overture/runs/${encodeURIComponent(runId)}/events/stream`, base);
+  url.search = new URLSearchParams({
+    projectId: parsed.projectId,
+    conversationId: parsed.conversationId,
+    afterCursor: parsed.afterCursor,
+  }).toString();
+  let response: Response;
+  try {
+    response = await fetch(url.href, {
+      headers: { ...headers, "last-event-id": parsed.afterCursor },
+      redirect: "error",
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch {
+    throw new Error("Control plane Overture event stream failed");
+  }
+  if (!response.ok) throw new Error(`Control plane Overture event stream returned HTTP ${response.status}`);
+  if (response.body === null) throw new Error("Control plane Overture event stream returned no body");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      buffer += decoder.decode(chunk.value, { stream: !chunk.done });
+      const records = buffer.split(/\r?\n\r?\n/);
+      buffer = records.pop() ?? "";
+      for (const record of records) {
+        if (record.match(/^event:\s*(.+)$/m)?.[1] !== "overture-event") continue;
+        const data = record.match(/^data:\s*(.+)$/m)?.[1];
+        if (data !== undefined) yield OvertureEventSchema.parse(JSON.parse(data));
+      }
+      if (chunk.done) break;
+    }
+    if (buffer.trim() !== "" && buffer.match(/^event:\s*(.+)$/m)?.[1] === "overture-event") {
+      const data = buffer.match(/^data:\s*(.+)$/m)?.[1];
+      if (data !== undefined) yield OvertureEventSchema.parse(JSON.parse(data));
     }
   } finally {
     await reader.cancel().catch(() => undefined);

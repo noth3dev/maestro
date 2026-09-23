@@ -198,6 +198,7 @@ export interface ApiClient {
     options?: { idempotencyKey?: string },
   ): Promise<OvertureMessage>;
   listOvertureEvents(runId: string, query: OvertureEventQuery): Promise<readonly OvertureEvent[]>;
+  streamOvertureEvents(runId: string, query: OvertureEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<OvertureEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;

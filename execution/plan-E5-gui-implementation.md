@@ -1071,6 +1071,8 @@ The following tasks absorb the former E6 plan into E5. They are part of the same
 
 **Task 15 Electron bridge checkpoint (2026-09-23):** Added the four typed Overture API methods to Carnegie's main-process allow-list and CommonJS preload allow-list. Focused verification passed **3 files / 51 tests** (`apiBridge`, API client, and Overture route); root build/typecheck passed. The bridge exposes persistence/API plumbing only; it does not claim renderer Overture UI, provider-backed role turns, SSE, Task Editor, Task Contract, Goal, or Worker evidence.
 
+**Task 15 event-stream checkpoint (2026-09-23):** Added cursor-reconciled Overture SSE at `/v1/overture/runs/:runId/events/stream` with `Last-Event-ID` validation, bounded active-stream registration, polling, heartbeat, cleanup, and typed API-client parsing/reconnect headers. Focused verification passed **3 files / 52 tests** (API client, Control Plane Overture routes, Carnegie bridge); root build/typecheck, targeted ESLint, and `git diff --check` passed. The stream carries durable Overture events only; it does not claim role/provider execution, message streaming, artifacts/plans/linked Task Contract, renderer UI, or downstream Goal/Worker evidence.
+
 ### Task 15: Implement role-specific Crew runtime and interactive Task Editor
 
 **Purpose:** Make Concertmaster awaken real Crew roles that converse with the operator instead of producing hidden one-shot reports.

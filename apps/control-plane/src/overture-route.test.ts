@@ -57,7 +57,18 @@ async function app() {
   fastify.setErrorHandler((error, _request, reply) =>
     reply.status(error instanceof RequestValidationError ? 400 : 500).send({ error: error.message }),
   );
-  registerOvertureRoutes(fastify, { overture: service() });
+  registerOvertureRoutes(fastify, {
+    overture: service(),
+    pollingScheduler: {
+      setInterval: ((callback: () => void, delay: number) => setInterval(callback, delay)) as unknown as (
+        callback: () => void,
+        delayMs: number,
+      ) => ReturnType<typeof setInterval>,
+      clearInterval: (timer) => clearInterval(timer),
+    },
+    activeStreams: new Set(),
+    maxActiveStreams: 4,
+  });
   await fastify.ready();
   return fastify;
 }

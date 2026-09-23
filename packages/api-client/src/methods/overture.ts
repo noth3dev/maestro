@@ -8,14 +8,14 @@ import {
   OvertureRunSchema,
   UuidSchema,
 } from "@maestro/contracts";
-import { cryptoRandomUuid } from "../transport.js";
+import { cryptoRandomUuid, readOvertureEventStream } from "../transport.js";
 import type { ApiClient } from "../client.js";
 import type { MethodContext } from "../context.js";
 
 export function createOvertureMethods(
   ctx: MethodContext,
-): Pick<ApiClient, "createOvertureRun" | "getOvertureRun" | "sendOvertureOperatorMessage" | "listOvertureEvents"> {
-  const { request, headers } = ctx;
+): Pick<ApiClient, "createOvertureRun" | "getOvertureRun" | "sendOvertureOperatorMessage" | "listOvertureEvents" | "streamOvertureEvents"> {
+  const { request, headers, fetch, base } = ctx;
   return {
     createOvertureRun(input, options) {
       return request(
@@ -65,6 +65,9 @@ export function createOvertureMethods(
         { headers },
         OvertureEventSchema.array(),
       );
+    },
+    streamOvertureEvents(runId, query, options) {
+      return readOvertureEventStream(fetch, base, headers, UuidSchema.parse(runId), query, options?.signal);
     },
   };
 }

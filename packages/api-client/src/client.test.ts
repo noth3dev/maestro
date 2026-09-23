@@ -1237,4 +1237,29 @@ describe("overture client", () => {
       expect.anything(),
     );
   });
+
+  it("streams typed Overture events from the reconnect cursor", async () => {
+    const conversationId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const streamRunId = "99999999-9999-4999-8999-999999999999";
+    const event = {
+      eventId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      runId: streamRunId,
+      projectId,
+      cursor: "2",
+      eventType: "run_created" as const,
+      payload: {},
+      createdAt: "2026-09-23T00:00:00.000Z",
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(`id: 2\nevent: overture-event\ndata: ${JSON.stringify(event)}\n\n: heartbeat\n\n`));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    const received = [];
+    for await (const item of client.streamOvertureEvents(streamRunId, { projectId, conversationId, afterCursor: "1" })) received.push(item);
+    expect(received).toEqual([event]);
+    expect(fetch).toHaveBeenCalledWith(
+      `https://maestro.test/v1/overture/runs/${streamRunId}/events/stream?projectId=${projectId}&conversationId=${conversationId}&afterCursor=1`,
+      expect.objectContaining({ headers: { authorization: "Bearer top-secret", "last-event-id": "1" } }),
+    );
+  });
 });
