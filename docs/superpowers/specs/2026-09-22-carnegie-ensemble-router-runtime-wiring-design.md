@@ -67,6 +67,8 @@ The existing `operator_settings.model_pool` remains the persisted operator prefe
 
 The pool is an additional allow-list. It can narrow a Mission Bundle but cannot expand it. It cannot override the candidate catalog, model map, Goal snapshot, provider facts, or account binding.
 
+`RouterCatalogEntry.inUse` reports static pool eligibility only: the model must have a human-owned profile, explicit candidate membership, and either an empty pool or an exact pool entry. It does not imply live, Goal, Mission Bundle, or account-authorization readiness. `poolModelRefs` retains the raw saved preferences, including refs that are not current candidates.
+
 The authenticated operator identity must be carried explicitly into the worker admission factory. The current Head actor identity is not sufficient because it is a role/session identity, not necessarily the operator who changed Settings.
 
 ### 4.3 Fail-closed behavior
@@ -94,7 +96,7 @@ Carnegie Router Catalog
   │     ├─ operator pool
   │     └─ routing mode/status
   │
-  └─ PATCH /v1/settings/model-pool
+  └─ PUT /v1/router/config
           │
           └─ operator_settings.model_pool
 
@@ -148,10 +150,13 @@ Add a dedicated contract rather than overloading `SettingsRead`:
 ```ts
 type RouterRuntimeMode = "ensemble" | "pin";
 type RouterRowState =
+  | "routable"
   | "pool-disabled"
   | "live-unavailable"
+  | "live-unknown"
   | "unprofiled"
   | "not-a-candidate"
+  | "candidate-unknown"
   | "catalog-ready";
 
 interface RouterCatalogEntry {
@@ -164,13 +169,15 @@ interface RouterCatalogEntry {
     reviewedAt?: string;
   };
   live: {
-    present: boolean;
+    /** null = Gateway catalog unavailable; false = successful read with no exact model match. */
+    present: boolean | null;
     capabilities: string[];
     authModes: string[];
     regions: string[];
   };
   candidate: {
-    present: boolean;
+    /** null = candidate catalog unavailable; false = successful read with no exact model match. */
+    present: boolean | null;
     candidateRefs: string[];
     accountBindings: string[];
   };
@@ -188,9 +195,13 @@ interface RouterCatalogRead {
 }
 ```
 
+`routable` remains schema-permitted, but current catalog composition emits `catalog-ready` for static readiness; no row state promises downstream Goal, Mission Bundle, live-provider, or account admission success. `present: null` means that source could not be read; `false` means the source was read successfully and omitted the exact model. Candidate and live source states are independent. Use `candidate-unknown` and `live-unknown` for unknown membership, and reserve `not-a-candidate` / `live-unavailable` for confirmed absence. The UI shows source-specific “not checked” text for null and keeps candidate switches disabled when candidate membership is unknown. If both sources fail, the catalog reason reports both; with no rows, the existing top-level inactive/partial status and reason remain the outage signal. Row-state priority is unprofiled, candidate-unknown, not-a-candidate, pool-disabled, live-unknown, live-unavailable, then catalog-ready; the source cells still show each independent result. A syntactically valid candidate catalog with `entries: []` is a known empty set, not a source outage: profiled rows show candidate `present: false`, `not-a-candidate`, and `inUse: false`; the top-level status is `partial`, `active` is false, and the reason says no candidates are configured. Missing, malformed, or unreadable catalogs keep candidate presence unknown and status inactive.
+
 `catalog-ready` means that the static model map, candidate binding, and current live catalog are present. It does not promise that a future Goal's Mission Bundle, TaskDemand, or Goal-scoped observation will accept the row. Those checks remain admission-time checks.
 
 The response contains no secrets. Account bindings are opaque references only.
+
+The `@maestro/contracts` Zod schema is the authority for this v1 response. Ship the Control Plane and Carnegie consumer together: updated consumers accept existing boolean `present` values and default a missing `nonCandidateModelRefs` to `[]`; older strict clients may reject null membership, the new unknown states, or the added validation field. This does not bump the API endpoint version, change the operator-config JSON schemaVersion, or require a database schema migration.
 
 ### 6.4 Safe config import/export
 
@@ -210,7 +221,9 @@ Upload is a preview/apply flow:
 3. show the resulting state changes and models that are live-only or not candidates
 4. apply only after explicit confirmation through an atomic bulk model-pool write
 
-Add `PUT /v1/router/config` for the confirmed bulk write. It accepts the same strict `{ schemaVersion, enabledModelRefs }` document and replaces the operator pool in one transaction. The existing single-model `PATCH /v1/settings/model-pool` remains for row toggles and uses the same persistence validation. The UI must not implement an import by issuing a sequence of independent toggles.
+Validation `changes` describe static `inUse` transitions for explicit candidates only. When the candidate catalog is available, profiled refs outside it appear in `nonCandidateModelRefs` as informational warnings; they remain valid, persistable preferences but do not become routable. If the candidate catalog is unavailable, the preview must not classify refs by candidate membership. Live-only Gateway refs are identified only when the live catalog is available; they remain invalid until a human-owned profile exists. A source outage must not be rendered as confirmed absence.
+
+Add `PUT /v1/router/config` for the confirmed bulk write. It accepts the same strict `{ schemaVersion, enabledModelRefs }` document and replaces the operator pool in one transaction. The Router Catalog UI uses this same atomic full-pool route for single-row toggles and confirmed imports. The existing single-model `PATCH /v1/settings/model-pool` remains for direct settings clients, but is not used by the Router Catalog panel. The UI must not implement an import by issuing a sequence of independent toggles.
 
 Import cannot modify the human model map or candidate catalog. Candidate catalog changes remain deployment/configuration work and require the same explicit account binding and human baseline checks as today.
 
@@ -233,7 +246,7 @@ Do not duplicate model map parsing in multiple routes.
 
 Add read-only `GET /v1/router/catalog` with the authenticated operator context.
 
-Keep the existing `PATCH /v1/settings/model-pool` endpoint as the single-row write path for pool changes so existing Settings behavior and persistence remain compatible. Add `PUT /v1/router/config` for an atomic complete-pool replacement. The Router UI must call one of these paths, then reload `GET /v1/router/catalog`.
+Keep the existing `PATCH /v1/settings/model-pool` endpoint for direct settings clients. Carnegie's Router Catalog uses `PUT /v1/router/config` for both single-row toggles and imports, each as one atomic complete-pool replacement. The PUT response contains a freshly recomposed `RouterCatalogRead`, which Carnegie adopts directly; it does not issue a second GET. Serialize GUI pool writes and disable row toggles and catalog refresh while import validation, preview, or apply is active so the confirmation diff remains current. This gate serializes only operations from the mounted Carnegie panel; it does not fence direct or other concurrent API clients, which remain last-writer-wins because this contract has no compare-and-swap revision.
 
 Add `POST /v1/router/config/validate` for upload preview. It must not mutate state.
 
@@ -281,16 +294,17 @@ Columns:
 - in-use toggle
 - router state
 
-The toggle is disabled for rows that are not in the human baseline or explicit candidate catalog. It can narrow the pool but cannot make an unprofiled row routable.
+The toggle is disabled for rows that are not in the human baseline, are confirmed absent from the candidate catalog, or have unknown candidate membership. Unknown candidate/live source results display “not checked”; only successful source reads may produce confirmed absence labels. The pool toggle can narrow preferences but cannot make an unprofiled or unknown row routable.
 
 ### Empty and failure states
 
 Show actionable messages:
 
-- candidate catalog missing: configure candidate catalog before Ensemble worker admission
+- candidate catalog missing: candidate membership/account binding is not checked; configure the candidate catalog before Ensemble worker admission
 - model map missing/invalid: fix human-owned model map
-- live Gateway unavailable: provider availability cannot be confirmed
+- live Gateway catalog unavailable: live membership is not checked; provider availability cannot be confirmed
 - no catalog-ready rows: the current pool or live/catalog state leaves no static candidate; Goal and task requirements can still remove candidates at admission time
+- if both candidate and live sources fail, the reason reports both; unknown source state is not rendered as confirmed absence
 - pin mode: pool changes affect display only until Ensemble mode is enabled
 
 ## 9. Persistence and security
@@ -326,9 +340,10 @@ Pool state is an allow-list, never an authority grant. It cannot add tools, path
 ### API/UI tests
 
 - catalog groups `openai` and `openai-codex` separately
-- live-only models display as unprofiled and cannot be enabled
+- candidate membership and live Gateway membership distinguish unknown (`null`) from confirmed absence (`false`)
+- live-only models display as unprofiled only when live membership was successfully read and cannot be enabled
 - upload preview does not mutate the database
-- confirmed upload persists through the existing model-pool endpoint
+- single-row toggles and confirmed imports both persist atomically through `PUT /v1/router/config`; the response returns a freshly composed catalog that Carnegie adopts without a separate GET; the panel serializes writes and blocks row toggles/refresh while validation, preview, or apply is active; `PATCH /v1/settings/model-pool` remains available to direct settings clients
 - UI reflects runtime mode and inactive reasons
 - toggling a model changes the next worker routing decision, not just the rendered row
 

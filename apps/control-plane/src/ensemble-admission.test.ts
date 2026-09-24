@@ -60,6 +60,26 @@ describe("ensemble native admission", () => {
     expect(decision.routingEvidence.approvalRef).toBeNull();
   });
 
+  it("escalates an empty candidate catalog before creating native admission", () => {
+    let error: unknown;
+    try {
+      createEnsembleNativeAdmission(config, {
+        snapshot,
+        modelMap,
+        candidates: [],
+        routeRef: "worker:worker-1:1",
+        base,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({
+      name: "EnsembleRoutingShortfallError",
+      shortfall: { pressure: { decisionLayer: "Encore Council" }, rejected: [] },
+    });
+  });
+
   it("rejects project-scoped context before ensemble worker routing", () => {
     expect(() => createEnsembleNativeAdmission(config, {
       snapshot,

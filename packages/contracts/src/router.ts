@@ -8,8 +8,10 @@ export const RouterRowStateSchema = z.enum([
   "routable",
   "pool-disabled",
   "live-unavailable",
+  "live-unknown",
   "unprofiled",
   "not-a-candidate",
+  "candidate-unknown",
   "catalog-ready",
 ]);
 export type RouterRowState = z.infer<typeof RouterRowStateSchema>;
@@ -30,7 +32,8 @@ const RouterCatalogBaselineSchema = z
   .strict();
 const RouterCatalogLiveSchema = z
   .object({
-    present: z.boolean(),
+    /** Null means the Gateway catalog could not be read; false means a successful read omitted the model. */
+    present: z.boolean().nullable(),
     capabilities: z.array(z.string().min(1)),
     authModes: z.array(z.enum(["api-key", "managed-subscription"])),
     regions: z.array(z.string().min(1)),
@@ -38,7 +41,8 @@ const RouterCatalogLiveSchema = z
   .strict();
 const RouterCatalogCandidateSchema = z
   .object({
-    present: z.boolean(),
+    /** Null means the candidate catalog could not be read; false means a successful read omitted the model. */
+    present: z.boolean().nullable(),
     candidateRefs: z.array(z.string().min(1)),
     accountBindings: z.array(z.string().min(1)),
   })
@@ -52,6 +56,7 @@ export const RouterCatalogEntrySchema = z
     baseline: RouterCatalogBaselineSchema,
     live: RouterCatalogLiveSchema,
     candidate: RouterCatalogCandidateSchema,
+    /** True when the profiled explicit candidate is allowed by the operator pool. */
     inUse: z.boolean(),
     state: RouterRowStateSchema,
   })
@@ -70,11 +75,13 @@ export const RouterCatalogReadSchema = z
   .strict();
 export type RouterCatalogRead = z.infer<typeof RouterCatalogReadSchema>;
 
+/** `changes` describe static `inUse` transitions; noncandidate refs remain valid operator preferences. */
 export const RouterConfigValidationSchema = z
   .object({
     valid: z.boolean(),
     enabledModelRefs: UniqueModelRefsSchema,
     unknownModelRefs: UniqueModelRefsSchema,
+    nonCandidateModelRefs: UniqueModelRefsSchema.default([]),
     changes: z
       .array(z.object({ modelRef: ModelRefSchema, previousInUse: z.boolean(), nextInUse: z.boolean() }).strict())
       .refine(

@@ -19,6 +19,53 @@ describe("Router Catalog contracts", () => {
     expect(RouterConfigInputSchema.safeParse({ schemaVersion: 1, enabledModelRefs: ["provider/model/extra"] }).success).toBe(false);
   });
 
+  it("distinguishes unknown source results from confirmed absence", () => {
+    const baseEntry = {
+      modelRef: "openai/model-a",
+      providerId: "openai",
+      modelId: "model-a",
+      baseline: { present: true, score: 140, reviewedAt: "2026-09-22T00:00:00.000Z" },
+      live: { present: true, capabilities: ["text"], authModes: ["api-key"], regions: ["US"] },
+      candidate: { present: true, candidateRefs: ["candidate-a"], accountBindings: ["opaque-account"] },
+      inUse: true,
+      state: "catalog-ready",
+    };
+    const unknownCandidate = {
+      mode: "ensemble",
+      active: false,
+      status: "inactive",
+      reason: "Candidate catalog is unavailable.",
+      poolModelRefs: ["openai/model-a"],
+      entries: [
+        {
+          ...baseEntry,
+          candidate: { present: null, candidateRefs: [], accountBindings: [] },
+          live: { present: null, capabilities: [], authModes: [], regions: [] },
+          inUse: false,
+          state: "candidate-unknown",
+        },
+      ],
+    };
+    const unknownLive = {
+      mode: "ensemble",
+      active: false,
+      status: "partial",
+      reason: "Live Gateway catalog is unavailable.",
+      poolModelRefs: ["openai/model-a"],
+      entries: [
+        {
+          ...baseEntry,
+          live: { present: null, capabilities: [], authModes: [], regions: [] },
+          inUse: true,
+          state: "live-unknown",
+        },
+      ],
+    };
+
+    expect(RouterCatalogReadSchema.parse(unknownCandidate)).toEqual(unknownCandidate);
+    expect(RouterCatalogReadSchema.parse(unknownLive)).toEqual(unknownLive);
+  });
+
   it("accepts the strict catalog and validation response shapes", () => {
     const catalog = {
       mode: "ensemble",
@@ -44,6 +91,7 @@ describe("Router Catalog contracts", () => {
         valid: true,
         enabledModelRefs: ["openai/model-a"],
         unknownModelRefs: [],
+        nonCandidateModelRefs: [],
         changes: [{ modelRef: "openai/model-a", previousInUse: false, nextInUse: true }],
       }),
     ).toBeTruthy();

@@ -34,6 +34,13 @@ describe("production routing candidate catalog", () => {
     expect(readFileSync(files.modelMapPath, "utf8")).toBe(files.original);
   });
 
+  it("accepts a valid empty candidate list as a known empty set", () => {
+    const files = catalogFile([]);
+    const catalog = readRoutingCandidateCatalog(files);
+    expect(catalog.candidates).toEqual([]);
+    expect(Object.isFrozen(catalog.candidates)).toBe(true);
+  });
+
   it("fails closed when a catalog model is absent from the human-owned model_map", () => {
     const files = catalogFile([{ candidateRef: "unknown", modelRef: "provider/not-in-model-map", accountBinding: "account" }]);
     expect(() => readRoutingCandidateCatalog(files)).toThrow(/model_map|modelRef/i);

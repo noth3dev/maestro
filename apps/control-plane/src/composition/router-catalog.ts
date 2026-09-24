@@ -27,11 +27,13 @@ export interface RouterCatalogDeps {
 
 type GatewayModel = Awaited<ReturnType<ModelGatewayPort["listModels"]>>[number];
 type Baseline = { present: true; score: number | null; reviewedAt?: string } | { present: false; score: null };
-type CandidateState =
-  { present: true; candidateRefs: string[]; accountBindings: string[] } | { present: false; candidateRefs: []; accountBindings: [] };
-type LiveState =
-  | { present: true; capabilities: string[]; authModes: ("api-key" | "managed-subscription")[]; regions: string[] }
-  | { present: false; capabilities: []; authModes: []; regions: [] };
+type CandidateState = { present: boolean | null; candidateRefs: string[]; accountBindings: string[] };
+type LiveState = {
+  present: boolean | null;
+  capabilities: string[];
+  authModes: ("api-key" | "managed-subscription")[];
+  regions: string[];
+};
 
 interface CatalogSources {
   readonly modelMap: ReturnType<typeof readModelMapSource>["modelMap"];
@@ -54,7 +56,8 @@ function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function liveState(models: readonly GatewayModel[], modelRef: string): LiveState {
+function liveState(models: readonly GatewayModel[], modelRef: string, liveAvailable: boolean): LiveState {
+  if (!liveAvailable) return { present: null, capabilities: [], authModes: [], regions: [] };
   const matching = models.filter((model) => `${model.identity.provider}/${model.identity.id}` === modelRef);
   if (matching.length === 0) return { present: false, capabilities: [], authModes: [], regions: [] };
   return {
@@ -72,7 +75,8 @@ function baselineState(modelMap: CatalogSources["modelMap"], modelRef: string): 
     : { present: true, score: averageScore(entry), reviewedAt: entry.provenance.reviewedAt };
 }
 
-function candidateState(candidates: CatalogSources["candidates"], modelRef: string): CandidateState {
+function candidateState(candidates: CatalogSources["candidates"], modelRef: string, candidateCatalogAvailable: boolean): CandidateState {
+  if (!candidateCatalogAvailable) return { present: null, candidateRefs: [], accountBindings: [] };
   const matching = candidates.filter((candidate) => candidate.modelRef === modelRef);
   if (matching.length === 0) return { present: false, candidateRefs: [], accountBindings: [] };
   return {
@@ -90,23 +94,18 @@ function rowState(input: {
   modelRef: string;
 }): RouterCatalogEntry["state"] {
   if (!input.baseline.present) return "unprofiled";
+  if (input.candidate.present === null) return "candidate-unknown";
   if (!input.candidate.present) return "not-a-candidate";
   if (input.pool.length > 0 && !input.pool.includes(input.modelRef)) return "pool-disabled";
+  if (input.live.present === null) return "live-unknown";
   if (!input.live.present) return "live-unavailable";
   return "catalog-ready";
 }
 
-async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
-  let modelMap: CatalogSources["modelMap"];
-  let modelMapPath: string;
-  try {
-    const source = readModelMapSource();
-    modelMap = source.modelMap;
-    modelMapPath = source.path;
-  } catch {
-    throw new Error("Human-owned model_map is unavailable or invalid");
-  }
-
+function readCandidateCatalog(
+  deps: RouterCatalogDeps,
+  modelMapPath: string,
+): Pick<CatalogSources, "candidates" | "candidateCatalogAvailable" | "reason"> {
   let candidates: CatalogSources["candidates"] = [];
   let candidateCatalogAvailable = false;
   let reason: string | undefined;
@@ -120,6 +119,26 @@ async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
       reason = "Candidate catalog is unavailable or invalid; configure it before Ensemble worker admission.";
     }
   }
+  return { candidates, candidateCatalogAvailable, ...(reason === undefined ? {} : { reason }) };
+}
+
+async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
+  let modelMap: CatalogSources["modelMap"];
+  let modelMapPath: string;
+  try {
+    const source = readModelMapSource();
+    modelMap = source.modelMap;
+    modelMapPath = source.path;
+  } catch {
+    throw new Error("Human-owned model_map is unavailable or invalid");
+  }
+
+  const candidateSource = readCandidateCatalog(deps, modelMapPath);
+  const { candidates, candidateCatalogAvailable } = candidateSource;
+  let reason = candidateSource.reason;
+  const addReason = (message: string) => {
+    reason = reason === undefined ? message : `${reason} ${message}`;
+  };
 
   let liveModels: readonly GatewayModel[] = [];
   let liveAvailable = false;
@@ -128,13 +147,18 @@ async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
       liveModels = await deps.modelGateway.listModels({ operatorId: deps.config.modelGatewayOperatorId });
       liveAvailable = true;
     } catch {
-      reason ??= "Live Gateway catalog is unavailable; provider availability cannot be confirmed.";
+      addReason("Live Gateway catalog is unavailable; provider availability cannot be confirmed.");
     }
   } else {
-    reason ??= "Live Gateway catalog is unavailable; provider availability cannot be confirmed.";
+    addReason("Live Gateway catalog is unavailable; provider availability cannot be confirmed.");
   }
 
-  let candidateSetReady = candidateCatalogAvailable && liveAvailable;
+  let candidateSetReady = candidateCatalogAvailable && liveAvailable && candidates.length > 0;
+  if (candidateCatalogAvailable && candidates.length === 0) {
+    addReason(
+      "Candidate catalog is valid but contains no candidates; Ensemble worker admission is unavailable until a candidate is configured.",
+    );
+  }
   if (candidateSetReady) {
     const liveRefs = new Set(liveModels.map((model) => `${model.identity.provider}/${model.identity.id}`));
     const allCandidatesLive = candidates.every((candidate) => liveRefs.has(candidate.modelRef));
@@ -145,13 +169,21 @@ async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
     });
     if (!allCandidatesLive) {
       candidateSetReady = false;
-      reason ??= "Configured candidate catalog contains models unavailable from the live Gateway.";
+      addReason("Configured candidate catalog contains models unavailable from the live Gateway.");
     } else if (!allBindingsAuthorized) {
       candidateSetReady = false;
-      reason ??= "Configured candidate catalog contains an unauthorized account binding.";
+      addReason("Configured candidate catalog contains an unauthorized account binding.");
     }
   }
-  return { modelMap, candidates, candidateCatalogAvailable, candidateSetReady, liveModels, liveAvailable, ...(reason === undefined ? {} : { reason }) };
+  return {
+    modelMap,
+    candidates,
+    candidateCatalogAvailable,
+    candidateSetReady,
+    liveModels,
+    liveAvailable,
+    ...(reason === undefined ? {} : { reason }),
+  };
 }
 
 function buildRead(deps: RouterCatalogDeps, pool: readonly string[], sources: CatalogSources): RouterCatalogRead {
@@ -161,8 +193,8 @@ function buildRead(deps: RouterCatalogDeps, pool: readonly string[], sources: Ca
   const refs = [...new Set([...baselineRefs, ...candidateRefs, ...liveRefs])];
   const entries = refs.map((modelRef): RouterCatalogEntry => {
     const baseline = baselineState(sources.modelMap, modelRef);
-    const candidate = candidateState(sources.candidates, modelRef);
-    const live = liveState(sources.liveModels, modelRef);
+    const candidate = candidateState(sources.candidates, modelRef, sources.candidateCatalogAvailable);
+    const live = liveState(sources.liveModels, modelRef, sources.liveAvailable);
     const separator = modelRef.indexOf("/");
     const providerId = modelRef.slice(0, separator);
     const modelId = modelRef.slice(separator + 1);
@@ -173,11 +205,15 @@ function buildRead(deps: RouterCatalogDeps, pool: readonly string[], sources: Ca
       baseline,
       live,
       candidate,
-      inUse: baseline.present && (pool.length === 0 || pool.includes(modelRef)),
+      inUse: baseline.present && candidate.present === true && (pool.length === 0 || pool.includes(modelRef)),
       state: rowState({ baseline, candidate, live, pool, modelRef }),
     };
   });
-  const status = !sources.candidateCatalogAvailable ? "inactive" : !sources.liveAvailable || !sources.candidateSetReady ? "partial" : "ready";
+  const status = !sources.candidateCatalogAvailable
+    ? "inactive"
+    : !sources.liveAvailable || !sources.candidateSetReady
+      ? "partial"
+      : "ready";
   return {
     mode: deps.config.modelRoutingMode,
     active: deps.config.modelRoutingMode === "ensemble" && status === "ready",
@@ -218,18 +254,27 @@ export function composeRouterCatalogService(deps: RouterCatalogDeps): RouterCata
 
   async function validate(operatorId: string, input: RouterConfigInput): Promise<RouterConfigValidation> {
     const parsed = RouterConfigInputSchema.parse(input);
-    const source = readModelMapSource().modelMap;
-    const knownRefs = new Set(source.entries.map((entry) => entry.modelRef));
+    const modelMapSource = readModelMapSource();
+    const knownRefs = new Set(modelMapSource.modelMap.entries.map((entry) => entry.modelRef));
+    const candidateSource = readCandidateCatalog(deps, modelMapSource.path);
+    const eligibleRefs = [
+      ...new Set(candidateSource.candidates.map((candidate) => candidate.modelRef).filter((ref) => knownRefs.has(ref))),
+    ].sort();
+    const eligibleSet = new Set(eligibleRefs);
     const enabledModelRefs = [...parsed.enabledModelRefs].sort();
     const unknownModelRefs = enabledModelRefs.filter((modelRef) => !knownRefs.has(modelRef));
+    const nonCandidateModelRefs = candidateSource.candidateCatalogAvailable
+      ? enabledModelRefs.filter((modelRef) => knownRefs.has(modelRef) && !eligibleSet.has(modelRef))
+      : [];
     const previousRefs = await readEnabledModelRefs(deps.pool, operatorId);
-    const previousInUse = new Set(previousRefs.length === 0 ? [...knownRefs] : previousRefs);
-    const nextInUse = new Set(parsed.enabledModelRefs.length === 0 ? [...knownRefs] : parsed.enabledModelRefs);
-    const changes = [...knownRefs]
-      .sort()
+    const previousInUse = new Set(previousRefs.length === 0 ? eligibleRefs : previousRefs.filter((ref) => eligibleSet.has(ref)));
+    const nextInUse = new Set(
+      parsed.enabledModelRefs.length === 0 ? eligibleRefs : parsed.enabledModelRefs.filter((ref) => eligibleSet.has(ref)),
+    );
+    const changes = eligibleRefs
       .filter((modelRef) => previousInUse.has(modelRef) !== nextInUse.has(modelRef))
       .map((modelRef) => ({ modelRef, previousInUse: previousInUse.has(modelRef), nextInUse: nextInUse.has(modelRef) }));
-    return { valid: unknownModelRefs.length === 0, enabledModelRefs, unknownModelRefs, changes };
+    return { valid: unknownModelRefs.length === 0, enabledModelRefs, unknownModelRefs, nonCandidateModelRefs, changes };
   }
 
   return {

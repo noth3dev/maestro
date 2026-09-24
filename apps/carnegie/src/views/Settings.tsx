@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
-  RouterConfigInputSchema,
   type ProviderAccountLoginStartResult,
   type ProviderAccountLoginStatus,
   type RouterCatalogEntry,
@@ -14,6 +13,10 @@ import { isSessionFailure, useConnection } from "../connection.js";
 import { ToggleSwitch } from "../components/ToggleSwitch.js";
 import { isProviderAuthUrlAllowed, waitForProviderAccountLogin } from "../lib/provider-account-login.js";
 import { createSettingsStore, raisesAuthority, redactSecret, type SettingsApi } from "../lib/settings-data.js";
+import { RouterConfigImportPreview } from "./RouterConfigImportPreview.js";
+import { createRouterConfigImportController } from "./router-config-import.js";
+import { createRouterPoolMutationGate, routerPoolControlsLocked } from "./router-pool-mutation.js";
+export { routerConfigDocument } from "./router-config-import.js";
 
 type Panel = "profile" | "appearance" | "connection" | "notifications" | "providers" | "models" | "authority" | "danger";
 
@@ -154,16 +157,15 @@ type RouterCatalogPanelProps = {
   onApplyConfig: (input: RouterConfigInput) => Promise<RouterCatalogRead>;
 };
 
-export function routerConfigDocument(value: unknown): RouterConfigInput {
-  return RouterConfigInputSchema.parse(value);
-}
-
 export function nextRouterPool(catalog: RouterCatalogRead, modelRef: string, inUse: boolean): string[] {
   const eligible = catalog.entries.filter((entry) => entry.baseline.present && entry.candidate.present).map((entry) => entry.modelRef);
+  const eligibleRefs = new Set(eligible);
   const next = new Set(catalog.poolModelRefs.length === 0 ? eligible : catalog.poolModelRefs);
   if (inUse) next.add(modelRef);
   else {
-    if (next.size <= 1 && next.has(modelRef)) throw new Error("At least one catalog candidate must remain enabled");
+    const enabledCandidateCount = [...next].filter((ref) => eligibleRefs.has(ref)).length;
+    if (eligibleRefs.has(modelRef) && next.has(modelRef) && enabledCandidateCount <= 1)
+      throw new Error("At least one catalog candidate must remain enabled");
     next.delete(modelRef);
   }
   return next.size === eligible.length && eligible.every((ref) => next.has(ref)) ? [] : [...next].sort();
@@ -174,19 +176,60 @@ function routerStatusLabel(catalog: RouterCatalogRead): string {
   return catalog.status === "ready" ? "Ready" : catalog.status === "partial" ? "Partial" : "Inactive";
 }
 
+const routerRowStateLabels: Record<RouterCatalogEntry["state"], string> = {
+  routable: "routable",
+  "pool-disabled": "pool disabled",
+  "live-unavailable": "not listed in live Gateway catalog",
+  "live-unknown": "live Gateway catalog not checked",
+  unprofiled: "unprofiled",
+  "not-a-candidate": "not a candidate",
+  "candidate-unknown": "candidate status unknown",
+  "catalog-ready": "catalog ready",
+};
+const routerRowStateFilterValues: RouterCatalogEntry["state"][] = [
+  "catalog-ready",
+  "pool-disabled",
+  "live-unavailable",
+  "live-unknown",
+  "unprofiled",
+  "not-a-candidate",
+  "candidate-unknown",
+  "routable",
+];
+
 function routerRowCanToggle(entry: RouterCatalogEntry): boolean {
-  return entry.baseline.present && entry.candidate.present;
+  return entry.baseline.present && entry.candidate.present === true;
 }
 
-function RouterRow({ entry, busy, onToggle }: { entry: RouterCatalogEntry; busy: boolean; onToggle: (entry: RouterCatalogEntry) => void }) {
+export function RouterRow({
+  entry,
+  busy,
+  locked,
+  lockStatusId,
+  onToggle,
+}: {
+  entry: RouterCatalogEntry;
+  busy: boolean;
+  locked: boolean;
+  lockStatusId: string;
+  onToggle: (entry: RouterCatalogEntry) => void;
+}) {
   const canToggle = routerRowCanToggle(entry);
   const disabledReason = !entry.baseline.present
-    ? "unprofiled — add a human-owned model profile before enabling"
-    : !entry.candidate.present
-      ? "not a candidate — configure an explicit account binding before enabling"
-      : entry.state === "live-unavailable"
-        ? "live availability is not confirmed"
-        : undefined;
+    ? "Unprofiled — add a human-owned model profile before enabling."
+    : entry.candidate.present === null
+      ? "Candidate catalog unavailable; membership and account binding are not checked. Restore/configure the catalog, then refresh."
+      : entry.candidate.present === false
+        ? "Not a candidate — configure an explicit account binding before enabling."
+        : entry.live.present === null
+          ? "Live Gateway catalog not checked; availability is unconfirmed."
+          : entry.live.present === false
+            ? "Not listed in the live Gateway catalog."
+            : undefined;
+  const disabledReasonId = `router-disabled-${encodeURIComponent(entry.modelRef)}`;
+  const descriptionIds = [locked && canToggle ? lockStatusId : undefined, disabledReason !== undefined ? disabledReasonId : undefined]
+    .filter((id): id is string => id !== undefined)
+    .join(" ");
   return (
     <tr className={!canToggle ? "router-catalog-row is-disabled" : undefined}>
       <td>
@@ -195,13 +238,24 @@ function RouterRow({ entry, busy, onToggle }: { entry: RouterCatalogEntry; busy:
       </td>
       <td>{entry.baseline.present ? (entry.baseline.score === null ? "unscored" : entry.baseline.score.toFixed(1)) : "not profiled"}</td>
       <td>
-        {entry.live.present ? <span className="badge badge-olive">available</span> : <span className="badge badge-slate">unavailable</span>}
+        {entry.live.present === true ? (
+          <span className="badge badge-olive">listed</span>
+        ) : entry.live.present === false ? (
+          <span className="badge badge-slate">not listed in live Gateway catalog</span>
+        ) : (
+          <span className="badge badge-slate">not checked in live Gateway catalog</span>
+        )}
       </td>
       <td>
-        {entry.candidate.present ? (
+        {entry.candidate.present === true ? (
           <>
             <span>{entry.candidate.candidateRefs.join(", ")}</span>
             <span className="router-model-ref">{entry.candidate.accountBindings.join(", ")}</span>
+          </>
+        ) : entry.candidate.present === null ? (
+          <>
+            <span className="badge badge-slate">candidate membership not checked</span>
+            <span className="router-model-ref">account binding not checked</span>
           </>
         ) : (
           <span className="badge badge-slate">not a candidate</span>
@@ -213,16 +267,21 @@ function RouterRow({ entry, busy, onToggle }: { entry: RouterCatalogEntry; busy:
           role="switch"
           aria-checked={entry.inUse}
           aria-label={`${entry.inUse ? "Disable" : "Enable"} ${entry.modelRef}`}
+          aria-describedby={descriptionIds || undefined}
           className={`router-toggle${entry.inUse ? " on" : ""}`}
-          disabled={!canToggle || busy}
+          disabled={!canToggle || busy || locked}
           onClick={() => onToggle(entry)}
         >
           {busy ? "saving…" : entry.inUse ? "in use" : "enable"}
         </button>
-        {disabledReason !== undefined && <span className="router-disabled-reason">{disabledReason}</span>}
+        {disabledReason !== undefined && (
+          <span id={disabledReasonId} className="router-disabled-reason">
+            {disabledReason}
+          </span>
+        )}
       </td>
       <td>
-        <span className={`router-state router-state-${entry.state}`}>{entry.state}</span>
+        <span className={`router-state router-state-${entry.state}`}>{routerRowStateLabels[entry.state]}</span>
       </td>
     </tr>
   );
@@ -242,10 +301,26 @@ export function RouterCatalogPanel({
   const [stateFilter, setStateFilter] = useState("all");
   const [inUseFilter, setInUseFilter] = useState("all");
   const [busyModelRef, setBusyModelRef] = useState<string | undefined>();
+  const [poolMutationBusy, setPoolMutationBusy] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>();
   const [importPreview, setImportPreview] = useState<{ input: RouterConfigInput; result: RouterConfigValidation } | undefined>();
   const [importError, setImportError] = useState<string | undefined>();
+  const [validatingImport, setValidatingImport] = useState(false);
   const [applyingImport, setApplyingImport] = useState(false);
+  const applyingImportRef = useRef(false);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const importUploadButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreImportFocusRef = useRef(false);
+  const importControllerRef = useRef<ReturnType<typeof createRouterConfigImportController> | null>(null);
+  if (importControllerRef.current === null) importControllerRef.current = createRouterConfigImportController();
+  const poolMutationGateRef = useRef<ReturnType<typeof createRouterPoolMutationGate> | null>(null);
+  if (poolMutationGateRef.current === null) poolMutationGateRef.current = createRouterPoolMutationGate();
+
+  useEffect(() => {
+    if (importPreview !== undefined || applyingImport || !restoreImportFocusRef.current) return;
+    restoreImportFocusRef.current = false;
+    importUploadButtonRef.current?.focus();
+  }, [importPreview, applyingImport]);
 
   const entries = catalog?.entries ?? [];
   const providers = [...new Set(entries.map((entry) => entry.providerId))].sort();
@@ -265,6 +340,32 @@ export function RouterCatalogPanel({
     .map((providerId) => ({ providerId, entries: filteredEntries.filter((entry) => entry.providerId === providerId) }))
     .filter((group) => group.entries.length > 0);
 
+  const poolControlsLocked = routerPoolControlsLocked({
+    poolMutationBusy,
+    validatingImport,
+    hasImportPreview: importPreview !== undefined,
+    applyingImport,
+  });
+  const poolLockStatusMessage = applyingImport
+    ? undefined
+    : poolMutationBusy
+      ? "Saving a router-pool update. Wait before changing another row or importing a file."
+      : validatingImport
+        ? "Checking the config. Row updates and catalog refresh are paused."
+        : importPreview !== undefined
+          ? "Finish or cancel the import preview before changing rows or refreshing the catalog."
+          : undefined;
+  const runPoolMutation = async (operation: () => Promise<unknown>): Promise<boolean> => {
+    const gate = poolMutationGateRef.current;
+    if (gate === null || gate.locked) return false;
+    setPoolMutationBusy(true);
+    try {
+      return await gate.run(operation);
+    } finally {
+      setPoolMutationBusy(false);
+    }
+  };
+
   const downloadConfig = () => {
     if (catalog === undefined) return;
     const payload = JSON.stringify({ schemaVersion: 1, enabledModelRefs: catalog.poolModelRefs }, null, 2);
@@ -279,43 +380,75 @@ export function RouterCatalogPanel({
   const uploadConfig = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
+    const controller = importControllerRef.current;
+    if (
+      file === undefined ||
+      controller === null ||
+      controller.validating ||
+      applyingImportRef.current ||
+      poolMutationGateRef.current?.locked
+    )
+      return;
     setImportError(undefined);
     setImportPreview(undefined);
-    if (file === undefined) return;
+    setValidatingImport(true);
     try {
-      const input = routerConfigDocument(JSON.parse(await file.text()));
-      const result = await onValidateConfig(input);
-      setImportPreview({ input, result });
+      const preview = await controller.validate(file, onValidateConfig);
+      if (preview !== undefined) setImportPreview(preview);
     } catch (cause: unknown) {
       setImportError(cause instanceof Error ? cause.message : "Router config must be strict JSON with schemaVersion 1.");
+    } finally {
+      setValidatingImport(false);
     }
   };
 
   const toggle = async (entry: RouterCatalogEntry) => {
+    const gate = poolMutationGateRef.current;
+    if (gate === null || gate.locked || importControllerRef.current?.validating || importPreview !== undefined || applyingImportRef.current)
+      return;
     setBusyModelRef(entry.modelRef);
     setActionError(undefined);
     try {
-      await onToggle(entry.modelRef, !entry.inUse);
+      const updated = await runPoolMutation(() => onToggle(entry.modelRef, !entry.inUse));
+      if (!updated) throw new Error("Another router-pool update is already in progress.");
     } catch (cause: unknown) {
-      setActionError(cause instanceof Error ? cause.message : "Router pool update failed; no setting was changed.");
+      setActionError(
+        cause instanceof Error ? cause.message : "Router pool update could not be confirmed. Refresh the catalog before retrying.",
+      );
     } finally {
       setBusyModelRef(undefined);
     }
   };
 
   const applyImport = async () => {
-    if (importPreview === undefined || !importPreview.result.valid) return;
+    const gate = poolMutationGateRef.current;
+    if (importPreview === undefined || !importPreview.result.valid || applyingImportRef.current || gate === null || gate.locked) return;
+    applyingImportRef.current = true;
     setApplyingImport(true);
     setImportError(undefined);
     try {
-      await onApplyConfig(importPreview.input);
+      const updated = await runPoolMutation(() => onApplyConfig(importPreview.input));
+      if (!updated) throw new Error("Another router-pool update is already in progress.");
+      restoreImportFocusRef.current = true;
       setImportPreview(undefined);
     } catch (cause: unknown) {
-      setImportError(cause instanceof Error ? cause.message : "Router config apply failed; no setting was changed.");
+      setImportError(
+        cause instanceof Error
+          ? cause.message
+          : "Apply result could not be confirmed. Cancel, refresh the catalog, and re-import before retrying.",
+      );
     } finally {
+      applyingImportRef.current = false;
       setApplyingImport(false);
     }
   };
+
+  const cancelImportPreview = () => {
+    if (applyingImportRef.current) return;
+    restoreImportFocusRef.current = true;
+    setImportPreview(undefined);
+  };
+  const importControlsDisabled = poolMutationBusy || validatingImport || applyingImport;
 
   return (
     <div className="settings-panel settings-panel-wide router-catalog-panel">
@@ -324,6 +457,10 @@ export function RouterCatalogPanel({
           <div className="settings-section-title">Ensemble Router</div>
           <div className="settings-section-sub">
             Exact provider/model identities from the human baseline, live Gateway, candidate catalog, and operator pool.
+          </div>
+          <div className="settings-section-sub">
+            Pool eligibility reflects only the human profile, explicit candidate, and operator pool; it does not guarantee live, account,
+            Goal, or Mission Bundle readiness.
           </div>
         </div>
         <span className={`router-runtime-badge router-runtime-${catalog?.status ?? "inactive"}`}>
@@ -353,16 +490,40 @@ export function RouterCatalogPanel({
       {!loading && error === undefined && catalog !== undefined && (
         <>
           <div className="router-catalog-actions">
-            <button type="button" className="btn btn-sm" onClick={onRefresh}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={poolControlsLocked}
+              aria-describedby={poolControlsLocked ? "router-pool-lock-status" : undefined}
+              onClick={onRefresh}
+            >
               refresh
             </button>
             <button type="button" className="btn btn-sm" onClick={downloadConfig}>
               download operator config
             </button>
-            <label className="btn btn-sm router-upload-label">
+            <button
+              ref={importUploadButtonRef}
+              type="button"
+              className="btn btn-sm router-upload-button"
+              aria-disabled={importControlsDisabled}
+              disabled={applyingImport}
+              onClick={() => {
+                if (!importControlsDisabled) importFileInputRef.current?.click();
+              }}
+            >
               upload operator config
-              <input type="file" accept="application/json,.json" onChange={(event) => void uploadConfig(event)} />
-            </label>
+            </button>
+            <input
+              ref={importFileInputRef}
+              className="router-file-input"
+              type="file"
+              accept="application/json,.json"
+              disabled={importControlsDisabled}
+              aria-hidden="true"
+              tabIndex={-1}
+              onChange={(event) => void uploadConfig(event)}
+            />
           </div>
           <div className="router-catalog-filters" aria-label="Router Catalog filters">
             <label>
@@ -389,9 +550,9 @@ export function RouterCatalogPanel({
               state{" "}
               <select className="input" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}>
                 <option value="all">all states</option>
-                {["catalog-ready", "pool-disabled", "live-unavailable", "unprofiled", "not-a-candidate"].map((state) => (
+                {routerRowStateFilterValues.map((state) => (
                   <option key={state} value={state}>
-                    {state}
+                    {routerRowStateLabels[state]}
                   </option>
                 ))}
               </select>
@@ -405,6 +566,16 @@ export function RouterCatalogPanel({
               </select>
             </label>
           </div>
+          {poolLockStatusMessage !== undefined && (
+            <p
+              id="router-pool-lock-status"
+              className="router-catalog-reason"
+              role="status"
+              aria-busy={poolMutationBusy || validatingImport}
+            >
+              {poolLockStatusMessage}
+            </p>
+          )}
           {actionError !== undefined && (
             <p className="router-catalog-error" role="alert">
               {actionError}
@@ -416,39 +587,13 @@ export function RouterCatalogPanel({
             </p>
           )}
           {importPreview !== undefined && (
-            <section className="router-import-preview" aria-labelledby="router-import-preview-title">
-              <div className="router-import-preview-head">
-                <strong id="router-import-preview-title">Import preview</strong>
-                <button type="button" className="btn btn-sm" onClick={() => setImportPreview(undefined)}>
-                  cancel
-                </button>
-              </div>
-              <p>
-                {importPreview.result.valid
-                  ? "Ready to apply. This replaces the operator pool atomically."
-                  : "Not ready to apply. Unknown model refs must be removed."}
-              </p>
-              {importPreview.result.unknownModelRefs.length > 0 && (
-                <p className="router-catalog-error">Unknown model refs: {importPreview.result.unknownModelRefs.join(", ")}</p>
-              )}
-              {importPreview.result.changes.length > 0 && (
-                <ul>
-                  {importPreview.result.changes.map((change) => (
-                    <li key={change.modelRef}>
-                      {change.modelRef}: {change.previousInUse ? "in use" : "not in use"} → {change.nextInUse ? "in use" : "not in use"}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={!importPreview.result.valid || applyingImport}
-                onClick={() => void applyImport()}
-              >
-                {applyingImport ? "applying…" : "apply import"}
-              </button>
-            </section>
+            <RouterConfigImportPreview
+              validation={importPreview.result}
+              entries={entries}
+              applying={applyingImport}
+              onCancel={cancelImportPreview}
+              onApply={() => void applyImport()}
+            />
           )}
           {grouped.length === 0 ? (
             <p className="router-catalog-empty" role="status">
@@ -476,6 +621,8 @@ export function RouterCatalogPanel({
                           key={entry.modelRef}
                           entry={entry}
                           busy={busyModelRef === entry.modelRef}
+                          locked={poolControlsLocked}
+                          lockStatusId="router-pool-lock-status"
                           onToggle={(row) => void toggle(row)}
                         />
                       ))}

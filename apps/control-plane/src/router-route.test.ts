@@ -39,6 +39,7 @@ const validation: RouterConfigValidation = {
   valid: true,
   enabledModelRefs: ["openai/model-a"],
   unknownModelRefs: [],
+  nonCandidateModelRefs: [],
   changes: [],
 };
 
@@ -60,6 +61,37 @@ describe("authenticated router routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual(catalog);
     expect(service.get).toHaveBeenCalledWith(operator.operatorId);
+    await app.close();
+  });
+
+  it("preserves unknown source membership in the catalog response", async () => {
+    const unknownCatalog: RouterCatalogRead = {
+      mode: "ensemble",
+      active: false,
+      status: "inactive",
+      reason: "Candidate catalog and live Gateway catalog are unavailable.",
+      poolModelRefs: ["openai/model-a"],
+      entries: [
+        {
+          ...catalog.entries[0]!,
+          live: { present: null, capabilities: [], authModes: [], regions: [] },
+          candidate: { present: null, candidateRefs: [], accountBindings: [] },
+          inUse: false,
+          state: "candidate-unknown",
+        },
+      ],
+    };
+    const service: RouterCatalogService = {
+      get: vi.fn(async () => unknownCatalog),
+      validate: vi.fn(async () => validation),
+      replace: vi.fn(async () => unknownCatalog),
+    };
+    const app = appWith(service);
+
+    const response = await app.inject({ method: "GET", url: "/v1/router/catalog", headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(unknownCatalog);
     await app.close();
   });
 

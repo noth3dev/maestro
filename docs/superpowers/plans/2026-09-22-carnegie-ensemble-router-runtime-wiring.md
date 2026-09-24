@@ -83,10 +83,12 @@
 ## Task 1: Add the operator pool constraint to the domain selector
 
 **Files:**
+
 - Modify: `packages/domain/src/routing-selector.ts`
 - Test: `packages/domain/src/routing-selector.test.ts`
 
 **Interfaces:**
+
 - Consumes: existing `RoutingSelectionRequest`, `RouterCandidate`, and `selectRoutedModel()`.
 - Produces: `RoutingSelectionRequest.operatorEnabledModelRefs?: readonly string[]`, with exact identity validation and `operator model pool excludes candidate` rejection records.
 
@@ -114,9 +116,7 @@ it("rejects malformed and duplicate operator pool identities", () => {
 });
 
 it("fails closed when the operator pool removes every eligible candidate", () => {
-  expect(() => selectRoutedModel(request({ operatorEnabledModelRefs: ["provider/not-in-catalog"] }))).toThrow(
-    /No candidate satisfies/,
-  );
+  expect(() => selectRoutedModel(request({ operatorEnabledModelRefs: ["provider/not-in-catalog"] }))).toThrow(/No candidate satisfies/);
 });
 ```
 
@@ -156,12 +156,14 @@ git commit -m "feat: apply operator model pool during routing selection"
 ## Task 2: Add atomic model-pool persistence
 
 **Files:**
+
 - Modify: `packages/contracts/src/settings.ts`
 - Modify: `packages/persistence/src/settings.ts`
 - Modify: `packages/persistence/src/index.ts`
 - Test: `packages/persistence/src/settings.test.ts`
 
 **Interfaces:**
+
 - Consumes: current `SettingsModelPoolUpdate`, `createPostgresSettingsService()`, and `operator_settings.model_pool` JSONB.
 - Produces:
   - `SettingsModelPoolConfigSchema` and `SettingsModelPoolConfig` with `{ schemaVersion: 1, enabledModelRefs: string[] }`.
@@ -209,12 +211,14 @@ Expected: missing export/method failures.
 In `packages/contracts/src/settings.ts`, add:
 
 ```ts
-export const SettingsModelPoolConfigSchema = z.object({
-  schemaVersion: z.literal(1),
-  enabledModelRefs: z.array(z.string().min(3)).superRefine((refs, ctx) => {
-    if (new Set(refs).size !== refs.length) ctx.addIssue({ code: "custom", message: "enabledModelRefs must not contain duplicates" });
-  }),
-}).strict();
+export const SettingsModelPoolConfigSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    enabledModelRefs: z.array(z.string().min(3)).superRefine((refs, ctx) => {
+      if (new Set(refs).size !== refs.length) ctx.addIssue({ code: "custom", message: "enabledModelRefs must not contain duplicates" });
+    }),
+  })
+  .strict();
 export type SettingsModelPoolConfig = z.infer<typeof SettingsModelPoolConfigSchema>;
 ```
 
@@ -240,6 +244,7 @@ git commit -m "feat: add atomic operator model pool persistence"
 ## Task 3: Thread authenticated operator identity into Worker admission
 
 **Files:**
+
 - Modify: `packages/persistence/src/worker/types.ts`
 - Modify: `packages/persistence/src/worker/spawn.ts`
 - Modify: `apps/control-plane/src/worker-service.ts`
@@ -247,6 +252,7 @@ git commit -m "feat: add atomic operator model pool persistence"
 - Test: `apps/control-plane/src/worker-service.test.ts`
 
 **Interfaces:**
+
 - Consumes: `OperatorContext.operatorId` in `createWorkerService.spawn()`.
 - Produces:
   - `SpawnWorkerRequest.operatorId?: string` for the ensemble-only internal admission seam; pin-mode direct persistence callers remain source-compatible.
@@ -297,12 +303,14 @@ git commit -m "feat: carry operator identity into worker admission"
 ## Task 4: Apply the pool in the real Ensemble admission path
 
 **Files:**
+
 - Modify: `apps/control-plane/src/ensemble-admission.ts`
 - Modify: `apps/control-plane/src/composition/execution-services.ts`
 - Test: `apps/control-plane/src/ensemble-admission.test.ts`
 - Test: `apps/control-plane/src/worker-service.test.ts`
 
 **Interfaces:**
+
 - Consumes: `WorkerAdmissionFactoryInput.operatorId`, `readEnabledModelRefs()`, and Task 1's selector field.
 - Produces: an admission path that reads the operator pool immediately before selection and passes `operatorEnabledModelRefs` to `selectRoutedModel`.
 
@@ -346,6 +354,7 @@ git commit -m "feat: wire operator pool into ensemble admission"
 ## Task 5: Build the Router Catalog contracts and backend service
 
 **Files:**
+
 - Create: `packages/contracts/src/router.ts`
 - Modify: `packages/contracts/src/index.ts`
 - Test: `packages/contracts/src/router.test.ts`
@@ -355,6 +364,7 @@ git commit -m "feat: wire operator pool into ensemble admission"
 - Test: `apps/control-plane/src/composition/router-catalog.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ModelMap`, `readRoutingCandidateCatalog()`, `ModelGatewayPort.listModels()`, `readEnabledModelRefs()`, and `MaestroConfig.modelRoutingMode`.
 - Produces:
   - `RouterCatalogReadSchema` and `RouterCatalogRead`.
@@ -387,9 +397,10 @@ Service tests must cover:
 
 - `openai/model-a` and `openai-codex/model-a` are separate entries/groups.
 - a live-only model has `baseline.present === false`, `state === "unprofiled"`, and cannot be enabled.
-- a baseline model missing from the candidate catalog has `state === "not-a-candidate"`.
-- a candidate with baseline and live presence has `state === "catalog-ready"`.
-- missing candidate catalog returns `status: "inactive"` with a reason and never exposes file contents or secrets.
+- a baseline model missing from a successfully read candidate catalog has `state === "not-a-candidate"`.
+- unavailable candidate membership is `candidate.present === null` with `state === "candidate-unknown"`, never a confirmed noncandidate.
+- unavailable Gateway membership is `live.present === null` with `state === "live-unknown"`; a successful listing that omits the model remains `live.present === false` / `live-unavailable`.
+- missing candidate catalog returns `status: "inactive"` with an actionable reason and never exposes file contents or secrets; when both catalog sources fail, the reason identifies both.
 - validation reports unknown model refs without mutating the pool.
 
 Use the existing fake Gateway model shape and temporary JSON files for model map/candidate catalog; do not use real credentials.
@@ -408,7 +419,17 @@ Define exact schemas for:
 
 ```ts
 RouterRuntimeModeSchema = z.enum(["ensemble", "pin"]);
-RouterRowStateSchema = z.enum(["routable", "pool-disabled", "live-unavailable", "unprofiled", "not-a-candidate", "catalog-ready"]);
+RouterRowStateSchema = z.enum([
+  "routable",
+  "pool-disabled",
+  "live-unavailable",
+  "live-unknown",
+  "unprofiled",
+  "not-a-candidate",
+  "candidate-unknown",
+  "catalog-ready",
+]);
+// `live.present` and `candidate.present` are `boolean | null`; null means the source could not be read.
 RouterConfigInputSchema = z.object({ schemaVersion: z.literal(1), enabledModelRefs: z.array(z.string().min(3)) }).strict();
 ```
 
@@ -420,15 +441,17 @@ Create `model-map-source.ts` with a loader that tries `MAESTRO_MODEL_MAP`, `proc
 
 - [ ] **Step 5: Implement catalog composition.**
 
-Load the full baseline, explicit candidates when `config.ensembleCandidateCatalogPath` exists, live Gateway models when a Gateway is configured, and raw operator refs. Build a union by exact `provider/model` identity. Derive states in this order:
+Load the full baseline, explicit candidates when `config.ensembleCandidateCatalogPath` exists, live Gateway models when a Gateway is configured, and raw operator refs. Build a union by exact `provider/model` identity. Represent candidate and live source membership independently: `present: null` when that source cannot be read, `false` only when a successful read omits the exact model, and `true` when it includes the exact model. Derive row states in this order:
 
 1. absent from baseline → `unprofiled`
-2. absent from candidate catalog → `not-a-candidate`
-3. non-empty pool excludes it → `pool-disabled`
-4. absent from live Gateway → `live-unavailable`
-5. present in baseline, candidate catalog, and live Gateway → `catalog-ready`
+2. candidate membership unknown → `candidate-unknown`
+3. absent from the successfully read candidate catalog → `not-a-candidate`
+4. non-empty pool excludes it → `pool-disabled`
+5. live catalog unavailable → `live-unknown`
+6. successfully read live Gateway omits it → `live-unavailable`
+7. present in baseline, candidate catalog, and live Gateway → `catalog-ready`
 
-Return `status: "inactive"` when the candidate catalog is unavailable, `status: "partial"` when live data is unavailable but the baseline/catalog can be read, and `status: "ready"` when all static and live sources are available. A catalog row is static readiness only; Goal and TaskDemand checks remain admission-time.
+Return `status: "inactive"` when the candidate catalog is unavailable, `status: "partial"` when live data is unavailable but the baseline/catalog can be read, and `status: "ready"` when all static and live sources are available. Include both source failures in the reason when both are unavailable. A catalog row is static readiness only; Goal and TaskDemand checks remain admission-time.
 
 - [ ] **Step 6: Run service tests and the provider-access regression suite.**
 
@@ -450,6 +473,7 @@ git commit -m "feat: add router catalog contracts and composition"
 ## Task 6: Add authenticated Router API and atomic import/export
 
 **Files:**
+
 - Create: `apps/control-plane/src/routes/router.ts`
 - Modify: `apps/control-plane/src/routes/deps.ts`
 - Modify: `apps/control-plane/src/server.ts`
@@ -459,6 +483,7 @@ git commit -m "feat: add router catalog contracts and composition"
 - Modify: `packages/persistence/src/settings.ts`
 
 **Interfaces:**
+
 - Consumes: `RouterCatalogService` from Task 5 and `SettingsService.replaceModelPool()` from Task 2.
 - Produces these authenticated routes:
   - `GET /v1/router/catalog` → `RouterCatalogReadSchema`
@@ -473,11 +498,21 @@ Use the existing `buildServer()` test setup and authenticated bearer header. Add
 expect(await app.inject({ method: "GET", url: "/v1/router/catalog", headers })).toHaveProperty("statusCode", 200);
 expect(service.get).toHaveBeenCalledWith(operator.operatorId);
 
-const preview = await app.inject({ method: "POST", url: "/v1/router/config/validate", headers, payload: { schemaVersion: 1, enabledModelRefs: ["openai/model-a"] } });
+const preview = await app.inject({
+  method: "POST",
+  url: "/v1/router/config/validate",
+  headers,
+  payload: { schemaVersion: 1, enabledModelRefs: ["openai/model-a"] },
+});
 expect(preview.statusCode).toBe(200);
 expect(service.validate).toHaveBeenCalledWith(operator.operatorId, { schemaVersion: 1, enabledModelRefs: ["openai/model-a"] });
 
-const malformed = await app.inject({ method: "POST", url: "/v1/router/config/validate", headers, payload: { schemaVersion: 1, enabledModelRefs: ["bad ref"] } });
+const malformed = await app.inject({
+  method: "POST",
+  url: "/v1/router/config/validate",
+  headers,
+  payload: { schemaVersion: 1, enabledModelRefs: ["bad ref"] },
+});
 expect(malformed.statusCode).toBe(400);
 expect(service.replace).not.toHaveBeenCalled();
 ```
@@ -520,6 +555,7 @@ git commit -m "feat: expose authenticated router catalog API"
 ## Task 7: Add API client, Electron bridge, and Carnegie Router Catalog UI
 
 **Files:**
+
 - Create: `packages/api-client/src/methods/router.ts`
 - Modify: `packages/api-client/src/client.ts`
 - Modify: `packages/api-client/src/client.test.ts`
@@ -530,6 +566,7 @@ git commit -m "feat: expose authenticated router catalog API"
 - Modify: `apps/carnegie/src/styles/components.css`
 
 **Interfaces:**
+
 - Consumes: Task 5 contracts and Task 6 routes.
 - Produces renderer methods:
   - `getRouterCatalog(): Promise<RouterCatalogRead>`
@@ -582,7 +619,7 @@ expect(screen.getByRole("button", { name: /add|enable/i })).toBeDisabled();
 expect(screen.getByText(/candidate catalog/i)).toBeInTheDocument();
 ```
 
-Mock a toggle and assert `replaceRouterConfig` or the single model-pool patch is called, then the catalog reloads. Mock file upload and assert validation is called before apply; assert cancel/failed validation does not call replacement. Assert download creates a JSON document containing only `schemaVersion` and `enabledModelRefs`.
+Mock a toggle and assert `replaceRouterConfig` is called once with the complete pool and the returned catalog is adopted without a follow-up GET. Mock file upload and assert validation is called before apply; assert cancel/failed validation does not call replacement. Assert download creates a JSON document containing only `schemaVersion` and `enabledModelRefs`.
 
 - [ ] **Step 5: Run UI tests and confirm they fail.**
 
@@ -601,7 +638,7 @@ In `Settings.tsx`:
 - group entries by exact `providerId`
 - filter by search, Provider, row state, and in-use status
 - render baseline, live, candidate/account, and pool state columns
-- disable enabling for `unprofiled` and `not-a-candidate` rows
+- disable enabling for `unprofiled`, `candidate-unknown`, and confirmed `not-a-candidate` rows; render live and candidate unknown states separately from confirmed absence
 - use the existing `ToggleSwitch` or a labeled button for pool changes
 - keep `openai` and `openai-codex` as separate groups
 - implement strict JSON download with a Blob URL and cleanup
@@ -636,11 +673,13 @@ git commit -m "feat: connect Carnegie router catalog to control plane"
 ## Task 8: Prove the full UI-to-Gateway routing path
 
 **Files:**
+
 - Modify: `apps/control-plane/src/native-worker-acceptance.integration.test.ts`
 - Create: `apps/control-plane/src/router-runtime.integration.test.ts`
 - Create: `config/ensemble-candidates.example.json`
 
 **Interfaces:**
+
 - Consumes: Tasks 1–7, real PostgreSQL migrations, `createControlPlane()`, the existing in-process Model Gateway server, and the existing worker/council/mission-bundle setup helpers.
 - Produces: a release gate proving that a persisted UI-equivalent pool change changes the actual Gateway admission identity.
 
@@ -715,6 +754,14 @@ Review that no provider token, raw account credential, temporary absolute path, 
 git add apps/control-plane/src/native-worker-acceptance.integration.test.ts apps/control-plane/src/router-runtime.integration.test.ts config/ensemble-candidates.example.json
 git commit -m "test: prove router pool reaches model gateway admission"
 ```
+
+---
+
+## Lockstep release note — Router Catalog v1
+
+Deploy the Control Plane and Carnegie consumer together. This contract revision returns nullable `candidate.present` / `live.present`, adds `candidate-unknown` / `live-unknown` row states, and adds `nonCandidateModelRefs` to router-config validation responses. Older strict-v1 clients may reject null membership, the new row states, or the added validation field. The updated Carnegie consumer accepts old boolean membership values and defaults a missing `nonCandidateModelRefs` field to `[]`.
+
+The operator router-config JSON remains schema version 1, and this change requires no database schema migration. Do not roll out the revised Control Plane response ahead of its updated Carnegie consumer.
 
 ---
 

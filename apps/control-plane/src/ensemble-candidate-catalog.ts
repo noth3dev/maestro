@@ -95,8 +95,8 @@ function parseCandidates(value: unknown, modelMap: ModelMap): readonly RouterCan
   const catalog = ownDataProperties(value, ["schemaVersion", "entries"], "Candidate catalog");
   required(catalog, ["schemaVersion", "entries"], "Candidate catalog");
   if (catalog.schemaVersion !== 1) throw new RoutingCandidateCatalogError("Candidate catalog schemaVersion must be 1");
-  if (!Array.isArray(catalog.entries) || Object.getPrototypeOf(catalog.entries) !== Array.prototype || catalog.entries.length === 0) {
-    throw new RoutingCandidateCatalogError("Candidate catalog entries must be a non-empty standard Array");
+  if (!Array.isArray(catalog.entries) || Object.getPrototypeOf(catalog.entries) !== Array.prototype) {
+    throw new RoutingCandidateCatalogError("Candidate catalog entries must be a standard Array");
   }
   const knownModels = new Set(modelMap.entries.map((entry) => entry.modelRef));
   const refs = new Set<string>();
