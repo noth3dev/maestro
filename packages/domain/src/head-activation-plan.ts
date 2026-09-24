@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { sha256Hex } from "./hash.js";
 
 export const HEAD_ACTIVATION_PLAN_VERSION = 1 as const;
@@ -21,26 +20,26 @@ export interface HeadActivationPlan extends HeadActivationPlanInput {
   readonly contentHash: string;
 }
 
-/** Stable UUID-shaped command identity for one explicit department brief. */
+function deriveStableCommandId(input: string): string {
+  const hex = sha256Hex(input).slice(0, 32).split("");
+  hex[12] = "5";
+  hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x03) | 0x08).toString(16);
+  const id = hex.join("");
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+}
+
 /** Stable UUID-shaped command identity for creating the Goal's Head Council. */
 export function deriveCouncilCreationCommandId(startCommandId: string, goalId: string): string {
   if (startCommandId.trim() === "" || goalId.trim() === "")
     throw new InvalidHeadActivationPlanError("Council command identity is required");
-  const digest = createHash("sha256").update(`maestro:start_goal:council:${startCommandId}:${goalId}`, "utf8").digest();
-  digest[6] = (digest[6]! & 0x0f) | 0x50;
-  digest[8] = (digest[8]! & 0x3f) | 0x80;
-  const hex = digest.subarray(0, 16).toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return deriveStableCommandId(`maestro:start_goal:council:${startCommandId}:${goalId}`);
 }
 
+/** Stable UUID-shaped command identity for one explicit department brief. */
 export function deriveHeadActivationCommandId(startCommandId: string, departmentId: string): string {
   if (startCommandId.trim() === "" || departmentId.trim() === "")
     throw new InvalidHeadActivationPlanError("Head activation command identity is required");
-  const digest = createHash("sha256").update(`maestro:start_goal:head:${startCommandId}:${departmentId}`, "utf8").digest();
-  digest[6] = (digest[6]! & 0x0f) | 0x50;
-  digest[8] = (digest[8]! & 0x3f) | 0x80;
-  const hex = digest.subarray(0, 16).toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return deriveStableCommandId(`maestro:start_goal:head:${startCommandId}:${departmentId}`);
 }
 
 export class InvalidHeadActivationPlanError extends Error {
