@@ -10,7 +10,7 @@ import type { ViewName } from "../views.js";
 export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (view: ViewName) => void }) {
   const t = useT();
   const { theme, setTheme } = useTheme();
-  const { goals, selectedGoalId, selectGoal } = useGoals();
+  const { goals, orchestrationByGoalId = {}, selectedGoalId, selectGoal } = useGoals();
   const { config } = useConnection();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingApprovalCount, setPendingApprovalCount] = useState<number | undefined>(undefined);
@@ -85,8 +85,9 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
         {goals !== undefined && goals.length > 0 && (
           <div className="sb-channels">
             {goals.map((goal) => (
-              <button key={goal.goalId} type="button" className={`sb-chan${goal.goalId === selectedGoalId ? " on" : ""}`} onClick={() => selectGoal(goal.goalId)}>
+              <button key={goal.goalId} type="button" className={`sb-chan${goal.goalId === selectedGoalId ? " on" : ""}`} onClick={() => selectGoal(goal.goalId)} aria-label={`Goal ${goal.goalId.slice(0, 8)}`}>
                 <Icon name="crown" /> <span className="lbl">{goal.goalId.slice(0, 8)}</span>
+                {orchestrationByGoalId[goal.goalId] !== undefined && <span className="sb-goal-status" data-orchestration-stage={orchestrationByGoalId[goal.goalId]!.stage}>{orchestrationByGoalId[goal.goalId]!.stage}</span>}
               </button>
             ))}
           </div>

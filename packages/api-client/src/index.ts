@@ -30,6 +30,7 @@ export type {
   GoalBudgetSummary,
   BillingReadModel,
   GoalResult,
+  StartGoalOrchestrationStatus,
   InboxRead,
   CriticalActionApprovalInput,
   TransitionGoalInput,

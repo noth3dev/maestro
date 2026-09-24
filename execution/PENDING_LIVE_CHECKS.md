@@ -107,3 +107,11 @@ Added an unconnected `HeadBriefRuntime` adapter in `packages/agent-runtime/src/h
 Added a project-bound read-only status surface for the durable post-Launch orchestration run: `GET /v1/goals/:goalId/orchestration?projectId=...`, typed API-client method `getGoalOrchestrationStatus`, and Carnegie Electron/preload exposure. It returns the PostgreSQL-backed `stage`, `state`, `reason`, command/binding identity, and plan hash; missing or different-project runs fail closed as not found. This surface performs no mutation, provider call, brief submission, reveal, or decision.
 
 `npx vitest run apps/control-plane/src/start-goal-orchestration-status-service.test.ts apps/control-plane/src/server.test.ts packages/api-client/src/client.test.ts apps/carnegie/electron/apiBridge.test.ts --reporter=dot` passed **4 files / 116 tests**; `npm run build`, targeted `npx eslint ...`, `npm run boundaries:check`, and `git diff --check` passed.
+
+
+
+## Task 16 Carnegie orchestration-stage display (2026-09-24)
+
+Carnegie now loads the read-only orchestration status for each Goal during the existing Goal refresh and displays an available stage such as `briefs_pending` in the Sidebar. Missing legacy orchestration rows are ignored per Goal so the durable Goal list remains usable. This is display-only: it performs no state transition, provider call, brief submission, reveal, or decision.
+
+`npx vitest run apps/carnegie/src --reporter=dot` passed **55 files / 252 tests**; `npm run build`, targeted ESLint, `npm run boundaries:check`, and `git diff --check` passed.

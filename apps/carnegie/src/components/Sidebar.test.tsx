@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./Sidebar.js";
 
+const goalsState = vi.hoisted(() => ({ goals: undefined as readonly { goalId: string; state: string }[] | undefined, orchestrationByGoalId: {} as Record<string, { stage: string; state: string }>, selectedGoalId: undefined as string | undefined, selectGoal: vi.fn() }));
+
 vi.mock("../icons.js", () => ({ Icon: () => null }));
 vi.mock("../i18n/index.js", () => ({
   useT: () => ({
@@ -10,12 +12,20 @@ vi.mock("../i18n/index.js", () => ({
   }),
 }));
 vi.mock("../theme.js", () => ({ useTheme: () => ({ theme: "light", setTheme: vi.fn() }) }));
-vi.mock("../goals.js", () => ({ useGoals: () => ({ goals: undefined, selectedGoalId: undefined, selectGoal: vi.fn() }) }));
+vi.mock("../goals.js", () => ({ useGoals: () => goalsState }));
 vi.mock("../connection.js", () => ({ useConnection: () => ({ config: undefined }) }));
 vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
 vi.stubGlobal("React", React);
 
 describe("Sidebar navigation semantics", () => {
+  it("shows a durable orchestration stage when one exists for a Goal", () => {
+    const goalId = "22222222-2222-4222-8222-222222222222";
+    goalsState.goals = [{ goalId, state: "active" }]; goalsState.selectedGoalId = goalId; goalsState.orchestrationByGoalId = { [goalId]: { stage: "briefs_pending", state: "running" } };
+    const html = renderToStaticMarkup(<Sidebar view="dashboard" onNavigate={vi.fn()} />);
+    expect(html).toContain("briefs_pending");
+    goalsState.goals = undefined; goalsState.selectedGoalId = undefined; goalsState.orchestrationByGoalId = {};
+  });
+
   it("marks only the current route as the current page", () => {
     const html = renderToStaticMarkup(<Sidebar view="home" onNavigate={vi.fn()} />);
 

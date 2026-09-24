@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import type { GoalList, GoalResult } from "@maestro/api-client";
+import type { GoalList, GoalResult, StartGoalOrchestrationStatus } from "@maestro/api-client";
 import { useConnection } from "./connection.js";
-import { loadGoalsAfterLaunch, selectedGoalIdAfterRefresh } from "./lib/goal-operations.js";
+import { loadGoalOrchestrationStatuses, loadGoalsAfterLaunch, selectedGoalIdAfterRefresh } from "./lib/goal-operations.js";
 
 interface GoalLoadScope {
   projectId: string;
@@ -10,6 +10,7 @@ interface GoalLoadScope {
 
 interface GoalsContextValue {
   goals: GoalResult[] | undefined;
+  orchestrationByGoalId: Readonly<Record<string, StartGoalOrchestrationStatus>>;
   selectedGoalId: string | undefined;
   selectGoal: (goalId: string) => void;
   refresh: () => Promise<GoalList | undefined>;
@@ -23,6 +24,7 @@ const GoalsContext = createContext<GoalsContextValue | undefined>(undefined);
 export function GoalsProvider({ children, refreshKey }: { children: ReactNode; refreshKey?: string }) {
   const { config } = useConnection();
   const [goals, setGoals] = useState<GoalResult[] | undefined>(undefined);
+  const [orchestrationByGoalId, setOrchestrationByGoalId] = useState<Readonly<Record<string, StartGoalOrchestrationStatus>>>({});
   const [selectedGoalId, setSelectedGoalId] = useState<string | undefined>(undefined);
   const [loadedFor, setLoadedFor] = useState<GoalLoadScope | undefined>(undefined);
   const [loading, setLoading] = useState(true);
@@ -34,6 +36,7 @@ export function GoalsProvider({ children, refreshKey }: { children: ReactNode; r
     const generation = ++requestGeneration.current;
     if (config === undefined) {
       setGoals(undefined);
+      setOrchestrationByGoalId({});
       setSelectedGoalId(undefined);
       setLoadedFor(undefined);
       setError(undefined);
@@ -43,10 +46,13 @@ export function GoalsProvider({ children, refreshKey }: { children: ReactNode; r
     setLoading(true);
     setError(undefined);
     setGoals(undefined);
+    setOrchestrationByGoalId({});
     try {
       const page = await loadGoalsAfterLaunch(window.maestro.api, { projectId: config.projectId });
+      const orchestration = await loadGoalOrchestrationStatuses(window.maestro.api, { projectId: config.projectId }, page.goals);
       if (generation !== requestGeneration.current) return undefined;
       setGoals(page.goals);
+      setOrchestrationByGoalId(orchestration);
       setSelectedGoalId((current) => selectedGoalIdAfterRefresh(current, page.goals));
       setLoadedFor({ projectId: config.projectId, refreshKey });
       return page;
@@ -61,6 +67,7 @@ export function GoalsProvider({ children, refreshKey }: { children: ReactNode; r
   useEffect(() => {
     if (previousProjectId.current !== config?.projectId) {
       setGoals(undefined);
+      setOrchestrationByGoalId({});
       setSelectedGoalId(undefined);
       previousProjectId.current = config?.projectId;
     }
@@ -68,7 +75,9 @@ export function GoalsProvider({ children, refreshKey }: { children: ReactNode; r
   }, [config?.projectId, refreshKey, refresh]);
 
   return (
-    <GoalsContext.Provider value={{ goals, selectedGoalId, selectGoal: setSelectedGoalId, refresh, loadedFor, loading, error }}>
+    <GoalsContext.Provider
+      value={{ goals, orchestrationByGoalId, selectedGoalId, selectGoal: setSelectedGoalId, refresh, loadedFor, loading, error }}
+    >
       {children}
     </GoalsContext.Provider>
   );

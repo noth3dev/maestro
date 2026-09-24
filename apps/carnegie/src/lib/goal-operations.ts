@@ -1,7 +1,8 @@
-import type { ApiClient, GoalList, GoalResult } from "@maestro/api-client";
+import type { ApiClient, GoalList, GoalResult, StartGoalOrchestrationStatus } from "@maestro/api-client";
 
 export type GoalOperationsApi = Pick<ApiClient, "listGoals">;
 export type GoalRefreshApi = { refreshGoals: () => Promise<GoalList | undefined> };
+export type GoalOrchestrationStatusApi = Pick<ApiClient, "getGoalOrchestrationStatus">;
 
 export async function loadGoalsAfterLaunch(
   api: GoalOperationsApi,
@@ -27,4 +28,12 @@ export function selectedGoalIdAfterRefresh(
 ): string | undefined {
   if (selectedGoalId !== undefined && goals.some((goal) => goal.goalId === selectedGoalId)) return selectedGoalId;
   return goals[0]?.goalId;
+}
+
+export async function loadGoalOrchestrationStatuses(api: GoalOrchestrationStatusApi, input: { readonly projectId: string }, goals: readonly GoalResult[]): Promise<Readonly<Record<string, StartGoalOrchestrationStatus>>> {
+  const entries = await Promise.all(goals.map(async (goal) => {
+    try { return [goal.goalId, await api.getGoalOrchestrationStatus(goal.goalId, { projectId: input.projectId })] as const; }
+    catch { return undefined; }
+  }));
+  return Object.fromEntries(entries.filter((entry): entry is readonly [string, StartGoalOrchestrationStatus] => entry !== undefined));
 }

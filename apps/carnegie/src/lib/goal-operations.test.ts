@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadGoalsAfterLaunch, selectGoalAfterLaunch, selectedGoalIdAfterRefresh } from "./goal-operations.js";
+import { loadGoalOrchestrationStatuses, loadGoalsAfterLaunch, selectGoalAfterLaunch, selectedGoalIdAfterRefresh } from "./goal-operations.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const firstGoal = { goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "active" as const, version: 3 };
@@ -12,6 +12,13 @@ describe("Goal loading and selection", () => {
     await expect(loadGoalsAfterLaunch({ listGoals }, { projectId })).resolves.toEqual({ goals: [firstGoal, secondGoal] });
     expect(listGoals).toHaveBeenCalledWith(projectId);
     expect(selectedGoalIdAfterRefresh(undefined, [firstGoal, secondGoal])).toBe(firstGoal.goalId);
+  });
+
+  it("loads available orchestration statuses without failing the Goal list for legacy Goals", async () => {
+    const getGoalOrchestrationStatus = vi.fn().mockResolvedValueOnce({ goalId: firstGoal.goalId, projectId, taskContractId: "task-contract", startCommandId: "start-command", actorId: null, stage: "briefs_pending" as const, state: "running" as const, headActivationPlanHash: null, reason: "council_created" }).mockRejectedValueOnce(new Error("status not found"));
+    await expect(loadGoalOrchestrationStatuses({ getGoalOrchestrationStatus }, { projectId }, [firstGoal, secondGoal])).resolves.toEqual({ [firstGoal.goalId]: expect.objectContaining({ stage: "briefs_pending", state: "running" }) });
+    expect(getGoalOrchestrationStatus).toHaveBeenNthCalledWith(1, firstGoal.goalId, { projectId });
+    expect(getGoalOrchestrationStatus).toHaveBeenNthCalledWith(2, secondGoal.goalId, { projectId });
   });
 
   it("refreshes and selects the server-created Goal after Launch", async () => {
