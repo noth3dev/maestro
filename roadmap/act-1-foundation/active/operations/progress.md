@@ -5000,3 +5000,9 @@ Verification: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/ma
 - Corrected Council handoff semantics: Council creation now transitions the durable orchestration run to `stage=briefs_pending`, `state=running`, and replay returns without reactivating Heads or creating another Council. Added migration 0111 for the stage checks. No brief content or provider call was added.
 - Focused verification passed **3 files / 9 tests**; build, lint, migration numbering, boundaries, and diff checks pass. Fresh unrestricted PostgreSQL run 16 passed **446 files / 2,957 tests**, exit 0, **949.80s** (`/tmp/maestro-full-test-16.log`).
 - E5 remains partial and E6 remains archival/gated; live provider, independent brief, reveal/decision, downstream, certification, and report evidence is absent.
+
+
+
+## Task 16 Head brief adapter boundary (2026-09-24)
+
+Added an unconnected `HeadBriefRuntime` adapter in `packages/agent-runtime/src/head-brief-runtime.ts`. It prompts/observes an opaque Head execution only when an explicit caller invokes it, requires a terminal successful answer, parses strict JSON through the existing `IndependentBrief` validator, returns the exact provider/model identity, bounds output size, and never echoes raw provider text in errors. It does not submit a brief, mutate Council state, or wire into `start_goal`; no provider was contacted in verification. `npx vitest run packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts packages/domain/src/council.test.ts --reporter=dot` passed **3 files / 9 tests**; `npm run build` and targeted `npx eslint packages/agent-runtime/src/head-brief-runtime.ts packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts` passed.

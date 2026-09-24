@@ -93,3 +93,9 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 
 
 - [ ] **Task 16 resumable `briefs_pending` stage (2026-09-24):** Council creation now leaves the orchestration run running and replay-safe while no brief content exists. Focused tests and fresh run 16 passed **446 files / 2,957 tests**, exit 0, **949.80s** (`/tmp/maestro-full-test-16.log`). Live provider, sealed independent briefs, reveal/decision, downstream execution, certification/report, and E5 acceptance remain pending.
+
+
+
+## Task 16 Head brief adapter boundary (2026-09-24)
+
+Added an unconnected `HeadBriefRuntime` adapter in `packages/agent-runtime/src/head-brief-runtime.ts`. It prompts/observes an opaque Head execution only when an explicit caller invokes it, requires a terminal successful answer, parses strict JSON through the existing `IndependentBrief` validator, returns the exact provider/model identity, bounds output size, and never echoes raw provider text in errors. It does not submit a brief, mutate Council state, or wire into `start_goal`; no provider was contacted in verification. `npx vitest run packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts packages/domain/src/council.test.ts --reporter=dot` passed **3 files / 9 tests**; `npm run build` and targeted `npx eslint packages/agent-runtime/src/head-brief-runtime.ts packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts` passed.

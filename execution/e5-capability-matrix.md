@@ -245,3 +245,9 @@ Run 13 was non-green (**445 files / 2,952 tests**, 5 failures, exit 1, **1034.66
 ## Task 16 resumable briefs-pending stage and run 16
 
 **Status: Partial.** After durable Council creation, orchestration remains `running` at `briefs_pending`; replay does not create duplicate effects. Focused tests passed **3 files / 9 tests** and fresh PostgreSQL `npm test` passed **446 files / 2,957 tests**, exit 0, duration **949.80s** (`/tmp/maestro-full-test-16.log`). Independent Head briefs, reveal/decision, live provider, downstream execution, and E5 acceptance remain open.
+
+
+
+## Task 16 Head brief adapter boundary (2026-09-24)
+
+Added an unconnected `HeadBriefRuntime` adapter in `packages/agent-runtime/src/head-brief-runtime.ts`. It prompts/observes an opaque Head execution only when an explicit caller invokes it, requires a terminal successful answer, parses strict JSON through the existing `IndependentBrief` validator, returns the exact provider/model identity, bounds output size, and never echoes raw provider text in errors. It does not submit a brief, mutate Council state, or wire into `start_goal`; no provider was contacted in verification. `npx vitest run packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts packages/domain/src/council.test.ts --reporter=dot` passed **3 files / 9 tests**; `npm run build` and targeted `npx eslint packages/agent-runtime/src/head-brief-runtime.ts packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts` passed.

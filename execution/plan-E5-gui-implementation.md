@@ -1471,3 +1471,9 @@ Focused verification passed **12 files / 70 tests**. Fresh unrestricted PostgreS
 Council creation no longer terminates the orchestration run. A new durable `briefs_pending` stage keeps the run `running` and resumable after Council creation, while replay is a no-op and does not reactivate Heads or recreate the Council. Migration `0111_briefs_pending_orchestration_stage.sql` widens both run/history stage checks. No independent brief content is synthesized or submitted; briefs, reveal, and decision remain explicit later boundaries.
 
 Focused verification passed **3 files / 9 tests** plus build, lint, migration numbering, boundary, and diff checks. Fresh unrestricted PostgreSQL run 16 passed **446 test files / 2,957 tests**, exit 0, duration **949.80s** (`/tmp/maestro-full-test-16.log`). This is automated evidence only; no live provider or downstream E5 completion is claimed.
+
+
+
+## Task 16 Head brief adapter boundary (2026-09-24)
+
+Added an unconnected `HeadBriefRuntime` adapter in `packages/agent-runtime/src/head-brief-runtime.ts`. It prompts/observes an opaque Head execution only when an explicit caller invokes it, requires a terminal successful answer, parses strict JSON through the existing `IndependentBrief` validator, returns the exact provider/model identity, bounds output size, and never echoes raw provider text in errors. It does not submit a brief, mutate Council state, or wire into `start_goal`; no provider was contacted in verification. `npx vitest run packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts packages/domain/src/council.test.ts --reporter=dot` passed **3 files / 9 tests**; `npm run build` and targeted `npx eslint packages/agent-runtime/src/head-brief-runtime.ts packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts` passed.
