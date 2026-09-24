@@ -81,7 +81,7 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Settings / provider / billing (Task 10)
 
-**Status: Partial.** `views/Settings.tsx`, `lib/settings-data.ts`, and `views/Billing.tsx` exist; `settings-data.ts` provides a server-authoritative store. The 2026-09-25 isolated Electron check opened Router Catalog and Providers read-only; OAuth sign-in and Billing were not exercised. Provider and downstream E5 acceptance remain open; see `execution/e5-live-evidence/README.md`.
+**Status: Partial.** `views/Settings.tsx`, `lib/settings-data.ts`, and `views/Billing.tsx` exist; `settings-data.ts` provides a server-authoritative store. The 2026-09-25 isolated Electron check opened Router Catalog and Providers read-only; OAuth sign-in and Billing were not exercised. Provider and downstream E5 acceptance remain open; see `execution/e5-live-evidence/README.md`. Three independent no-edit SRP reviews recommend extracting the roughly 500-line Router Catalog view from the 1,090-line `Settings.tsx` into `RouterCatalogPanel.tsx`, keeping durable fetch/state in `Settings`; this behavior-preserving refactor awaits explicit approval.
 
 ## Persona / Arrangements (Task 11)
 
