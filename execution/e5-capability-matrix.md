@@ -99,7 +99,7 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Tasks 14–15 (live project progression, final gate)
 
-**Attempted, not complete.** The latest recorded unrestricted PostgreSQL suite passed 446 files / 2,957 tests on 2026-09-24 (see the dated checkpoints below). A 2026-09-23 real ChatGPT/Codex binding and assistant response did not produce a Task Contract. The 2026-09-25 isolated Electron run verified only read-only Settings UI and did not attempt OAuth or a provider turn. The integrated Overture → Task Contract → exact Launch → Goal/Head/Council/Worker flow remains unverified; see `execution/PENDING_LIVE_CHECKS.md` for current blockers and next evidence gates.
+**Attempted, not complete.** The latest full automated check, `npm run check` on 2026-09-25, passed 449 test files / 2,998 tests (exit 0; details below). A 2026-09-23 real ChatGPT/Codex binding and assistant response did not produce a Task Contract. The 2026-09-25 isolated Electron run verified only read-only Settings UI and did not attempt OAuth or a provider turn. The integrated Overture → Task Contract → exact Launch → Goal/Head/Council/Worker flow remains unverified; see `execution/PENDING_LIVE_CHECKS.md` for current blockers and next evidence gates.
 
 **Historical Heartbeat #49 correction (2026-09-24):** The unrestricted PostgreSQL suite passed **440 files / 2,916 tests**, exit 0 in **1,001.90s**. This automated result was superseded by the later Task 16 run 16 checkpoint (446 files / 2,957 tests); neither run closes the live provider or E5 gate.
 
@@ -269,3 +269,7 @@ Added a project-bound read-only status surface for the durable post-Launch orche
 Carnegie now loads the read-only orchestration status for each Goal during the existing Goal refresh and displays an available stage such as `briefs_pending` in the Sidebar. Missing legacy orchestration rows are ignored per Goal so the durable Goal list remains usable. This is display-only: it performs no state transition, provider call, brief submission, reveal, or decision.
 
 `npx vitest run apps/carnegie/src --reporter=dot` passed **55 files / 252 tests**; `npm run build`, targeted ESLint, `npm run boundaries:check`, and `git diff --check` passed.
+
+## Full automated verification checkpoint (2026-09-25)
+
+At feature-branch HEAD `3e507fa8`, `npm run check` completed with exit 0 against disposable PostgreSQL 16.15 at `127.0.0.1:55446` using a 4 GiB tmpfs. The check ran `npm run build` (`tsc -b` and Carnegie renderer typecheck) followed by Vitest: **449/449 files and 2,998/2,998 tests passed**; Vitest duration was **1,162.22s**. The earlier 512 MiB tmpfs attempt ended after PostgreSQL logged a WAL `No space left on device` panic; its later connection failures were environmental and are superseded by this passing rerun. After verification, the disposable container was stopped and removed; port `55446` was free, and persistent `maestro-local-postgres` remained running on `55432`. This automated result does not close provider sign-in, integrated Overture/Task Contract/Goal/Worker acceptance, or full E5 live acceptance.
