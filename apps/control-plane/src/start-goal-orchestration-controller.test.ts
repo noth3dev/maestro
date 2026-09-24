@@ -82,6 +82,26 @@ describe("start-goal orchestration controller", () => {
     expect(record).toHaveBeenLastCalledWith(undefined, expect.objectContaining({ state: "unknown" }));
   });
 
+  it("does not repeat effects when a run is already waiting for briefs", async () => {
+    const begin = vi.fn(async () => ({ state: "running" as const, stage: "briefs_pending" as const }));
+    const activate = vi.fn();
+    const create = vi.fn();
+    const controller = createStartGoalOrchestrationController({
+      begin,
+      record: vi.fn(),
+      goalService: { getGoal: vi.fn(), transitionGoal: vi.fn() },
+      headParticipationService: { activate },
+      councilService: { create },
+    } as never);
+
+    await expect(controller.execute({ ...commandBase, headActivationPlan: plan })).resolves.toMatchObject({
+      state: "running",
+      stage: "briefs_pending",
+    });
+    expect(activate).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("activates the explicit Head set after durably advancing draft -> active and replays stable command IDs", async () => {
     const begin = vi.fn(async () => ({ state: "running" as const }));
     const record = vi.fn(async (_pool: unknown, input: { state: string; reason: string }) => ({ ...input }));
@@ -117,8 +137,8 @@ describe("start-goal orchestration controller", () => {
     } as never);
 
     await expect(controller.execute({ ...commandBase, headActivationPlan: plan })).resolves.toMatchObject({
-      state: "completed",
-      stage: "council_creation",
+      state: "running",
+      stage: "briefs_pending",
     });
     expect(begin).toHaveBeenCalledWith(undefined, expect.objectContaining({ headActivationPlanHash: plan.contentHash }), plan.contentHash);
     expect(transitionGoal).toHaveBeenCalledTimes(3);
@@ -131,7 +151,7 @@ describe("start-goal orchestration controller", () => {
     );
     expect(record).toHaveBeenLastCalledWith(
       undefined,
-      expect.objectContaining({ state: "completed", stage: "council_creation", reason: "council_created" }),
+      expect.objectContaining({ state: "running", stage: "briefs_pending", reason: "council_created" }),
     );
   });
 });

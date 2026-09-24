@@ -240,3 +240,8 @@ Run 13 was non-green (**445 files / 2,952 tests**, 5 failures, exit 1, **1034.66
 ## Task 16 Council-creation handoff and run 15
 
 **Status: Partial.** The controller now durably creates the first Head Council after explicit Head activation and replays without a duplicate. Focused verification passed **12 files / 70 tests**; fresh PostgreSQL `npm test` passed **446 files / 2,956 tests**, exit 0, duration **945.94s** (`/tmp/maestro-full-test-15.log`). Brief submission/reveal/decision and live provider/downstream acceptance remain open.
+
+
+## Task 16 resumable briefs-pending stage and run 16
+
+**Status: Partial.** After durable Council creation, orchestration remains `running` at `briefs_pending`; replay does not create duplicate effects. Focused tests passed **3 files / 9 tests** and fresh PostgreSQL `npm test` passed **446 files / 2,957 tests**, exit 0, duration **949.80s** (`/tmp/maestro-full-test-16.log`). Independent Head briefs, reveal/decision, live provider, downstream execution, and E5 acceptance remain open.

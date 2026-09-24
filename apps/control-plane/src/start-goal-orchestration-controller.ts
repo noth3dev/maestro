@@ -64,6 +64,7 @@ export function createStartGoalOrchestrationController(
           state: "blocked",
           reason: "missing_head_activation_plan",
         });
+      if (run.stage === "briefs_pending") return run;
       if (run.stage === "council_creation") return createCouncil(run, command, plan, deps, record);
 
       try {
@@ -166,10 +167,10 @@ async function createCouncil(
       goalId: command.goalId,
       commandId: command.commandId,
       eventKey: `${command.commandId}:council-created`,
-      stage: "council_creation",
-      state: "completed",
+      stage: "briefs_pending",
+      state: "running",
       reason: "council_created",
-      details: { councilId: council.councilId, nextStage: "briefs_pending" },
+      details: { councilId: council.councilId, nextStage: "brief_submission" },
     });
   } catch (error) {
     return transitionState(run, record, deps.pool, {

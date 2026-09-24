@@ -4993,3 +4993,10 @@ Verification: `MAESTRO_TEST_DATABASE_URL=postgresql://maestro@127.0.0.1:55432/ma
 - Added the next bounded post-Head stage: after all explicit Heads are durably active, the controller creates the Goal-bound Head Council through the existing `CouncilService.create` path, persists `council_creation`, and replays without duplicate creation. Brief submission, reveal, decision, and later execution remain untouched.
 - Added migration 0110 to widen orchestration stage checks and deterministic Council creation command identity. Focused verification passed **12 files / 70 tests**; build/lint/migration/boundary checks pass.
 - Fresh unrestricted PostgreSQL run 15 passed **446 files / 2,956 tests**, exit 0, **945.94s** (`/tmp/maestro-full-test-15.log`). E5 remains partial; no live provider or downstream evidence is claimed.
+
+
+## Task 16 resumable briefs-pending stage — 2026-09-24
+
+- Corrected Council handoff semantics: Council creation now transitions the durable orchestration run to `stage=briefs_pending`, `state=running`, and replay returns without reactivating Heads or creating another Council. Added migration 0111 for the stage checks. No brief content or provider call was added.
+- Focused verification passed **3 files / 9 tests**; build, lint, migration numbering, boundaries, and diff checks pass. Fresh unrestricted PostgreSQL run 16 passed **446 files / 2,957 tests**, exit 0, **949.80s** (`/tmp/maestro-full-test-16.log`).
+- E5 remains partial and E6 remains archival/gated; live provider, independent brief, reveal/decision, downstream, certification, and report evidence is absent.

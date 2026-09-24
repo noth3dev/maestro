@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import type { ValidatedStartGoalOrchestrationCommand } from "./commands.js";
 
 export type StartGoalOrchestrationState = "running" | "blocked" | "unknown" | "completed";
-export type StartGoalOrchestrationStage = "head_activation" | "council_creation";
+export type StartGoalOrchestrationStage = "head_activation" | "council_creation" | "briefs_pending";
 
 export type StartGoalOrchestrationInput = Omit<ValidatedStartGoalOrchestrationCommand, "actorId"> & {
   actorId: string | null;

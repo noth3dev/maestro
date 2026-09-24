@@ -1464,3 +1464,10 @@ Fresh unrestricted PostgreSQL run 14 after all hardening and snapshot updates pa
 After all explicit Heads reach durable `active`, the bounded controller now creates exactly one Head Council through the existing lease-bound `CouncilService.create` seam. The orchestration run advances to `council_creation`; Council briefs, reveal, decision, Department Plans, Mission Bundles, Workers, and later stages remain separate and are not inferred. Migration `0110_council_creation_orchestration_stage.sql` widens the append-only stage checks. Stable Council command identity derives from the original start command and Goal.
 
 Focused verification passed **12 files / 70 tests**. Fresh unrestricted PostgreSQL run 15 passed **446 test files / 2,956 tests**, exit 0, duration **945.94s** (`/tmp/maestro-full-test-15.log`). This is automated evidence only; no live provider, downstream brief/reveal/decision, worker, certification, report, external effect, or E5 completion is claimed.
+
+
+## Task 16 resumable briefs-pending stage and regression run 16 (2026-09-24)
+
+Council creation no longer terminates the orchestration run. A new durable `briefs_pending` stage keeps the run `running` and resumable after Council creation, while replay is a no-op and does not reactivate Heads or recreate the Council. Migration `0111_briefs_pending_orchestration_stage.sql` widens both run/history stage checks. No independent brief content is synthesized or submitted; briefs, reveal, and decision remain explicit later boundaries.
+
+Focused verification passed **3 files / 9 tests** plus build, lint, migration numbering, boundary, and diff checks. Fresh unrestricted PostgreSQL run 16 passed **446 test files / 2,957 tests**, exit 0, duration **949.80s** (`/tmp/maestro-full-test-16.log`). This is automated evidence only; no live provider or downstream E5 completion is claimed.

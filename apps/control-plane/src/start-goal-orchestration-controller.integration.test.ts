@@ -130,12 +130,12 @@ describeDatabase("start_goal orchestration controller", () => {
     };
     const controller = createStartGoalOrchestrationController({ pool, goalService, headParticipationService, councilService } as never);
 
-    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
-    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "running", stage: "briefs_pending" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "running", stage: "briefs_pending" });
     expect(activations).toEqual([expect.any(String)]);
     expect(councils).toHaveLength(1);
     expect((await pool.query("SELECT stage, state, reason FROM goal_orchestration_runs WHERE goal_id = $1", [goalId])).rows).toEqual([
-      { stage: "council_creation", state: "completed", reason: "council_created" },
+      { stage: "briefs_pending", state: "running", reason: "council_created" },
     ]);
   });
 
@@ -193,12 +193,12 @@ describeDatabase("start_goal orchestration controller", () => {
       councilService: { create: async () => ({ councilId: "council-1" }) },
     } as never);
 
-    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
-    await expect(controller.execute(input)).resolves.toMatchObject({ state: "completed", stage: "council_creation" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "running", stage: "briefs_pending" });
+    await expect(controller.execute(input)).resolves.toMatchObject({ state: "running", stage: "briefs_pending" });
     expect(transitions).toEqual(["ready_for_confirmation", "launched", "active"]);
     expect(activations).toEqual([deriveHeadActivationCommandId(input.commandId, "product")]);
     expect((await pool.query("SELECT state, reason FROM goal_orchestration_runs WHERE goal_id = $1", [goalId])).rows).toEqual([
-      { state: "completed", reason: "council_created" },
+      { state: "running", reason: "council_created" },
     ]);
   });
 });

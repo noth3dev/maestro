@@ -90,3 +90,6 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 
 
 - [ ] **Task 16 Council-creation handoff (2026-09-24):** automated focused coverage passes for stage widening, stable Council command identity, durable Council creation after active Heads, and replay without duplication. Run 15 passed **446 files / 2,956 tests**, exit 0, **945.94s** (`/tmp/maestro-full-test-15.log`). Live provider, sealed Head briefs, reveal/decision, downstream execution, certification/report, and E5 acceptance remain pending.
+
+
+- [ ] **Task 16 resumable `briefs_pending` stage (2026-09-24):** Council creation now leaves the orchestration run running and replay-safe while no brief content exists. Focused tests and fresh run 16 passed **446 files / 2,957 tests**, exit 0, **949.80s** (`/tmp/maestro-full-test-16.log`). Live provider, sealed independent briefs, reveal/decision, downstream execution, certification/report, and E5 acceptance remain pending.
