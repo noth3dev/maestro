@@ -9,7 +9,9 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 - **Backend-blocked** — no valid server contract/durable source of truth; no fake action is shown.
 - **Out-of-scope** — excluded by an explicit roadmap gate.
 
-**Current verification state (2026-09-23):** The fresh real-PostgreSQL suite passed 432 test files / 2,874 tests (exit 0); root and Carnegie builds passed; exact Carnegie Playwright passed 4 tests with 5 designed CDP skips; changed-file ESLint and `git diff --check` passed; and secret/artifact scans were clean. A fresh Docker-backed Electron rerun now auto-bootstrapped PostgreSQL, Control Plane (`4310`), and Model Gateway (`4321`) and reached the authenticated Home UI; the bounded real composer request failed at the exact provider boundary with `No Concertmaster model is available`. Task 14 remains `Backend-blocked`; no row is upgraded to `Live` without durable/provider evidence.
+**Historical verification state (2026-09-23):** The fresh real-PostgreSQL suite passed 432 test files / 2,874 tests (exit 0); root and Carnegie builds passed; exact Carnegie Playwright passed 4 tests with 5 designed CDP skips; changed-file ESLint and `git diff --check` passed; and secret/artifact scans were clean. A fresh Docker-backed Electron rerun now auto-bootstrapped PostgreSQL, Control Plane (`4310`), and Model Gateway (`4321`) and reached the authenticated Home UI; the bounded real composer request failed at the exact provider boundary with `No Concertmaster model is available`. Task 14 remains `Backend-blocked`; no row is upgraded to `Live` without durable/provider evidence.
+
+**Current local UI verification (2026-09-25):** `npx vitest run apps/carnegie/src/views/Settings.test.tsx --reporter=dot` passed 1 file / 30 tests. Real Electron/CDP read-only acceptance on a disposable profile/database opened Settings → Ensemble Router and Providers: 7 router rows showed unknown candidate/account state and all switches were disabled; the first switch exposed an accessible explanation. Both API-key rows showed `not connected`, with empty-field `connect` buttons disabled. No OAuth sign-in, provider turn, Task Contract, Goal, or Worker evidence was attempted. This is a limited UI pass, not full E5 acceptance; see `execution/PENDING_LIVE_CHECKS.md` and `execution/e5-live-evidence/README.md`.
 
 **Heartbeat #49 automated verification (2026-09-24):** A fresh unrestricted `npm test` against PostgreSQL `127.0.0.1:55432` passed **440 test files / 2,916 tests**, exit 0, duration **1,001.90s** (`/tmp/maestro-full-test-2.log`). This supersedes the older automated count only; Task 14 remains `Backend-blocked`, and no live provider/Task Contract/Goal/Worker evidence exists.
 
@@ -79,7 +81,7 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Settings / provider / billing (Task 10)
 
-**Status: Partial.** `views/Settings.tsx`, `views/Billing.tsx` exist; not inspected in depth this session. No `lib/settings-data.ts` exists per the plan's file list.
+**Status: Partial.** `views/Settings.tsx`, `lib/settings-data.ts`, and `views/Billing.tsx` exist; `settings-data.ts` provides a server-authoritative store. The 2026-09-25 isolated Electron check opened Router Catalog and Providers read-only; OAuth sign-in and Billing were not exercised. Provider and downstream E5 acceptance remain open; see `execution/e5-live-evidence/README.md`.
 
 ## Persona / Arrangements (Task 11)
 
@@ -93,13 +95,13 @@ Task 3 implementation checkpoint: `lib/conversation-data.ts` paginates the 256-e
 
 ## Accessibility / layout (Task 13)
 
-**Status: Partial infrastructure exists.** Carnegie now has Task 13 semantic/responsive checks, rendered active-route/mode tests, and CDP-gated live specs in `apps/carnegie/src/task13-a11y.test.ts`, `apps/carnegie/src/components/Sidebar.test.tsx`, `apps/carnegie/tests/e5-a11y.spec.ts`, and `apps/carnegie/tests/e5-live-acceptance.spec.ts`. The current focused UI suite passes 8 files / 35 tests; root/Carnegie builds, changed-file ESLint, exact Carnegie Playwright (4 passed / 5 designed skips), and radial smoke pass. Real-CDP a11y execution reached the recovery renderer but was backend-blocked; no browser success is claimed for unavailable backend routes.
+**Status: Partial infrastructure and live evidence.** Carnegie has semantic/responsive tests and CDP-gated specs in `apps/carnegie/src/task13-a11y.test.ts`, `apps/carnegie/src/components/Sidebar.test.tsx`, `apps/carnegie/tests/e5-a11y.spec.ts`, and `apps/carnegie/tests/e5-live-acceptance.spec.ts`. The 2026-09-25 real-Electron Router Catalog slice passed on a 2880×1716 viewport. Three independent reviewers found that `.settings-panel-wide` at 780px constrains the 820px-minimum router table, forcing horizontal scroll despite available space. A scoped 1180px panel and keyboard-focusable, named narrow-screen scroll region were proposed but not implemented; explicit approval is pending. Full route/window-scale and accessibility acceptance remains open.
 
 ## Tasks 14–15 (live project progression, final gate)
 
-**Attempted, not complete.** Task 14 reached the real Electron/CDP boundary and is `Backend-blocked` at existing PGlite bootstrap. Task 15 automated verification is now fresh and green: real PostgreSQL `npm test` passed 432 files / 2,874 tests (exit 0), root and Carnegie builds passed, exact Carnegie Playwright passed 4 with 5 designed skips, changed-file ESLint and `git diff --check` passed, and secret/artifact scans were clean. E5 is still not closed because the live Task 14 project progression/provider check has no usable Control Plane, database, or provider listener. See the dated entries below and `execution/PENDING_LIVE_CHECKS.md`.
+**Attempted, not complete.** The latest recorded unrestricted PostgreSQL suite passed 446 files / 2,957 tests on 2026-09-24 (see the dated checkpoints below). A 2026-09-23 real ChatGPT/Codex binding and assistant response did not produce a Task Contract. The 2026-09-25 isolated Electron run verified only read-only Settings UI and did not attempt OAuth or a provider turn. The integrated Overture → Task Contract → exact Launch → Goal/Head/Council/Worker flow remains unverified; see `execution/PENDING_LIVE_CHECKS.md` for current blockers and next evidence gates.
 
-Heartbeat #49 correction: the latest unrestricted PostgreSQL suite passed **440 files / 2,916 tests** with exit 0 in **1,001.90s**; this is automated regression evidence and does not change the live blocker or E5 gate.
+**Historical Heartbeat #49 correction (2026-09-24):** The unrestricted PostgreSQL suite passed **440 files / 2,916 tests**, exit 0 in **1,001.90s**. This automated result was superseded by the later Task 16 run 16 checkpoint (446 files / 2,957 tests); neither run closes the live provider or E5 gate.
 
 ---
 
