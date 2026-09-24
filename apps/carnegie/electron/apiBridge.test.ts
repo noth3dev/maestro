@@ -38,6 +38,7 @@ describe("Carnegie renderer API bridge", () => {
   it("exposes the full E5 API surface: workspace, conversation, goal, planning, worker, git, evidence, oversight, and reporting methods", () => {
     const required = [
       "createGoal",
+      "getGoalOrchestrationStatus",
       "listProjects",
       "getOrganization",
       "provisionProjectAccess",

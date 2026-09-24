@@ -41,6 +41,42 @@ function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   };
 }
 
+describe("Goal orchestration status route", () => {
+  it("returns the project-bound durable stage without mutating it", async () => {
+    const status = {
+      goalId: goal.goalId,
+      projectId: goal.projectId,
+      taskContractId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f08",
+      startCommandId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f09",
+      actorId: operator.operatorId,
+      stage: "briefs_pending" as const,
+      state: "running" as const,
+      headActivationPlanHash: "a".repeat(64),
+      reason: "council_created",
+    };
+    const orchestrationStatus = {
+      get: vi.fn(async (goalId: string, projectId: string) => {
+        expect({ goalId, projectId }).toEqual({ goalId: goal.goalId, projectId: goal.projectId });
+        return status;
+      }),
+    };
+    const app = buildServer({
+      goalService: fakeService(),
+      authenticator: authenticated(),
+      orchestrationStatusService: orchestrationStatus,
+    });
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/goals/${goal.goalId}/orchestration?projectId=${goal.projectId}`,
+      headers: { authorization: "Bearer test" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(status);
+    expect(orchestrationStatus.get).toHaveBeenCalledOnce();
+    await app.close();
+  });
+});
+
 describe("health routes", () => {
   it("serves unauthenticated liveness and readiness checks", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readinessCheck: async () => {} });

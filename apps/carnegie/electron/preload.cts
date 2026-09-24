@@ -36,6 +36,7 @@ function subscribeToEventStream(query: { projectId: string; after: string }, lis
 const exposedApiMethods = [
   "listGoals",
   "getGoal",
+  "getGoalOrchestrationStatus",
   "createGoal",
   "listProjects",
   "getOrganization",

@@ -4,6 +4,7 @@ import {
   GoalListSchema,
   GoalBudgetSummarySchema,
   GoalResultSchema,
+  StartGoalOrchestrationStatusSchema,
   TransitionGoalInputSchema,
   UuidSchema,
 } from "@maestro/contracts";
@@ -17,6 +18,7 @@ export function createGoalsMethods(
   | "createGoal"
   | "listGoals"
   | "getGoal"
+  | "getGoalOrchestrationStatus"
   | "getBudgetSummary"
   | "transitionGoal"
   | "pauseGoal"
@@ -50,6 +52,15 @@ export function createGoalsMethods(
         `v1/goals/${encodeURIComponent(parsedGoalId)}?${new URLSearchParams({ projectId: parsedQuery.projectId })}`,
         { headers },
         GoalResultSchema,
+      );
+    },
+    getGoalOrchestrationStatus(goalId, query) {
+      const parsedGoalId = UuidSchema.parse(goalId);
+      const parsedQuery = GoalQuerySchema.parse(query);
+      return request(
+        `v1/goals/${encodeURIComponent(parsedGoalId)}/orchestration?${new URLSearchParams({ projectId: parsedQuery.projectId })}`,
+        { headers },
+        StartGoalOrchestrationStatusSchema,
       );
     },
     getBudgetSummary(goalId, query) {

@@ -58,3 +58,25 @@ export const GoalResultSchema = z
 export type GoalResult = z.infer<typeof GoalResultSchema>;
 export const GoalListSchema = z.object({ goals: z.array(GoalResultSchema) }).strict();
 export type GoalList = z.infer<typeof GoalListSchema>;
+
+export const StartGoalOrchestrationStageSchema = z.enum(["head_activation", "council_creation", "briefs_pending"]);
+export type StartGoalOrchestrationStage = z.infer<typeof StartGoalOrchestrationStageSchema>;
+
+export const StartGoalOrchestrationStateSchema = z.enum(["running", "blocked", "unknown", "completed"]);
+export type StartGoalOrchestrationState = z.infer<typeof StartGoalOrchestrationStateSchema>;
+
+/** Read-only, project-bound status for the durable post-Launch orchestration run. */
+export const StartGoalOrchestrationStatusSchema = z
+  .object({
+    goalId: UuidSchema,
+    projectId: UuidSchema,
+    taskContractId: UuidSchema,
+    startCommandId: UuidSchema,
+    actorId: z.string().nullable(),
+    stage: StartGoalOrchestrationStageSchema,
+    state: StartGoalOrchestrationStateSchema,
+    headActivationPlanHash: z.string().length(64).nullable(),
+    reason: z.string().min(1),
+  })
+  .strict();
+export type StartGoalOrchestrationStatus = z.infer<typeof StartGoalOrchestrationStatusSchema>;

@@ -7,12 +7,13 @@ import {
   GoalControlInputSchema,
   GoalQuerySchema,
   GoalResultSchema,
+  StartGoalOrchestrationStatusSchema,
 } from "@maestro/contracts";
 import { parse, requestOperator } from "../server-input.js";
 import type { OperatorContext } from "@maestro/persistence";
 
 export function registerGoalRoutes(app: FastifyInstance, deps: GoalRouteDeps): void {
-  const { goalService } = deps;
+  const { goalService, orchestrationStatus } = deps;
   app.post("/v1/goals", async (request, reply) => {
     const input = parse(CreateGoalInputSchema, request.body);
     const commandId = parse(UuidSchema, request.headers["idempotency-key"]);
@@ -70,5 +71,12 @@ export function registerGoalRoutes(app: FastifyInstance, deps: GoalRouteDeps): v
     const query = parse(GoalQuerySchema, request.query);
     const result = await goalService.getGoal(goalId, query.projectId);
     return reply.status(200).send(GoalResultSchema.parse(result));
+  });
+
+  app.get("/v1/goals/:goalId/orchestration", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    const result = await orchestrationStatus.get(goalId, query.projectId);
+    return reply.status(200).send(StartGoalOrchestrationStatusSchema.parse(result));
   });
 }

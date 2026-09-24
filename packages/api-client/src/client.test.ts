@@ -50,6 +50,29 @@ describe("channel client", () => {
   });
 });
 
+describe("Goal orchestration status client", () => {
+  it("reads the project-bound durable orchestration status", async () => {
+    const status = {
+      goalId,
+      projectId,
+      taskContractId: commandId,
+      startCommandId: commandId,
+      actorId: "operator-1",
+      stage: "briefs_pending" as const,
+      state: "running" as const,
+      headActivationPlanHash: "a".repeat(64),
+      reason: "council_created",
+    };
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify(status), { status: 200 }));
+    const client = createApiClient({ baseUrl: "https://maestro.test", token: "top-secret", fetch });
+    await expect(client.getGoalOrchestrationStatus(goalId, { projectId })).resolves.toEqual(status);
+    expect(fetch).toHaveBeenCalledWith(
+      `https://maestro.test/v1/goals/${goalId}/orchestration?projectId=${projectId}`,
+      expect.objectContaining({ headers: { authorization: "Bearer top-secret" } }),
+    );
+  });
+});
+
 describe("billing client", () => {
   it("reads the project billing summary from the control plane", async () => {
     const summary = {

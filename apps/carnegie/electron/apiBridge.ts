@@ -5,6 +5,7 @@ import type { ConnectionConfig } from "./store.js";
 export const exposedApiMethods = [
   "listGoals",
   "getGoal",
+  "getGoalOrchestrationStatus",
   "createGoal",
   "listProjects",
   "getOrganization",

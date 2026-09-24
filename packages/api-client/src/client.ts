@@ -81,6 +81,7 @@ import {
   type GoalBudgetSummary,
   type BillingReadModel,
   type GoalResult,
+  type StartGoalOrchestrationStatus,
   type CriticalActionInput,
   type CriticalActionApprovalInput,
   type CriticalActionResult,
@@ -227,6 +228,7 @@ export interface ApiClient {
   streamOvertureEvents(runId: string, query: OvertureEventQuery, options?: { signal?: AbortSignal }): AsyncIterable<OvertureEvent>;
   provisionProjectAccess(input: ProjectAccessProvisionInput): Promise<ProjectAccessProvisionResult>;
   getGoal(goalId: string, query: GoalQuery): Promise<GoalResult>;
+  getGoalOrchestrationStatus(goalId: string, query: GoalQuery): Promise<StartGoalOrchestrationStatus>;
   transitionGoal(goalId: string, input: TransitionGoalInput, commandId: string): Promise<GoalResult>;
   pauseGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;
   stopGoal(goalId: string, input: GoalControlInput, commandId: string): Promise<GoalResult>;

@@ -20,7 +20,7 @@ export type EventRouteDeps = Pick<
   "events" | "pollingScheduler" | "activeStreams" | "maxActiveStreams" | "authenticator" | "projectMembership"
 >;
 export type GitRouteDeps = Pick<RouteDeps, "gitIntegrations">;
-export type GoalRouteDeps = Pick<RouteDeps, "goalService">;
+export type GoalRouteDeps = Pick<RouteDeps, "goalService" | "orchestrationStatus">;
 export type OversightRouteDeps = Pick<RouteDeps, "metronome" | "encore">;
 export type PersonaRouteDeps = Pick<RouteDeps, "personaInspection">;
 export type ProviderRouteDeps = Pick<

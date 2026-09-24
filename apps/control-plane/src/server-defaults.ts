@@ -1,4 +1,5 @@
 import { DurableStoreUnavailableError } from "./goal-service.js";
+import type { StartGoalOrchestrationStatusService } from "./start-goal-orchestration-status-service.js";
 import { CriticalActionUnavailableError, type CriticalActionService } from "./critical-action-service.js";
 import { type ReadStateService } from "./read-state-service.js";
 import type { ProjectionService } from "./projection-service.js";
@@ -36,6 +37,7 @@ import type {
  */
 export interface ServiceDefaultsInput {
   channelService: ChannelService | undefined;
+  orchestrationStatusService: StartGoalOrchestrationStatusService | undefined;
   organizationService: OrganizationService | undefined;
   eventService: EventService | undefined;
   projectionService: ProjectionService | undefined;
@@ -63,6 +65,7 @@ export interface ServiceDefaultsInput {
 
 export interface ResolvedServices {
   channels: ChannelService;
+  orchestrationStatus: StartGoalOrchestrationStatusService;
   organizations: OrganizationService;
   events: EventService;
   projections: ProjectionService;
@@ -86,6 +89,14 @@ export interface ResolvedServices {
   encore: EncoreService;
   discordSignal: DiscordSignalService;
   conversations: ConversationService;
+}
+
+function resolveOrchestrationStatus(input: StartGoalOrchestrationStatusService | undefined): StartGoalOrchestrationStatusService {
+  return input ?? {
+    get: async () => {
+      throw new DurableStoreUnavailableError();
+    },
+  };
 }
 
 function resolveChannels(input: ChannelService | undefined): ChannelService {
@@ -483,6 +494,7 @@ function resolveConversations(input: ConversationService | undefined): Conversat
 export function resolveServiceDefaults(input: ServiceDefaultsInput): ResolvedServices {
   return {
     channels: resolveChannels(input.channelService),
+    orchestrationStatus: resolveOrchestrationStatus(input.orchestrationStatusService),
     organizations: resolveOrganizations(input.organizationService),
     events: resolveEvents(input.eventService),
     projections: resolveProjections(input.projectionService),

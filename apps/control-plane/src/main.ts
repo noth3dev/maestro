@@ -35,6 +35,7 @@ import { createProjectionService } from "./projection-service.js";
 import { createMetronomeLoop } from "./metronome-loop.js";
 import { createStartGoalOutboxLoop } from "./start-goal-outbox-loop.js";
 import { createStartGoalOrchestrationController } from "./start-goal-orchestration-controller.js";
+import { createStartGoalOrchestrationStatusService } from "./start-goal-orchestration-status-service.js";
 import { createModelGatewayClient } from "./model-gateway-client.js";
 import { createNativeExecutionKernel, createUnavailableNativeExecutionKernel } from "./native-execution-kernel.js";
 import type { NativeAdmissionInput } from "./native-admission.js";
@@ -164,6 +165,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   });
   const app = buildServer({
     goalService,
+    orchestrationStatusService: createStartGoalOrchestrationStatusService({ pool }),
     headParticipationService,
     councilService,
     departmentPlanService,

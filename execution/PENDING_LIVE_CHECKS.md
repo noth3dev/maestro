@@ -99,3 +99,11 @@ The next narrow slice now couples exact Task Contract Launch to a server-derived
 ## Task 16 Head brief adapter boundary (2026-09-24)
 
 Added an unconnected `HeadBriefRuntime` adapter in `packages/agent-runtime/src/head-brief-runtime.ts`. It prompts/observes an opaque Head execution only when an explicit caller invokes it, requires a terminal successful answer, parses strict JSON through the existing `IndependentBrief` validator, returns the exact provider/model identity, bounds output size, and never echoes raw provider text in errors. It does not submit a brief, mutate Council state, or wire into `start_goal`; no provider was contacted in verification. `npx vitest run packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts packages/domain/src/council.test.ts --reporter=dot` passed **3 files / 9 tests**; `npm run build` and targeted `npx eslint packages/agent-runtime/src/head-brief-runtime.ts packages/agent-runtime/src/head-brief-runtime.test.ts packages/agent-runtime/src/surface.test.ts` passed.
+
+
+
+## Task 16 read-only orchestration status bridge (2026-09-24)
+
+Added a project-bound read-only status surface for the durable post-Launch orchestration run: `GET /v1/goals/:goalId/orchestration?projectId=...`, typed API-client method `getGoalOrchestrationStatus`, and Carnegie Electron/preload exposure. It returns the PostgreSQL-backed `stage`, `state`, `reason`, command/binding identity, and plan hash; missing or different-project runs fail closed as not found. This surface performs no mutation, provider call, brief submission, reveal, or decision.
+
+`npx vitest run apps/control-plane/src/start-goal-orchestration-status-service.test.ts apps/control-plane/src/server.test.ts packages/api-client/src/client.test.ts apps/carnegie/electron/apiBridge.test.ts --reporter=dot` passed **4 files / 116 tests**; `npm run build`, targeted `npx eslint ...`, `npm run boundaries:check`, and `git diff --check` passed.

@@ -89,6 +89,7 @@ const systemPollingScheduler: PollingScheduler = {
 
 export function buildServer({
   goalService,
+  orchestrationStatusService,
   authenticator,
   eventService,
   criticalActionService,
@@ -128,6 +129,7 @@ export function buildServer({
   personaInspectionService,
 }: {
   goalService: GoalService;
+  orchestrationStatusService?: import("./start-goal-orchestration-status-service.js").StartGoalOrchestrationStatusService;
   authenticator: OperatorAuthenticator;
   eventService?: EventService;
   criticalActionService?: CriticalActionService;
@@ -193,6 +195,7 @@ export function buildServer({
   const loginOperationStaleAfterMs = 30_000;
   const {
     channels,
+    orchestrationStatus,
     organizations,
     events,
     projections,
@@ -218,6 +221,7 @@ export function buildServer({
     conversations,
   } = resolveServiceDefaults({
     channelService,
+    orchestrationStatusService,
     organizationService,
     eventService,
     projectionService,
@@ -288,6 +292,7 @@ export function buildServer({
   });
   const deps: RouteDeps = {
     goalService,
+    orchestrationStatus,
     events,
     criticalActions,
     capabilityApprovals,
