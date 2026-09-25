@@ -29,8 +29,37 @@ export const ko: Translations = {
     notConnectedHint: "제어 플레인에 연결하면 이 화면에서 상태를 확인할 수 있습니다.",
   },
   setup: {
-    title: "제어 플레인 연결",
-    hint: "실행 중인 로컬 제어 플레인 서버를 입력하세요.",
+    title: "Maestro 설정",
+    hint: "Maestro는 보통 로컬 작업 공간을 자동으로 시작합니다. 시작되지 않으면 원인을 해결한 뒤 다시 시도하거나, 기존 로컬 제어 플레인에 연결하세요.",
+    retryHint:
+      "위에 나온 문제를 해결하세요. MAESTRO_* 설정이 원인이라면 Carnegie를 시작할 때 사용하는 환경을 수정하고 Carnegie를 다시 시작한 뒤 재시도하세요. 이 컴퓨터에서 Control Plane이 이미 실행 중이면 아래의 수동 연결을 사용하세요.",
+    databaseEngineRecoveryHint:
+      "MAESTRO_LOCAL_DB_ENGINE을 embedded 또는 docker로 설정하거나 기본값인 embedded를 사용하려면 해당 변수를 제거하세요. Carnegie를 시작할 때 사용하는 환경을 수정한 뒤 Carnegie를 다시 시작하고 로컬 설정을 재시도하세요.",
+    databasePortRecoveryHint:
+      "MAESTRO_EMBEDDED_DATABASE_PORT를 1에서 65535 사이의 정수로 설정하거나 변수를 제거해 기본값을 사용하세요. Carnegie를 시작할 때 사용하는 환경을 수정한 뒤 Carnegie를 다시 시작하고 로컬 설정을 재시도하세요.",
+    dockerUnavailableRecoveryHint:
+      "Docker를 실행한 뒤 로컬 설정을 다시 시도하세요. 데이터베이스 URL을 사용하려면 Carnegie를 시작할 때 사용하는 환경에 MAESTRO_LOCAL_DATABASE_URL을 설정한 뒤 Carnegie를 다시 시작하세요.",
+    dockerDiagnosticsRecoveryHint: "위 원인에 나온 Docker 진단 명령을 실행한 뒤 로컬 설정을 다시 시도하세요.",
+    retryLocal: "로컬 설정 다시 시도",
+    retryingLocal: "로컬 설정을 시작하는 중…",
+    retryFailed: "로컬 설정을 완료하지 못했습니다. 위 원인을 확인한 뒤 다시 시도하세요.",
+    starting: "로컬 작업 공간 시작 중…",
+    progressSteps: {
+      "docker-check": "Docker 사용 가능 여부 확인 중…",
+      "postgres-ready": "로컬 데이터베이스 시작 중…",
+      migrations: "데이터베이스 마이그레이션 실행 중…",
+      "control-plane-up": "Control Plane 시작 중…",
+      "model-gateway-up": "모델 게이트웨이 시작 중…",
+    },
+    completedProgressSteps: {
+      "docker-check": "Docker를 사용할 수 있습니다.",
+      "postgres-ready": "로컬 데이터베이스가 준비되었습니다.",
+      migrations: "데이터베이스 마이그레이션이 완료되었습니다.",
+      "control-plane-up": "Control Plane이 준비되었습니다.",
+      "model-gateway-up": "모델 게이트웨이가 준비되었습니다.",
+    },
+    manualTitle: "수동 연결",
+    manualHint: "이 컴퓨터에서 실행 중인 제어 플레인만 연결할 수 있습니다.",
     apiUrl: "제어 플레인 URL",
     token: "운영자 토큰",
     projectId: "프로젝트 ID",

@@ -20,6 +20,17 @@ function hasConnectionEnvironmentOverride(env: ConnectionEnvironment): boolean {
     || (env.MAESTRO_API_TOKEN?.trim() ?? "") !== "";
 }
 
+export function createBootstrapRunner(action: () => Promise<void>): () => Promise<void> {
+  let inFlight: Promise<void> | undefined;
+  return () => {
+    if (inFlight !== undefined) return inFlight;
+    inFlight = Promise.resolve().then(action).finally(() => {
+      inFlight = undefined;
+    });
+    return inFlight;
+  };
+}
+
 export async function initializeCarnegieConnection(options: CarnegieBootstrapOptions): Promise<CarnegieBootstrapResult> {
   let saved: ConnectionConfig | undefined;
   try {

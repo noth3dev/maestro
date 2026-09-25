@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { BootstrapStatus, MaestroBridge, PublicConnectionConfig } from "./global.js";
+import { redactSensitiveText } from "./lib/command-id.js";
 
 export type SessionRecovery =
   | { kind: "invalid-session"; action: "sign-in-again"; message: string }
@@ -41,6 +42,9 @@ interface ConnectionContextValue {
   connect: (input: { apiUrl: string; token: string; projectId: string }) => Promise<void>;
   disconnect: () => Promise<void>;
   retryConnection: () => void;
+  retryBootstrap: () => Promise<void>;
+  workspaceFocusRequest: number;
+  retryingBootstrap: boolean;
   recovery: SessionRecovery | undefined;
   reportSessionFailure: (error: unknown) => void;
   setupError: string | undefined;
@@ -61,7 +65,7 @@ interface ConnectionState {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Could not load the local workspace";
+  return redactSensitiveText(error instanceof Error ? error.message : "Could not load the local workspace");
 }
 
 export async function readConnectionState(source: ConnectionRefreshSource): Promise<ConnectionState> {
@@ -73,15 +77,23 @@ export async function readConnectionState(source: ConnectionRefreshSource): Prom
   const bootstrap = status.status === "fulfilled"
     ? status.value
     : { phase: "setup-required" as const, reason: errorMessage(status.reason) };
+  const bootstrapReason = bootstrap.phase === "setup-required" ? bootstrap.reason : undefined;
+  const setupError = error.status === "fulfilled"
+    ? error.value ?? bootstrapReason
+    : bootstrap.phase === "starting"
+      ? undefined
+      : bootstrapReason ?? errorMessage(loaded.status === "rejected" ? loaded.reason : error.reason);
   return {
-    config: loaded.status === "fulfilled" ? loaded.value : undefined,
-    setupError: error.status === "fulfilled"
-      ? error.value
-      : bootstrap.phase === "starting"
-        ? undefined
-        : errorMessage(loaded.status === "rejected" ? loaded.reason : error.reason),
+    config: bootstrap.phase === "setup-required" || loaded.status !== "fulfilled" ? undefined : loaded.value,
+    setupError: setupError === undefined ? undefined : redactSensitiveText(setupError),
     bootstrap,
   };
+}
+
+export function sessionRecoveryForConnectionState(state: ConnectionState): SessionRecovery | undefined {
+  if (state.bootstrap.phase === "setup-required") return undefined;
+  if (state.setupError === undefined || state.bootstrap.phase === "starting") return undefined;
+  return classifySessionRecovery(new Error(state.setupError));
 }
 
 export function ConnectionProvider({ children }: { children: ReactNode }) {
@@ -89,26 +101,40 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [setupError, setSetupError] = useState<string | undefined>(undefined);
   const [bootstrap, setBootstrap] = useState<BootstrapStatus>({ phase: "starting" });
   const [loading, setLoading] = useState(true);
+  const [retryingBootstrap, setRetryingBootstrap] = useState(false);
+  const [workspaceFocusRequest, setWorkspaceFocusRequest] = useState(0);
+  const connectionOperation = useRef<"manual-connect" | "bootstrap-retry" | undefined>(undefined);
   const [recovery, setRecovery] = useState<SessionRecovery | undefined>(undefined);
   const [refreshGeneration, setRefreshGeneration] = useState(0);
 
   useEffect(() => {
     let active = true;
-    let refreshGeneration = 0;
+    let readGeneration = 0;
     const refresh = async (): Promise<void> => {
-      const generation = ++refreshGeneration;
+      const generation = ++readGeneration;
       const state = await readConnectionState(window.maestro);
-      if (!active || generation !== refreshGeneration) return;
+      if (!active || generation !== readGeneration) return;
       setConfig(state.config);
       setSetupError(state.setupError);
       setBootstrap(state.bootstrap);
       setLoading(state.bootstrap.phase === "starting");
-      setRecovery(state.setupError === undefined || state.bootstrap.phase === "starting" ? undefined : classifySessionRecovery(new Error(state.setupError)));
+      if (state.bootstrap.phase !== "starting") setRetryingBootstrap(false);
+      setRecovery(sessionRecoveryForConnectionState(state));
     };
     const unsubscribe = window.maestro.bootstrap.onStatus((status) => {
       if (!active) return;
       setBootstrap(status);
-      if (status.phase !== "starting") void refresh();
+      if (status.phase === "starting") {
+        readGeneration += 1;
+        setLoading(true);
+        return;
+      }
+      if (status.phase === "setup-required") {
+        setConfig(undefined);
+        setSetupError(status.reason);
+        setRecovery(undefined);
+      }
+      void refresh();
     });
     void refresh();
     return () => {
@@ -118,10 +144,19 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   }, [refreshGeneration]);
 
   const connect: ConnectionContextValue["connect"] = async (input) => {
-    const saved = await window.maestro.config.save(input);
-    setConfig(saved);
-    setSetupError(undefined);
-    setRecovery(undefined);
+    if (connectionOperation.current !== undefined || retryingBootstrap) {
+      throw new Error("Another local connection operation is already in progress");
+    }
+    connectionOperation.current = "manual-connect";
+    try {
+      const saved = await window.maestro.config.save(input);
+      setConfig(saved);
+      setSetupError(undefined);
+      setRecovery(undefined);
+      setWorkspaceFocusRequest((current) => current + 1);
+    } finally {
+      connectionOperation.current = undefined;
+    }
   };
 
   const disconnect: ConnectionContextValue["disconnect"] = async () => {
@@ -138,9 +173,31 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     setRefreshGeneration((current) => current + 1);
   };
 
+  const retryBootstrap: ConnectionContextValue["retryBootstrap"] = async () => {
+    if (connectionOperation.current !== undefined || retryingBootstrap) return;
+    connectionOperation.current = "bootstrap-retry";
+    setRetryingBootstrap(true);
+    setLoading(true);
+    setRecovery(undefined);
+    try {
+      await window.maestro.bootstrap.retry();
+      setRefreshGeneration((current) => current + 1);
+    } catch (error) {
+      const reason = errorMessage(error);
+      setConfig(undefined);
+      setSetupError(reason);
+      setBootstrap({ phase: "setup-required", reason, canRetryLocal: true });
+      setLoading(false);
+      setRetryingBootstrap(false);
+      throw error;
+    } finally {
+      connectionOperation.current = undefined;
+    }
+  };
+
   const reportSessionFailure = useCallback((error: unknown) => setRecovery(classifySessionRecovery(error)), []);
 
-  return <ConnectionContext.Provider value={{ config, loading, connect, disconnect, retryConnection, recovery, reportSessionFailure, setupError, bootstrap }}>{children}</ConnectionContext.Provider>;
+  return <ConnectionContext.Provider value={{ config, loading, connect, disconnect, retryConnection, retryBootstrap, retryingBootstrap, workspaceFocusRequest, recovery, reportSessionFailure, setupError, bootstrap }}>{children}</ConnectionContext.Provider>;
 }
 
 export function SessionRecoveryNotice({ recovery, onAction }: { recovery: SessionRecovery; onAction: () => void }) {
@@ -151,11 +208,11 @@ export function SessionRecoveryNotice({ recovery, onAction }: { recovery: Sessio
     retry: "retry connection",
   };
   return (
-    <div className="home-main" role="alert">
-      <div className="home-title">session recovery</div>
-      <p className="form-hint">{recovery.message}</p>
+    <main id="session-recovery" className="home-main" tabIndex={-1}>
+      <h1 className="home-title">session recovery</h1>
+      <p className="form-hint" role="alert">{recovery.message}</p>
       <button type="button" className="btn btn-primary" onClick={onAction}>{actionLabels[recovery.action]}</button>
-    </div>
+    </main>
   );
 }
 

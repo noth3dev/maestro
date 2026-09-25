@@ -1,6 +1,6 @@
 # Carnegie
 
-A desktop app (Electron + React) that talks to a Maestro control plane you already have running. It is a client only — it never starts, owns, or manages the control-plane server or PostgreSQL.
+A desktop app (Electron + React) for a local Maestro workspace. At startup, Carnegie uses `@maestro/local-backend` to reuse or start the supported local stack. It does not implement a second stack manager; the shared local-stack launcher remains the source of truth for reuse, readiness, and migrations.
 
 ## Branding boundary
 
@@ -14,11 +14,17 @@ npm run --workspace @maestro/carnegie dev
 
 This builds the Electron main/preload code, starts the Vite dev server for the renderer, and opens the app window.
 
-On first launch it asks for the control-plane URL, an operator bearer token, and a project ID. They are saved locally — the URL and project ID in a plain preferences file, the token encrypted with the OS keychain via Electron's `safeStorage` — and can be changed later from Settings → connection, or forgotten from Settings → danger zone.
+On first launch Carnegie attempts local setup automatically. If bootstrap reports `setup-required`, the Setup screen shows the sanitized reason and a local retry button. The retry keeps the manual-form draft in place. Manual setup is a fallback for an already-running loopback Control Plane; a failed bootstrap does not delete the saved connection. The URL and project ID are stored in `connection.json`. The token stays in Electron's main process and is encrypted with `safeStorage` when available; otherwise Carnegie uses the local secret store. The connection can be changed later from Settings → connection, or forgotten from Settings → danger zone.
 
 ## Security boundary
 
-The bearer token lives only in the Electron **main** process. The renderer (the React UI) never receives it: it calls `window.maestro.api.*`, which is a `contextBridge`-exposed proxy that forwards to the main process over IPC, where the real `@maestro/api-client` call happens. The control-plane URL must be loopback (`127.0.0.1` / `localhost`), same as before — this is a local operator tool, not a remote multi-user app.
+The bearer token lives only in the Electron **main** process. The renderer (the React UI) never receives it: it calls `window.maestro.api.*`, which is a `contextBridge`-exposed proxy that forwards to the main process over IPC, where the real `@maestro/api-client` call happens. The saved control-plane URL must be loopback (`127.0.0.1` / `localhost` / `::1`); the Electron store rejects other hosts. This is a local operator tool, not a remote multi-user app.
+
+## Startup recovery and test scope
+
+A `setup-required` bootstrap result routes the renderer to Setup even if an older connection record is still on disk. The error status is sanitized before it crosses IPC. Retry keeps the Setup screen and manual-form draft mounted; its visible label and accessible name stay stable while a status region announces localized progress. Failure returns focus to Retry. Retry success and manual-connect success focus the workspace main landmark. The selected locale also updates the document language. Known database environment errors explain the accepted value and remind operators to restart Carnegie after changing its launch environment. Docker-daemon failures and Docker-container diagnostic failures receive different guidance; unknown failures keep the sanitized reason visible and point to the existing manual-connection fallback.
+
+`src/bootstrap-recovery.playwright.ts` verifies this renderer behavior with a stubbed `window.maestro` bridge, including keyboard focus, WCAG AA contrast, and axe checks in light and dark themes. It is fixture evidence only: it does not test real Electron IPC, the local-stack launcher, keychain isolation, a running Control Plane, PostgreSQL, or provider actions.
 
 ## What's real vs. not connected yet
 
@@ -26,4 +32,4 @@ Every screen from the design is present, but only the ones with a real control-p
 
 ## Native runtime boundary
 
-Carnegie calls the Control Plane only. It never starts the Model Gateway, stores provider credentials, or creates execution admissions.
+The React renderer talks to the Control Plane only; it does not call provider APIs directly or create execution admissions. During startup, the Electron main process may reuse or start the local Model Gateway through `@maestro/local-backend`.

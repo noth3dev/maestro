@@ -1,7 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { readConnectionState, classifySessionRecovery } from "./connection.js";
+import { readConnectionState, classifySessionRecovery, sessionRecoveryForConnectionState } from "./connection.js";
 
 describe("readConnectionState", () => {
+  it("keeps saved config from masking a retryable local bootstrap failure", async () => {
+    const credential = ["session", "private-value"].join("-");
+    const state = await readConnectionState({
+      config: {
+        get: async () => ({ apiUrl: "http://127.0.0.1:4310", projectId: "saved-project" }),
+        error: async () => undefined,
+      },
+      bootstrap: {
+        status: async () => ({
+          phase: "setup-required" as const,
+          reason: `Docker unavailable. Bearer ${credential}`,
+          canRetryLocal: true,
+        }),
+      },
+    });
+
+    expect(state.config).toBeUndefined();
+    expect(state.setupError).toBe("Docker unavailable. Bearer [redacted]");
+    expect(sessionRecoveryForConnectionState(state)).toBeUndefined();
+  });
+
   it("keeps showing bootstrap progress when the stale saved config cannot be read", async () => {
     const state = await readConnectionState({
       config: {

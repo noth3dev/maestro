@@ -181,9 +181,20 @@
 .setup-title { font-size:clamp(24px, 2.2vw, 30px); letter-spacing:-0.025em; }
 .setup-card { width:min(100%, 520px); max-width:none; padding:30px 32px 32px; border-radius:var(--radius-xl); background:var(--surface-2); box-shadow:var(--shadow-lg); }
 .setup-hint { margin-bottom:22px; font-size:13px; line-height:1.55; }
+.setup-recovery-hint { margin:0 0 18px; font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
+.setup-retry { display:flex; flex-direction:column; align-items:flex-start; gap:10px; padding:0 0 18px; margin:0 0 20px; border-bottom:1px solid var(--border); }
+.setup-retry .form-hint { margin:0; }
+.setup-retry-button { min-height:44px; }
+.setup-manual-title { margin:0 0 6px; font-size:14px; font-weight:600; }
+.setup-manual-hint { margin:0 0 18px; font-size:12px; line-height:1.5; }
 .setup-card .form-field { gap:8px; margin-bottom:18px; }
 .setup-card .form-label { font-size:14px; }
 .setup-card .input { min-height:48px; padding:12px 14px; font-size:14px; border-radius:var(--radius); }
+.setup-hint, .setup-recovery-hint, .setup-retry .form-hint, .setup-manual-hint { color:var(--text-secondary); }
+.setup-retry-button, .setup-submit.btn-primary { background:#a4543a; border-color:#a4543a; color:#fff; }
+.setup-retry-button:hover, .setup-submit.btn-primary:hover { background:#a25439; border-color:#a25439; opacity:1; }
+.setup-retry-button[aria-disabled="true"] { background:#a25439; border-color:#a25439; cursor:progress; }
+.setup-card .input:focus-visible { outline:2px solid var(--text-primary); outline-offset:2px; border-color:var(--text-primary); }
 .setup-error { margin-bottom:18px; font-size:13px; line-height:1.45; }
 .setup-submit { width:100%; min-height:48px; justify-content:center; font-size:14px; }
 @media (max-width: 640px) {

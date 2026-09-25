@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ConnectionProvider, SessionRecoveryNotice, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
 import { ThemeProvider } from "./theme.js";
-import { I18nProvider, localeFromPreferences, type Locale } from "./i18n/index.js";
+import { I18nProvider, localeFromPreferences, useT, type Locale } from "./i18n/index.js";
 import { Sidebar } from "./components/Sidebar.js";
 import { Setup } from "./views/Setup.js";
 import { Home } from "./views/Home.js";
@@ -52,11 +52,17 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
   })();
 
   const noSidebar = view === "git" || view === "flashmobSession";
+  const contentIsMainLandmark = !["dashboard", "planning", "settings"].includes(view);
 
   return (
     <div className={`app${homeMode === "flashmob" ? " flashmob-theme" : ""}`}>
       {!noSidebar && <Sidebar view={view} onNavigate={setView} />}
-      <div className="app-content">
+      <div
+        className="app-content"
+        id="workspace-focus-target"
+        tabIndex={-1}
+        {...(contentIsMainLandmark ? { role: "main", "aria-label": "Maestro workspace" } : {})}
+      >
         {eventState.stale && (
           <div className="event-stale-banner" role="status" aria-live="polite" aria-atomic="true">
             <span>Showing the last durable state while live updates reconnect.{eventState.error === undefined ? "" : ` ${eventState.error}`}</span>
@@ -84,14 +90,47 @@ function ConnectedWorkspace({ projectId }: { projectId: string }) {
 }
 
 function Connected() {
-  const { config, loading, bootstrap, recovery, retryConnection, disconnect } = useConnection();
-  if (loading) {
+  const t = useT();
+  const { config, loading, retryingBootstrap, workspaceFocusRequest, bootstrap, recovery, retryConnection, disconnect } = useConnection();
+  const wasRetryingBootstrap = useRef(false);
+  const lastWorkspaceFocusRequest = useRef(workspaceFocusRequest);
+  const bootstrapStatusText = bootstrapProgressText(
+    bootstrap,
+    t.setup.starting,
+    t.setup.progressSteps,
+    t.setup.completedProgressSteps,
+    t.setup.retryFailed,
+  );
+
+  useLayoutEffect(() => {
+    if (workspaceFocusRequest !== lastWorkspaceFocusRequest.current) {
+      lastWorkspaceFocusRequest.current = workspaceFocusRequest;
+      document.getElementById("workspace-focus-target")?.focus();
+    }
+  }, [workspaceFocusRequest]);
+
+  useLayoutEffect(() => {
+    if (wasRetryingBootstrap.current && !retryingBootstrap) {
+      const targetId = config !== undefined
+        ? "workspace-focus-target"
+        : recovery !== undefined
+          ? "session-recovery"
+          : "setup-retry-button";
+      const target = document.getElementById(targetId) ?? document.getElementById("setup-title");
+      target?.focus();
+    }
+    wasRetryingBootstrap.current = retryingBootstrap;
+  }, [config, recovery, retryingBootstrap]);
+
+  if (loading && !retryingBootstrap) {
     return (
-      <div className="app" aria-busy="true" aria-live="polite">
-        <div className="home-main">
-          <div className="home-title">starting local workspace</div>
-          <p className="form-hint">{bootstrapProgressText(bootstrap)}</p>
-        </div>
+      <div className="app">
+        <main className="home-main" aria-label={t.setup.starting}>
+          <h1 className="home-title" tabIndex={-1}>{t.setup.starting}</h1>
+          <p className="form-hint" role="status" aria-live="polite" aria-atomic="true">
+            {bootstrapStatusText}
+          </p>
+        </main>
       </div>
     );
   }
@@ -112,6 +151,10 @@ function LocalizedApp() {
       .then((preferences) => setLocale(localeFromPreferences(preferences.locale)))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") document.documentElement.lang = locale;
+  }, [locale]);
 
   return (
     <I18nProvider locale={locale}>

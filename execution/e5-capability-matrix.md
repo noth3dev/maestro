@@ -34,6 +34,16 @@ Statuses follow `plan-E5-gui-implementation.md`'s own contract exactly:
 
 **Remaining:** live first-run verification still requires the local bootstrap to run with Docker or packaged binaries; no live auto-bootstrap acceptance has been claimed in this sandbox. Explicit remote/disable overrides and genuine `setup-required` fallback remain covered by the existing orchestration tests.
 
+### Renderer recovery usability follow-up (2026-09-25)
+
+The Setup renderer keeps the Retry button's visible text and accessible name stable while a status region announces the active startup step and repeated failure. Known EN/KO step labels take precedence over backend progress prose; failing-step messages remain visible. Manual drafts persist across retry. Retry failure retains focus on Retry; retry or manual-connect success moves focus to the workspace main landmark. The page `lang` follows the selected locale.
+
+Recovery guidance uses known local-backend reason shapes rather than matching the word “Docker” anywhere: invalid `MAESTRO_LOCAL_DB_ENGINE` and `MAESTRO_EMBEDDED_DATABASE_PORT` reasons explain accepted values and that the environment used to launch Carnegie must be changed and Carnegie restarted; the actual Docker-daemon-unavailable reason offers the backend-supported Docker/`MAESTRO_LOCAL_DATABASE_URL` path; known Docker container failures point to the diagnostic command already shown in the reason; other failures retain the reason and show a neutral next step plus the separate Manual connection fallback. Recovery copy and both the primary-action text and button boundary meet AA contrast in light and dark themes.
+
+**Verification:** focused unit tests passed **5 files / 25 tests**; `bootstrap-recovery.playwright.ts` passed **19/19**; the full Carnegie accessibility suite passed **28** tests and skipped **5** CDP-gated cases. Carnegie build, changed-file ESLint, new-file/document Prettier checks, and `git diff --check` passed.
+
+**Evidence boundary:** `bootstrap-recovery.playwright.ts` runs against a Chromium fixture with a stubbed `window.maestro` bridge. It proves renderer/helper behavior only—not Electron IPC/preload, local bootstrap, keychain isolation, a running Control Plane/PostgreSQL, or provider actions. Live first-run and E5 acceptance remain open; see `execution/PENDING_LIVE_CHECKS.md`.
+
 ## Shared primitives (Task 2)
 
 - `lib/command-id.ts` — **Live (code-level).** `newCommandId()` and `classifyApiError()` preserve stable status/code fields from clone-safe IPC errors, redact credential-shaped message/detail text, and classify every `StableApiErrorCode` with a stable title plus retry policy; focused classification tests pass 10/10.

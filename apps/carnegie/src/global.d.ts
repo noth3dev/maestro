@@ -22,7 +22,7 @@ export interface Preferences {
 export type BootstrapStatus =
   | { phase: "starting"; step?: { step: string; status: string; message?: string } }
   | { phase: "ready" }
-  | { phase: "setup-required"; reason?: string };
+  | { phase: "setup-required"; reason?: string; canRetryLocal?: boolean };
 
 export interface MaestroBridge {
   api: BridgedApi;
@@ -34,6 +34,7 @@ export interface MaestroBridge {
   };
   bootstrap: {
     status(): Promise<BootstrapStatus>;
+    retry(): Promise<void>;
     onStatus(listener: (status: BootstrapStatus) => void): () => void;
   };
   external: {

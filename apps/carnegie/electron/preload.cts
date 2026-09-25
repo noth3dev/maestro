@@ -186,6 +186,7 @@ contextBridge.exposeInMainWorld("maestro", {
   },
   bootstrap: {
     status: () => ipcRenderer.invoke("maestro:bootstrap:status"),
+    retry: () => ipcRenderer.invoke("maestro:bootstrap:retry"),
     onStatus: (listener: (status: unknown) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, status: unknown) => listener(status);
       ipcRenderer.on("maestro:bootstrap-status", handler);

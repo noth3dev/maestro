@@ -8,7 +8,7 @@ export type ApiBridgeResponse<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: SerializedBridgeError };
 
-function redactErrorText(value: string): string {
+export function redactBridgeText(value: string): string {
   return value
     .replace(/((?:["']?(?:authorization|token|access[_ -]?token|refresh[_ -]?token|id[_ -]?token|api[-_ ]?key|client[_ -]?secret|secret|password|credential)["']?)\s*[:=]\s*)(["']?)(?:Bearer\s+)?[^\s,;}"']+(["']?)/gi, "$1$2[redacted]$3")
     .replace(/\bBearer\s+[^\s,;}"']+/gi, "Bearer [redacted]");
@@ -20,11 +20,11 @@ export function serializeBridgeError(error: unknown): SerializedBridgeError {
       kind: "api-error" as const,
       status: error.status,
       code: error.code,
-      message: redactErrorText(error.message),
+      message: redactBridgeText(error.message),
     };
-    return error.detail === undefined ? base : { ...base, detail: redactErrorText(error.detail) };
+    return error.detail === undefined ? base : { ...base, detail: redactBridgeText(error.detail) };
   }
-  return { kind: "error", message: redactErrorText(error instanceof Error ? error.message : "Unexpected error") };
+  return { kind: "error", message: redactBridgeText(error instanceof Error ? error.message : "Unexpected error") };
 }
 
 export async function invokeWithErrorEnvelope<T>(action: () => T | Promise<T>): Promise<ApiBridgeResponse<T>> {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { initializeCarnegieConnection } from "./bootstrap.js";
+import { createBootstrapRunner, initializeCarnegieConnection } from "./bootstrap.js";
 import type { ConnectionConfig } from "./store.js";
 import type { LocalBootstrapStepEvent } from "@maestro/local-backend";
 
@@ -109,5 +109,25 @@ describe("initializeCarnegieConnection", () => {
     await expect(initializeCarnegieConnection({ env: {}, load: () => undefined, save: vi.fn(), resolveLocalConnection })).resolves.toEqual({
       setupError: "Local bootstrap did not return a project ID",
     });
+  });
+});
+
+describe("createBootstrapRunner", () => {
+  it("coalesces concurrent startup and retry requests, then permits a new attempt", async () => {
+    let completeFirstAttempt: (() => void) | undefined;
+    const firstAttempt = new Promise<void>((resolve) => { completeFirstAttempt = resolve; });
+    const run = vi.fn<() => Promise<void>>().mockImplementationOnce(() => firstAttempt).mockResolvedValueOnce(undefined);
+    const runBootstrap = createBootstrapRunner(run);
+
+    const first = runBootstrap();
+    const concurrent = runBootstrap();
+    expect(concurrent).toBe(first);
+    await Promise.resolve();
+    expect(run).toHaveBeenCalledOnce();
+
+    completeFirstAttempt?.();
+    await first;
+    await runBootstrap();
+    expect(run).toHaveBeenCalledTimes(2);
   });
 });
