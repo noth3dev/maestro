@@ -145,7 +145,7 @@
 .sb-bottom .sb-bottom-icons svg:hover { color:var(--text-primary); }
 
 /* ── home ── */
-.home-main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:30px; }
+.home-main { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; gap:22px; padding:30px; overflow-y:auto; }
 .home-title { font-size:19px; font-weight:600; text-align:center; min-height:26px; }
 .home-composer { width:100%; max-width:440px; border:1px solid var(--border-strong); border-radius:var(--radius-lg); padding:14px; background:var(--surface-2); }
 .home-composer textarea { width:100%; border:none; outline:none; resize:none; min-height:52px; font-size:13px; background:transparent; color:var(--text-primary); }
@@ -195,7 +195,7 @@
 .setup-retry-button:hover, .setup-submit.btn-primary:hover { background:#a25439; border-color:#a25439; opacity:1; }
 .setup-retry-button[aria-disabled="true"] { background:#a25439; border-color:#a25439; cursor:progress; }
 .setup-card .input:focus-visible { outline:2px solid var(--text-primary); outline-offset:2px; border-color:var(--text-primary); }
-.setup-error { margin-bottom:18px; font-size:13px; line-height:1.45; }
+.setup-error { margin-bottom:18px; font-size:13px; line-height:1.45; max-height:30vh; overflow:auto; overflow-wrap:anywhere; white-space:pre-wrap; }
 .setup-submit { width:100%; min-height:48px; justify-content:center; font-size:14px; }
 @media (max-width: 640px) {
   .setup-card { padding:24px; }

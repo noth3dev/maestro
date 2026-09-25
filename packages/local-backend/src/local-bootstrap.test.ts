@@ -191,7 +191,7 @@ describe("resolveLocalConnection", () => {
       finishDatabase = resolve;
     });
     const startup = resolveLocalConnection({
-      env: {},
+      env: { MAESTRO_LOCAL_DB_ENGINE: "embedded" },
       fetch: vi.fn(),
       secretStore: secretStore(),
       runCommand: vi.fn(),
@@ -380,7 +380,7 @@ describe("resolveLocalConnection", () => {
       await embedded?.stop();
       await rm(dataDir, { recursive: true, force: true });
     }
-    expect(runCommand).not.toHaveBeenCalledWith("docker", expect.anything(), expect.anything());
+    expect(runCommand).not.toHaveBeenCalledWith("docker", expect.arrayContaining(["run"]), expect.anything());
   });
 
   it("resolves the sibling Control Plane from the built shared module", () => {
@@ -665,7 +665,7 @@ describe("resolveLocalConnection", () => {
     const fetch = vi.fn().mockRejectedValueOnce(new Error("Control Plane is down")).mockResolvedValueOnce(response({ status: "ok" }));
     const runCommand = vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" }));
     const result = await resolveLocalConnection({
-      env: { MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: { MAESTRO_LOCAL_DB_ENGINE: "embedded", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
       secretStore: secretStore(),
       runCommand,

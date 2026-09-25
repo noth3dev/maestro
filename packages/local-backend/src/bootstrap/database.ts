@@ -36,9 +36,15 @@ export async function ensureLocalDatabase(options: {
   const trimmedPort = rawPort?.trim();
   const port = configuredEmbeddedDatabasePort(rawPort);
   if (options.databaseUrl !== undefined && options.databaseUrl !== "") return { kind: "ready", databaseUrl: options.databaseUrl };
-  if (engine === "docker") return ensureDockerDatabase({ databaseUrl: DOCKER_LOCAL_DATABASE_URL, runCommand: options.runCommand, retryDelayMs: options.retryDelayMs, ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
+  const useDocker = () => ensureDockerDatabase({ databaseUrl: DOCKER_LOCAL_DATABASE_URL, runCommand: options.runCommand, retryDelayMs: options.retryDelayMs, ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
+  if (engine === "docker") return useDocker();
   if (engine !== undefined && engine !== "embedded") return { kind: "unavailable", reason: "MAESTRO_LOCAL_DB_ENGINE must be embedded or docker" };
   if (trimmedPort !== undefined && trimmedPort !== "" && port === undefined) return { kind: "unavailable", reason: "MAESTRO_EMBEDDED_DATABASE_PORT must be an integer from 1 to 65535" };
+  // Without an explicit engine, an existing Maestro Docker PostgreSQL container
+  // is the operator's established database; reuse it instead of silently
+  // starting a separate embedded store.
+  const autoSelect = engine === undefined;
+  if (autoSelect && (await options.runCommand("docker", ["inspect", "--format", "{{.State.Running}}", LOCAL_POSTGRES_CONTAINER])).code === 0) return useDocker();
 
   reportSetupStep(options.onStep, "postgres-ready", "started", "Starting embedded PostgreSQL-compatible database");
   try {
@@ -54,10 +60,31 @@ export async function ensureLocalDatabase(options: {
     reportSetupStep(options.onStep, "postgres-ready", "completed", "Embedded PostgreSQL-compatible database is ready");
     return { kind: "ready", databaseUrl: process.databaseUrl, process };
   } catch (error) {
-    const reason = `Embedded PostgreSQL-compatible database could not be started: ${error instanceof Error ? error.message : "unknown error"}`;
+    throwIfAborted(options.signal);
+    const reason = `Embedded PostgreSQL-compatible database could not be started: ${summarizeEmbeddedDatabaseError(error instanceof Error ? error.message : "unknown error")}`;
+    if (autoSelect && (await options.runCommand("docker", ["version", "--format", "{{.Server.Version}}"])).code === 0) {
+      reportSetupStep(options.onStep, "postgres-ready", "failed", `${reason}; falling back to Docker PostgreSQL`);
+      return useDocker();
+    }
     reportSetupStep(options.onStep, "postgres-ready", "failed", reason);
     return { kind: "unavailable", reason };
   }
+}
+
+const MAX_EMBEDDED_ERROR_LENGTH = 300;
+
+/**
+ * A crashing embedded child writes Node's uncaught-exception report, which
+ * echoes the minified source line before the actual error. Keep only the
+ * error line so setup reasons stay readable and bounded.
+ */
+export function summarizeEmbeddedDatabaseError(message: string): string {
+  const errorLine = message
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => /^[A-Za-z]*Error\b.*:/.test(line) && line.length <= MAX_EMBEDDED_ERROR_LENGTH);
+  if (errorLine !== undefined) return errorLine;
+  return message.length <= MAX_EMBEDDED_ERROR_LENGTH ? message : `${message.slice(0, MAX_EMBEDDED_ERROR_LENGTH)}…`;
 }
 
 async function ensureDockerDatabase(options: {

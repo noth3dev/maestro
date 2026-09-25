@@ -3,6 +3,7 @@ import { createAnthropicPlugin, ClaudeOAuthClient, createClaudeSubscriptionPlugi
 import { ProviderRegistry } from "@maestro/agent-runtime";
 import { createCodexAccessTokenResolver } from "./codex-token-resolver.js";
 import { createClaudeAccessTokenResolver } from "./claude-token-resolver.js";
+import { adoptExistingCodexLogin } from "./codex-login-adoption.js";
 import { KeychainCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 import { buildModelGatewayServer } from "./rpc.js";
@@ -49,10 +50,12 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   const codexAccountRef = `openai-codex-${operatorId}`;
   const codexModels = optionalModelsFromEnv(env.MAESTRO_CODEX_MODELS);
   let codex: CodexAppServerClient | CodexOAuthClient | undefined;
+  let codexLoginAdoption: Promise<unknown> | undefined;
   if (env.MAESTRO_CODEX_DISABLE !== "true") {
     if (codexCommand !== undefined && codexCommand !== "") {
       const client = new CodexAppServerClient({ command: codexCommand, args: ["app-server"], requestTimeoutMs: positiveMilliseconds(env.MAESTRO_CODEX_APP_SERVER_TIMEOUT_MS, 30000) });
       codex = client;
+      codexLoginAdoption = adoptExistingCodexLogin({ client, credentials, operatorId, accountRef: codexAccountRef });
       accountRefs["openai-codex"] = codexAccountRef;
       registry.register(createCodexAppServerPlugin({ client, ...(codexModels === undefined ? {} : { models: codexModels }) }));
     } else {
@@ -87,6 +90,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
   const initialBindings = Promise.all([
     env.OPENAI_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "openai", authMode: "api-key", accountRef: openAiAccountRef }, env.OPENAI_API_KEY) : undefined,
     env.ANTHROPIC_API_KEY ? credentials.bindEphemeral!({ operatorId, providerId: "anthropic", authMode: "api-key", accountRef: anthropicAccountRef }, env.ANTHROPIC_API_KEY) : undefined,
+    codexLoginAdoption,
   ]).then(() => undefined);
   const gateway = createModelGateway({ registry, credentials, ...(codex === undefined ? {} : { codex }), ...(claude === undefined ? {} : { claude }), operatorId, ready: initialBindings, instanceId: env.MAESTRO_MODEL_GATEWAY_INSTANCE_ID ?? `gateway-${process.pid}` });
   return { app: buildModelGatewayServer({ gateway, token, operatorId }), gateway, accountRefs };

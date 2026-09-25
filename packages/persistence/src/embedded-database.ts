@@ -231,13 +231,17 @@ export async function startEmbeddedDatabase(options: EmbeddedDatabaseOptions): P
       };
       output?.setEncoding("utf8");
       output?.on("data", onData);
+      // A crash report arrives in several chunks and starts with echoed
+      // source, so report stderr only once the child has exited.
+      let errorText = "";
       errorOutput?.setEncoding("utf8");
       errorOutput?.on("data", (chunk) => {
-        if (String(chunk).trim() !== "") reject(new Error(String(chunk).trim()));
+        if (errorText.length < 1_048_576) errorText += String(chunk);
       });
       child.once("error", reject);
       child.once("exit", (code) => {
-        if (code !== 0) reject(new Error(`Embedded database child exited with code ${code ?? "unknown"}`));
+        const detail = errorText.trim();
+        reject(new Error(detail !== "" ? detail : `Embedded database child exited with code ${code ?? "unknown"}`));
       });
     });
   } catch (error) {

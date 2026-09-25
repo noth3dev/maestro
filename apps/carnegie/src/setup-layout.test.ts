@@ -17,6 +17,11 @@ describe("Carnegie setup frame", () => {
     expect(styles).toContain("font-size:14px");
   });
 
+  it("contains long setup failure reasons inside the card", () => {
+    expect(styles).toMatch(/\.setup-error \{[^}]*overflow-wrap:anywhere/);
+    expect(styles).toMatch(/\.setup-error \{[^}]*max-height:30vh/);
+  });
+
   it("keeps the frameless shell usable at narrow widths without replacing Electron zoom", () => {
     expect(styles).toContain(".channel-wrap { flex-direction: column; }");
     expect(styles).toContain(".home-cards { grid-template-columns: 1fr; }");
