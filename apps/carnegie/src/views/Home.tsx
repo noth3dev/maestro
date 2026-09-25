@@ -16,7 +16,7 @@ import {
   submitHomeBrief,
   updateTaskContractDraft,
 } from "../lib/task-contract-authoring.js";
-import { loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
+import { cancelHomeTurn, loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
 import { selectGoalAfterLaunch } from "../lib/goal-operations.js";
 import { modelRef, readSavedConcertmasterModelRef, resolveDefaultModelRef, saveConcertmasterModelRef, sortLiveModels } from "../lib/concertmaster-model.js";
 
@@ -619,11 +619,9 @@ export function Home({
     setCancelBusy(true);
     setError(undefined);
     try {
-      await window.maestro.api.cancelConversation(conversationId, { projectId: config.projectId });
-      setTurnStatus("cancelled");
-    } catch (cause) {
-      setTurnStatus("failed");
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const result = await cancelHomeTurn(window.maestro.api, { conversationId, projectId: config.projectId });
+      setTurnStatus(result.status);
+      if (result.error !== undefined) setError(result.error);
     } finally {
       setCancelBusy(false);
     }

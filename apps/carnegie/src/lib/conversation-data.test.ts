@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { loadConversation, type GoalLessIntakeApi } from "./conversation-data.js";
+import { cancelHomeTurn, loadConversation, type GoalLessIntakeApi } from "./conversation-data.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const conversationId = "22222222-2222-4222-8222-222222222222";
@@ -68,5 +68,47 @@ describe("conversation durable read model", () => {
     const eventClient = api();
     vi.mocked(eventClient.listConversationEvents).mockResolvedValueOnce([{ ...((await eventClient.listConversationEvents(conversationId, { projectId, after: "0" }))[0]!), conversationId: "99999999-9999-4999-8999-999999999999" }]);
     await expect(loadConversation(eventClient, { conversationId, projectId })).rejects.toThrow("event boundary mismatch");
+  });
+
+  it("uses the server cancellation status instead of assuming the turn was cancelled", async () => {
+    const client = api();
+    vi.mocked(client.cancelConversation).mockResolvedValueOnce({
+      conversationId,
+      projectId,
+      goalId: null,
+      model: "openai/gpt-5",
+      status: "unknown",
+      version: 2,
+    });
+
+    const result = await cancelHomeTurn(client, { conversationId, projectId });
+
+    expect(result).toEqual({ status: "unknown" });
+    expect(client.cancelConversation).toHaveBeenCalledTimes(1);
+    expect(client.cancelConversation).toHaveBeenCalledWith(conversationId, { projectId });
+  });
+
+  it("preserves a completed outcome when completion wins a cancellation race", async () => {
+    const client = api();
+    vi.mocked(client.cancelConversation).mockResolvedValueOnce({
+      conversationId,
+      projectId,
+      goalId: null,
+      model: "openai/gpt-5",
+      status: "succeeded",
+      version: 3,
+    });
+
+    await expect(cancelHomeTurn(client, { conversationId, projectId })).resolves.toEqual({ status: "completed" });
+  });
+
+  it("reports a rejected cancellation request as unknown instead of turn failure", async () => {
+    const client = api();
+    vi.mocked(client.cancelConversation).mockRejectedValueOnce(new Error("cancel request timed out"));
+
+    await expect(cancelHomeTurn(client, { conversationId, projectId })).resolves.toEqual({
+      status: "unknown",
+      error: "cancel request timed out",
+    });
   });
 });

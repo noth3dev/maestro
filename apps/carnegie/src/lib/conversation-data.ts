@@ -1,5 +1,5 @@
 import type { ApiClient } from "@maestro/api-client";
-import type { ConversationEvent } from "@maestro/contracts";
+import { turnStatus, type ConversationEvent } from "@maestro/contracts";
 
 export type GoalLessIntakeApi = Pick<
   ApiClient,
@@ -76,4 +76,16 @@ export async function loadConversation(
     applyEvent(messages, event);
   }
   return [...messages.values()];
+}
+
+export async function cancelHomeTurn(
+  api: Pick<GoalLessIntakeApi, "cancelConversation">,
+  input: { conversationId: string; projectId: string },
+): Promise<{ status: ReturnType<typeof turnStatus>; error?: string }> {
+  try {
+    const conversation = await api.cancelConversation(input.conversationId, { projectId: input.projectId });
+    return { status: turnStatus(conversation.status) };
+  } catch (cause) {
+    return { status: "unknown", error: cause instanceof Error ? cause.message : String(cause) };
+  }
 }
