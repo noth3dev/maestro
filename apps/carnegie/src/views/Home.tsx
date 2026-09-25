@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ModelCatalogEntry, OvertureEvent, OvertureMessage, OverturePlanManifest, OvertureRun, TaskContract } from "@maestro/contracts";
 import { Icon } from "../icons.js";
 import { ReasoningDial, defaultReasoningEffort } from "../components/ReasoningDial.js";
+import { ProviderSignIn } from "../components/ProviderSignIn.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import type { ViewName } from "../views.js";
@@ -169,8 +170,9 @@ export function Home({
   const [concertmasterModels, setConcertmasterModels] = useState<readonly ModelCatalogEntry[]>([]);
   const [concertmasterModelRef, setConcertmasterModelRef] = useState<string | undefined>(undefined);
   const [concertmasterReasoningEffort, setConcertmasterReasoningEffort] = useState<string | undefined>(undefined);
-  const [concertmasterModelsLoading, setConcertmasterModelsLoading] = useState(false);
+  const [concertmasterModelsLoading, setConcertmasterModelsLoading] = useState(true);
   const [concertmasterModelsError, setConcertmasterModelsError] = useState<string | undefined>(undefined);
+  const [concertmasterModelsReload, setConcertmasterModelsReload] = useState(0);
   const [turnStatus, setTurnStatus] = useState<"idle" | "loading" | "completed" | "failed" | "cancelled" | "unknown">("idle");
   const [intakeMessage, setIntakeMessage] = useState<string | undefined>(undefined);
   const [draftForm, setDraftForm] = useState<DraftForm | undefined>(undefined);
@@ -264,7 +266,7 @@ export function Home({
     return () => {
       current = false;
     };
-  }, [projectId]);
+  }, [projectId, concertmasterModelsReload]);
 
   useEffect(() => {
     setConcertmasterReasoningEffort(defaultReasoningEffort(selectedConcertmasterModel));
@@ -743,6 +745,9 @@ export function Home({
             {cancelBusy ? "cancelling…" : "cancel turn"}
           </button>
         </section>
+      )}
+      {!concertmasterModelsLoading && concertmasterModels.length === 0 && conversationId === undefined && !isFlashmob && (
+        <ProviderSignIn onConnected={() => setConcertmasterModelsReload((current) => current + 1)} />
       )}
       <form className={`home-composer${isFlashmob ? " mode-flashmob" : ""}`} onSubmit={submitComposer}>
         <label className="sr-only" htmlFor="home-brief">

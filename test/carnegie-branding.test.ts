@@ -61,7 +61,7 @@ describe("Maestro product and Carnegie app boundary", () => {
     const preload = read(`${appDirectory}/electron/preload.cts`);
     const main = read(`${appDirectory}/electron/main.ts`);
     const globals = read(`${appDirectory}/src/global.d.ts`);
-    expect(preload).toContain('contextBridge.exposeInMainWorld("maestro"');
+    expect(preload).toContain('contextBridge.exposeInMainWorld("maestroBridge"');
     expect(preload).toContain('ipcRenderer.invoke("maestro:api"');
     expect(main).toContain('ipcMain.handle("maestro:api"');
     expect(globals).toContain("maestro:");

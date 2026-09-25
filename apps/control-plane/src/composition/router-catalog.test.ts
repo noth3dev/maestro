@@ -167,6 +167,37 @@ describe("Router catalog composition", () => {
     expect(disabled.entries[0]?.state).toBe("pool-disabled");
   });
 
+  it("derives candidates from live profiled models when no catalog path is configured", async () => {
+    modelFiles([{ modelRef: "openai-codex/model-a" }, { modelRef: "openai/model-b" }]);
+    const read = await composeRouterCatalogService({
+      pool: poolWith([]),
+      config: config(),
+      modelGateway: {
+        listModels: async () => [gatewayModel("openai-codex", "model-a"), gatewayModel("openai-codex", "unprofiled")],
+      } as ModelGatewayPort,
+      settingsService: settings([]),
+    }).get("operator-1");
+    expect(read.status).toBe("ready");
+    expect(read.entries.find((entry) => entry.modelRef === "openai-codex/model-a")).toMatchObject({
+      candidate: { present: true, accountBindings: ["opaque-codex"] },
+      state: "catalog-ready",
+    });
+    expect(read.entries.find((entry) => entry.modelRef === "openai-codex/unprofiled")).toMatchObject({ state: "unprofiled" });
+    expect(read.entries.find((entry) => entry.modelRef === "openai/model-b")).toMatchObject({ candidate: { present: false } });
+  });
+
+  it("stays inactive without a catalog path when the live Gateway is unavailable", async () => {
+    modelFiles([{ modelRef: "openai-codex/model-a" }]);
+    const read = await composeRouterCatalogService({
+      pool: poolWith([]),
+      config: config(),
+      modelGateway: undefined,
+      settingsService: settings([]),
+    }).get("operator-1");
+    expect(read.status).toBe("inactive");
+    expect(read.reason).toMatch(/derived from the live Gateway catalog/i);
+  });
+
   it("fails closed with an inactive status when the candidate catalog is unavailable", async () => {
     process.env.MAESTRO_MODEL_MAP = join(process.cwd(), "config/model_map.json");
     const settingsService = settings([]);

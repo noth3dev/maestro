@@ -8,7 +8,7 @@ import {
   type RouterConfigValidation,
 } from "@maestro/contracts";
 import { readEnabledModelRefs, createPostgresSettingsService } from "@maestro/persistence";
-import { readRoutingCandidateCatalog } from "../ensemble-candidate-catalog.js";
+import { deriveRoutingCandidates, readRoutingCandidateCatalog } from "../ensemble-candidate-catalog.js";
 import type { MaestroConfig } from "../config.js";
 import { readModelMapSource } from "./model-map-source.js";
 
@@ -105,12 +105,19 @@ function rowState(input: {
 function readCandidateCatalog(
   deps: RouterCatalogDeps,
   modelMapPath: string,
+  modelMap: CatalogSources["modelMap"],
+  live: { readonly models: readonly GatewayModel[]; readonly available: boolean },
 ): Pick<CatalogSources, "candidates" | "candidateCatalogAvailable" | "reason"> {
   let candidates: CatalogSources["candidates"] = [];
   let candidateCatalogAvailable = false;
   let reason: string | undefined;
   if (deps.config.ensembleCandidateCatalogPath === undefined) {
-    reason = "Candidate catalog is unavailable; configure it before Ensemble worker admission.";
+    if (live.available) {
+      candidates = deriveRoutingCandidates({ modelMap, liveModelRefs: live.models.map(liveModelRef), accountRefs: deps.config.modelAccountRefs });
+      candidateCatalogAvailable = true;
+    } else {
+      reason = "Candidates are derived from the live Gateway catalog, which is unavailable.";
+    }
   } else {
     try {
       candidates = readRoutingCandidateCatalog({ modelMapPath, catalogPath: deps.config.ensembleCandidateCatalogPath }).candidates;
@@ -120,6 +127,10 @@ function readCandidateCatalog(
     }
   }
   return { candidates, candidateCatalogAvailable, ...(reason === undefined ? {} : { reason }) };
+}
+
+function liveModelRef(model: GatewayModel): string {
+  return `${model.identity.provider}/${model.identity.id}`;
 }
 
 async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
@@ -133,9 +144,7 @@ async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
     throw new Error("Human-owned model_map is unavailable or invalid");
   }
 
-  const candidateSource = readCandidateCatalog(deps, modelMapPath);
-  const { candidates, candidateCatalogAvailable } = candidateSource;
-  let reason = candidateSource.reason;
+  let reason: string | undefined;
   const addReason = (message: string) => {
     reason = reason === undefined ? message : `${reason} ${message}`;
   };
@@ -153,10 +162,16 @@ async function readSources(deps: RouterCatalogDeps): Promise<CatalogSources> {
     addReason("Live Gateway catalog is unavailable; provider availability cannot be confirmed.");
   }
 
+  const candidateSource = readCandidateCatalog(deps, modelMapPath, modelMap, { models: liveModels, available: liveAvailable });
+  const { candidates, candidateCatalogAvailable } = candidateSource;
+  if (candidateSource.reason !== undefined) addReason(candidateSource.reason);
+
   let candidateSetReady = candidateCatalogAvailable && liveAvailable && candidates.length > 0;
   if (candidateCatalogAvailable && candidates.length === 0) {
     addReason(
-      "Candidate catalog is valid but contains no candidates; Ensemble worker admission is unavailable until a candidate is configured.",
+      deps.config.ensembleCandidateCatalogPath === undefined
+        ? "No live model has a reviewed model_map profile and an account binding; Ensemble worker admission is unavailable."
+        : "Candidate catalog is valid but contains no candidates; Ensemble worker admission is unavailable until a candidate is configured.",
     );
   }
   if (candidateSetReady) {
@@ -254,9 +269,8 @@ export function composeRouterCatalogService(deps: RouterCatalogDeps): RouterCata
 
   async function validate(operatorId: string, input: RouterConfigInput): Promise<RouterConfigValidation> {
     const parsed = RouterConfigInputSchema.parse(input);
-    const modelMapSource = readModelMapSource();
-    const knownRefs = new Set(modelMapSource.modelMap.entries.map((entry) => entry.modelRef));
-    const candidateSource = readCandidateCatalog(deps, modelMapSource.path);
+    const candidateSource = await readSources(deps);
+    const knownRefs = new Set(candidateSource.modelMap.entries.map((entry) => entry.modelRef));
     const eligibleRefs = [
       ...new Set(candidateSource.candidates.map((candidate) => candidate.modelRef).filter((ref) => knownRefs.has(ref))),
     ].sort();

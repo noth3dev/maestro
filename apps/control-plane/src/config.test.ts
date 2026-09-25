@@ -22,7 +22,7 @@ describe("parseConfig", () => {
       modelRoutingMode: "ensemble",
       modelGatewayUrl: "http://127.0.0.1:4321",
       modelGatewayOperatorId: "local-operator",
-      modelAccountRefs: { openai: "openai-local-operator", anthropic: "anthropic-local-operator" },
+      modelAccountRefs: { openai: "openai-local-operator", anthropic: "anthropic-local-operator", "openai-codex": "openai-codex-local-operator", "anthropic-claude": "anthropic-claude-local-operator" },
     });
   });
 
@@ -176,7 +176,7 @@ describe("parseConfig", () => {
       MAESTRO_MODEL_ACCOUNT_REFS: "openai=acct-openai,anthropic=acct-anthropic",
     });
     expect(config.modelGatewayToken).toBe("gateway-secret");
-    expect(config.modelAccountRefs).toEqual({ openai: "acct-openai", anthropic: "acct-anthropic" });
+    expect(config.modelAccountRefs).toEqual({ openai: "acct-openai", anthropic: "acct-anthropic", "openai-codex": "openai-codex-operator-a", "anthropic-claude": "anthropic-claude-operator-a" });
     expect(redactConfig(config)).not.toHaveProperty("modelGatewayToken");
     expect(JSON.stringify(redactConfig(config))).not.toContain("gateway-secret");
   });

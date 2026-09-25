@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAccountLoginController } from "./Settings.js";
+import { createAccountLoginController } from "./account-login.js";
 
 describe("account login controller", () => {
   const makeDeps = (providerId: "openai-codex" | "anthropic-claude") => {

@@ -10,7 +10,6 @@ export const en = {
     billing: "billing",
     luthiery: "luthiery",
     arrangements: "arrangements",
-    settings: "settings",
     newGoal: "new goal",
   },
   common: {
@@ -64,14 +63,6 @@ export const en = {
     projectId: "Project ID",
     connect: "Connect",
     connecting: "Connecting…",
-  },
-  settings: {
-    profile: "profile",
-    appearance: "appearance",
-    connection: "connection",
-    dangerZone: "danger zone",
-    darkMode: "dark mode",
-    disconnect: "disconnect",
   },
   radial: {
     title: "organization floor",

@@ -114,13 +114,41 @@ function parseCandidates(value: unknown, modelMap: ModelMap): readonly RouterCan
   }));
 }
 
+export function readRoutingModelMap(modelMapPath: string): ModelMap {
+  return parseModelMap(parseJsonFile(modelMapPath, "model_map"));
+}
+
+/**
+ * Zero-config candidate set: every live Gateway model that already has a
+ * human-owned model_map profile and whose provider has an operator account
+ * binding. Unprofiled live models stay out of routing; identities are exact,
+ * so `openai/*` and `openai-codex/*` never stand in for each other.
+ */
+export function deriveRoutingCandidates(input: {
+  readonly modelMap: ModelMap;
+  readonly liveModelRefs: Iterable<string>;
+  readonly accountRefs: Readonly<Record<string, string>>;
+}): readonly RouterCandidate[] {
+  const profiled = new Set(input.modelMap.entries.map((entry) => entry.modelRef));
+  const candidates: RouterCandidate[] = [];
+  for (const ref of new Set(input.liveModelRefs)) {
+    const separator = ref.indexOf("/");
+    if (separator <= 0 || !profiled.has(ref)) continue;
+    const provider = ref.slice(0, separator);
+    const accountBinding = Object.hasOwn(input.accountRefs, provider) ? input.accountRefs[provider] : undefined;
+    if (accountBinding === undefined) continue;
+    candidates.push({ candidateRef: `${provider}:${ref.slice(separator + 1)}`, modelRef: ref, accountBinding });
+  }
+  return Object.freeze(candidates);
+}
+
 /**
  * Read only the human-owned model map and an explicit candidate identity catalog.
  * Candidate references are never derived from model names, and this function
  * never writes either file.
  */
 export function readRoutingCandidateCatalog(paths: RoutingCandidateCatalogPaths): RoutingCandidateCatalog {
-  const modelMap = parseModelMap(parseJsonFile(paths.modelMapPath, "model_map"));
+  const modelMap = readRoutingModelMap(paths.modelMapPath);
   const candidates = parseCandidates(parseJsonFile(paths.catalogPath, "Candidate catalog"), modelMap);
   return Object.freeze({ modelMap, candidates });
 }

@@ -12,7 +12,6 @@ export const ko: Translations = {
     billing: "청구",
     luthiery: "루티에리",
     arrangements: "편곡",
-    settings: "설정",
     newGoal: "새 목표",
   },
   common: {
@@ -65,14 +64,6 @@ export const ko: Translations = {
     projectId: "프로젝트 ID",
     connect: "연결",
     connecting: "연결 중…",
-  },
-  settings: {
-    profile: "프로필",
-    appearance: "모양",
-    connection: "연결",
-    dangerZone: "위험 영역",
-    darkMode: "다크 모드",
-    disconnect: "연결 해제",
   },
   radial: {
     title: "조직 플로어",

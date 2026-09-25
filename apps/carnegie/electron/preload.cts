@@ -141,33 +141,11 @@ const exposedApiMethods = [
   "listImprovementDigestsForGoal",
 ] as const;
 
-type SerializedBridgeError =
-  | { readonly kind: "api-error"; readonly status: number; readonly code: string; readonly message: string; readonly detail?: string }
-  | { readonly kind: "error"; readonly message: string };
-type ApiBridgeResponse = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly error: SerializedBridgeError };
-
-function isApiBridgeResponse(value: unknown): value is ApiBridgeResponse {
-  return typeof value === "object" && value !== null && "ok" in value && typeof (value as { ok?: unknown }).ok === "boolean";
-}
-
-function restoreBridgeError(error: SerializedBridgeError): Error {
-  const restored = new Error(error.message);
-  if (error.kind === "api-error") {
-    Object.assign(restored, {
-      name: "ApiError",
-      status: error.status,
-      code: error.code,
-      ...(error.detail === undefined ? {} : { detail: error.detail }),
-    });
-  }
-  return restored;
-}
-
-async function invokeApi(method: string, args: unknown[]): Promise<unknown> {
-  const response = (await ipcRenderer.invoke("maestro:api", method, args)) as unknown;
-  if (!isApiBridgeResponse(response)) return response;
-  if (response.ok) return response.value;
-  throw restoreBridgeError(response.error);
+// Errors thrown across contextBridge keep only their message, so API calls
+// resolve with the main-process `{ ok, value | error }` envelope and the
+// renderer (src/bridge.ts) turns failures back into typed ApiErrors.
+function invokeApi(method: string, args: unknown[]): Promise<unknown> {
+  return ipcRenderer.invoke("maestro:api", method, args);
 }
 
 const api = Object.fromEntries(
@@ -176,7 +154,7 @@ const api = Object.fromEntries(
     .map((method) => [method, (...args: unknown[]) => invokeApi(method, args)]),
 ) as Record<string, (...args: unknown[]) => unknown>;
 
-contextBridge.exposeInMainWorld("maestro", {
+contextBridge.exposeInMainWorld("maestroBridge", {
   api,
   config: {
     get: () => ipcRenderer.invoke("maestro:config:get"),

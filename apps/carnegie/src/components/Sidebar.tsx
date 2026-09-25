@@ -106,9 +106,6 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
           >
             <Icon name={isDark ? "sun" : "moon"} />
           </button>
-          <button type="button" className="btn-icon" aria-label="Open settings" onClick={() => onNavigate("settings")}>
-            <Icon name="settings" />
-          </button>
         </div>
       </div>
     </nav>

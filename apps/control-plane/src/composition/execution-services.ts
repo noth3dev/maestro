@@ -7,7 +7,7 @@ import type { ControlPlaneOverrides } from "../main.js";
 import type { composeFoundationServices } from "./foundation-services.js";
 import { createPinnedNativeAdmission, type NativeAdmissionInput } from "../native-admission.js";
 import { createEnsembleNativeAdmission } from "../ensemble-admission.js";
-import { readRoutingCandidateCatalog } from "../ensemble-candidate-catalog.js";
+import { deriveRoutingCandidates, readRoutingCandidateCatalog, readRoutingModelMap } from "../ensemble-candidate-catalog.js";
 import { readModelMapSource } from "./model-map-source.js";
 import { createLocalGitPort } from "@maestro/git-adapter";
 import {
@@ -100,11 +100,19 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
         requeue: (reservationId: string) => requeueCapacityReservation(pool, reservationId).then(() => undefined),
       }
     : undefined;
+  const resolveRoutingCandidateCatalog = async () => {
+    const modelMapPath = readModelMapSource().path;
+    const catalogPath = config.ensembleCandidateCatalogPath;
+    if (catalogPath !== undefined) return readRoutingCandidateCatalog({ modelMapPath, catalogPath });
+    if (modelGateway === undefined) throw new Error("Ensemble candidates require the live Model Gateway catalog");
+    const modelMap = readRoutingModelMap(modelMapPath);
+    const live = await modelGateway.listModels({ operatorId: config.modelGatewayOperatorId });
+    const liveModelRefs = live.map((model) => `${model.identity.provider}/${model.identity.id}`);
+    return { modelMap, candidates: deriveRoutingCandidates({ modelMap, liveModelRefs, accountRefs: config.modelAccountRefs }) };
+  };
   const ensembleAdmission =
     config.modelRoutingMode === "ensemble"
       ? async (input: import("@maestro/persistence").WorkerAdmissionFactoryInput) => {
-          const catalogPath = config.ensembleCandidateCatalogPath;
-          if (catalogPath === undefined) throw new Error("Ensemble candidate catalog is not configured");
           const goalId = input.base.context.goalId;
           if (typeof goalId !== "string" || goalId.trim() === "") throw new Error("Ensemble admission requires a Goal-bound context");
           const snapshot = await readRoutingWorkSnapshot(pool, {
@@ -115,7 +123,7 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
             goalRef: goalId,
             projectRef: input.base.context.projectId,
           });
-          const catalog = readRoutingCandidateCatalog({ modelMapPath: readModelMapSource().path, catalogPath });
+          const catalog = await resolveRoutingCandidateCatalog();
           const operatorEnabledModelRefs = await readEnabledModelRefs(pool, input.operatorId);
           return createEnsembleNativeAdmission(config, {
             snapshot,

@@ -194,6 +194,374 @@
       }
     },
     {
+      "modelRef": "openai-codex/gpt-5.6-sol",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": {
+            "status": "scored",
+            "score": 140,
+            "rationale": "Frontier-tier third-party reasoning results place it alongside the strongest current models, but no Maestro deliberation evidence exists yet to justify the top band.",
+            "evidence": [
+              "LM Council cross-model benchmark board, retrieved 2026-09-09: https://lmcouncil.ai/benchmarks",
+              "BenchLM head-to-head Claude Opus 5 vs GPT-5.6 Sol, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "coding": {
+            "status": "scored",
+            "score": 150,
+            "rationale": "Highest published SWE-bench Verified result of the surveyed models at 96.2 percent, which is reproducible third-party evidence for code production specifically.",
+            "evidence": [
+              "SWE-bench Verified 96.2 percent reported by morphllm coding comparison, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "verification": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No surveyed public benchmark measures finding defects in another agent's output, which is what this axis means in Maestro.",
+            "evidence": [
+              "Rubric section 3.3 defines verification as review of existing work, distinct from production: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "instruction-fidelity": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No reproducible public measurement of exact Task Contract and Grant adherence was found; provider claims are not admissible under the rubric.",
+            "evidence": [
+              "Rubric section 1 excludes marketing claims from scores: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "tool-use": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "The available MCP-Atlas and OSWorld figures cover the prior generation (GPT-5.5), not this model, so there is no current evidence for this axis.",
+            "evidence": [
+              "MCP-Atlas and OSWorld results reported for GPT-5.5 and Opus 4.8 only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "long-context": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Declared window size is a provider fact, not evidence of quality of use across that window; no retrieval-degradation measurement was found.",
+            "evidence": [
+              "Rubric section 1 excludes context-window size from A scores: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "knowledge": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "The available graduate-science figures were used to support the reasoning axis; no separate factual-breadth evidence was surveyed for this model.",
+            "evidence": [
+              "GPQA Diamond figures surveyed for Opus 5 and Gemini 3.1 Pro only, retrieved 2026-09-09: https://benchlm.ai/compare/claude-opus-5-vs-gpt-5-6-sol",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "refusal-calibration": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No public benchmark measures over-refusal of ordinary in-scope shell, file, and Git work, which is the Maestro-specific failure this axis targets.",
+            "evidence": [
+              "Axis defined by Maestro host-tool stalling risk, not by a public suite: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 922000,
+        "pricing": {
+          "inputPerMillionTokens": 5,
+          "outputPerMillionTokens": 30
+        },
+        "authentication": {
+          "modes": [
+            "managed-subscription"
+          ]
+        },
+        "dataPolicy": {
+          "allowedDataClasses": [
+            "public",
+            "workspace"
+          ],
+          "retention": "transient",
+          "trainingUse": "opt-in",
+          "regions": [
+            "us"
+          ]
+        },
+        "modalities": [
+          "text"
+        ],
+        "toolCalls": {
+          "supported": true
+        },
+        "provenance": {
+          "source": "Copied from the reviewed openai/gpt-5.6-sol profile on 2026-09-26: openai-codex/gpt-5.6-sol is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact. OpenAI API pricing and GPT-5.6 launch notes, retrieved 2026-09-09: https://developers.openai.com/api/docs/pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": [
+          "https://openai.com/index/gpt-5-6/",
+          "https://developers.openai.com/api/docs/pricing",
+          "https://www.morphllm.com/best-ai-model-for-coding"
+        ],
+        "reviewedAt": "2026-09-26T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "openai-codex/gpt-5.6-terra",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Published tier comparisons describe Terra as a balanced tier but no per-axis third-party result was surveyed for it.",
+            "evidence": [
+              "Tier comparison without per-axis figures, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "coding": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No separate SWE-bench result for the Terra tier was surveyed; the Sol figure must not be inherited across tiers.",
+            "evidence": [
+              "SWE-bench figures published per model, not per family, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "verification": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No public benchmark matches the Maestro definition of reviewing another agent's output.",
+            "evidence": [
+              "Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "instruction-fidelity": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No reproducible measurement of exact contract adherence was found.",
+            "evidence": [
+              "Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "tool-use": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No current-generation agentic tool benchmark for this tier was surveyed.",
+            "evidence": [
+              "Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "long-context": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Window size is a provider fact; no quality-of-use measurement was found.",
+            "evidence": [
+              "Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "knowledge": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No factual-breadth measurement for this tier was surveyed.",
+            "evidence": [
+              "Tier comparison without per-axis figures, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "refusal-calibration": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No public benchmark measures over-refusal of ordinary local host work.",
+            "evidence": [
+              "Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 922000,
+        "pricing": {
+          "inputPerMillionTokens": 2,
+          "outputPerMillionTokens": 12
+        },
+        "authentication": {
+          "modes": [
+            "managed-subscription"
+          ]
+        },
+        "dataPolicy": {
+          "allowedDataClasses": [
+            "public",
+            "workspace"
+          ],
+          "retention": "transient",
+          "trainingUse": "opt-in",
+          "regions": [
+            "us"
+          ]
+        },
+        "modalities": [
+          "text"
+        ],
+        "toolCalls": {
+          "supported": true
+        },
+        "provenance": {
+          "source": "Copied from the reviewed openai/gpt-5.6-terra profile on 2026-09-26: openai-codex/gpt-5.6-terra is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact. OpenAI API pricing after the 2026-07-30 reduction, retrieved 2026-09-09: https://developers.openai.com/api/docs/pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": [
+          "https://openai.com/index/gpt-5-6/",
+          "https://developers.openai.com/api/docs/pricing"
+        ],
+        "reviewedAt": "2026-09-26T00:00:00.000Z"
+      }
+    },
+    {
+      "modelRef": "openai-codex/gpt-5.6-luna",
+      "capability": {
+        "schemaVersion": 2,
+        "axes": {
+          "reasoning": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Described as the cost-efficient tier; no per-axis third-party result was surveyed.",
+            "evidence": [
+              "Tier comparison, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "coding": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No separate SWE-bench result for this tier; family figures must not be inherited.",
+            "evidence": [
+              "Per-model publication only, retrieved 2026-09-09: https://www.morphllm.com/best-ai-model-for-coding",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "verification": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No public benchmark matches the Maestro definition of this axis.",
+            "evidence": [
+              "Rubric section 3.3: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "instruction-fidelity": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No reproducible measurement of exact contract adherence was found.",
+            "evidence": [
+              "Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "tool-use": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No current-generation agentic tool benchmark for this tier was surveyed.",
+            "evidence": [
+              "Prior-generation figures only, retrieved 2026-09-09: https://www.datacamp.com/blog/claude-opus-4-8-vs-gpt-5-5",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "long-context": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "Window size is a provider fact; no quality-of-use measurement was found.",
+            "evidence": [
+              "Rubric section 1: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "knowledge": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No factual-breadth measurement for this tier was surveyed.",
+            "evidence": [
+              "Tier comparison, retrieved 2026-09-09: https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          },
+          "refusal-calibration": {
+            "status": "unproven",
+            "score": null,
+            "rationale": "No public benchmark measures over-refusal of ordinary local host work.",
+            "evidence": [
+              "Axis is Maestro-specific: roadmap/act-1-foundation/specs/2026-09-08-model-capability-scoring-rubric.md",
+              "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact."
+            ]
+          }
+        }
+      },
+      "providerFacts": {
+        "schemaVersion": 1,
+        "contextCapacity": 922000,
+        "pricing": {
+          "inputPerMillionTokens": 0.2,
+          "outputPerMillionTokens": 1.2
+        },
+        "authentication": {
+          "modes": [
+            "managed-subscription"
+          ]
+        },
+        "dataPolicy": {
+          "allowedDataClasses": [
+            "public",
+            "workspace"
+          ],
+          "retention": "transient",
+          "trainingUse": "opt-in",
+          "regions": [
+            "us"
+          ]
+        },
+        "modalities": [
+          "text"
+        ],
+        "toolCalls": {
+          "supported": true
+        },
+        "provenance": {
+          "source": "Copied from the reviewed openai/gpt-5.6-luna profile on 2026-09-26: openai-codex/gpt-5.6-luna is the same model served through the ChatGPT Codex subscription, so capability evidence is shared while the identity stays exact. OpenAI API pricing after the 2026-07-30 reduction, retrieved 2026-09-09: https://developers.openai.com/api/docs/pricing",
+          "observedAt": "2026-09-09T00:00:00.000Z"
+        }
+      },
+      "provenance": {
+        "owner": "human",
+        "sourceRefs": [
+          "https://openai.com/index/gpt-5-6/",
+          "https://developers.openai.com/api/docs/pricing"
+        ],
+        "reviewedAt": "2026-09-26T00:00:00.000Z"
+      }
+    },
+    {
       "modelRef": "anthropic/claude-opus-5",
       "capability": {
         "schemaVersion": 2,

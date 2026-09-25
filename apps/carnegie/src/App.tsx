@@ -14,7 +14,6 @@ import { Floor } from "./views/Floor.js";
 import { Inbox } from "./views/Inbox.js";
 import { EvidenceLog } from "./views/EvidenceLog.js";
 import { Billing } from "./views/Billing.js";
-import { Settings } from "./views/Settings.js";
 import { Persona } from "./views/Persona.js";
 import { Luthiery } from "./views/Luthiery.js";
 import { Arrangements } from "./views/Arrangements.js";
@@ -42,7 +41,6 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
       case "inbox": return <Inbox onNavigate={setView} />;
       case "evlog": return <EvidenceLog onNavigate={setView} eventCursor={eventState.cursor} />;
       case "billing": return <Billing />;
-      case "settings": return <Settings />;
       case "persona": return <Persona />;
       case "luthiery": return <Luthiery />;
       case "arrangements": return <Arrangements />;
@@ -52,7 +50,7 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
   })();
 
   const noSidebar = view === "git" || view === "flashmobSession";
-  const contentIsMainLandmark = !["dashboard", "planning", "settings"].includes(view);
+  const contentIsMainLandmark = !["dashboard", "planning"].includes(view);
 
   return (
     <div className={`app${homeMode === "flashmob" ? " flashmob-theme" : ""}`}>

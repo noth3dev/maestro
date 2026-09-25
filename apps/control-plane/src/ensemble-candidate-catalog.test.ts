@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { readRoutingCandidateCatalog } from "./ensemble-candidate-catalog.js";
+import { deriveRoutingCandidates, readRoutingCandidateCatalog, readRoutingModelMap } from "./ensemble-candidate-catalog.js";
 
 const tempDirs: string[] = [];
 
@@ -55,5 +55,30 @@ describe("production routing candidate catalog", () => {
 
     const qualified = catalogFile([{ candidateRef: "openai/gpt-5.6-sol", modelRef: "openai/gpt-5.6-sol", accountBinding: "openai-local-operator" }]);
     expect(() => readRoutingCandidateCatalog(qualified)).toThrow(/opaque|candidateRef/i);
+  });
+});
+
+describe("derived routing candidates", () => {
+  const modelMap = readRoutingModelMap(join(process.cwd(), "config", "model_map.json"));
+  const accountRefs = { openai: "openai-op", "openai-codex": "openai-codex-op" };
+
+  it("admits only live, profiled models whose provider has an account binding", () => {
+    const candidates = deriveRoutingCandidates({
+      modelMap,
+      liveModelRefs: ["openai/gpt-5.6-sol", "openai/unprofiled-model", "anthropic/claude-opus-5"],
+      accountRefs,
+    });
+    expect(candidates).toEqual([{ candidateRef: "openai:gpt-5.6-sol", modelRef: "openai/gpt-5.6-sol", accountBinding: "openai-op" }]);
+  });
+
+  it("keeps openai-codex identities distinct from openai identities", () => {
+    const candidates = deriveRoutingCandidates({ modelMap, liveModelRefs: ["openai-codex/gpt-5.6-sol"], accountRefs });
+    expect(candidates).toEqual([
+      { candidateRef: "openai-codex:gpt-5.6-sol", modelRef: "openai-codex/gpt-5.6-sol", accountBinding: "openai-codex-op" },
+    ]);
+  });
+
+  it("derives no candidates when no live model is profiled", () => {
+    expect(deriveRoutingCandidates({ modelMap, liveModelRefs: ["example/new-model"], accountRefs })).toEqual([]);
   });
 });

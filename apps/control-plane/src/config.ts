@@ -163,7 +163,7 @@ export function parseConfig(env: Record<string, string | undefined>): MaestroCon
       throw new Error("Invalid MAESTRO_MODEL_ACCOUNT_REFS");
     accountRefs[provider] = accountRef;
   }
-  for (const provider of ["openai", "anthropic"]) accountRefs[provider] ??= `${provider}-${modelGatewayOperatorId}`;
+  for (const provider of ["openai", "anthropic", "openai-codex", "anthropic-claude"]) accountRefs[provider] ??= `${provider}-${modelGatewayOperatorId}`;
 
   return {
     databaseUrl,

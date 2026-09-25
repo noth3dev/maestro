@@ -59,5 +59,6 @@ export interface MaestroBridge {
 declare global {
   interface Window {
     maestro: MaestroBridge;
+    maestroBridge?: MaestroBridge;
   }
 }
