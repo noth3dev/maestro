@@ -460,7 +460,7 @@ export function RouterCatalogPanel({
             grouped.map((group) => (
               <section className="router-provider-group" key={group.providerId} aria-labelledby={`router-provider-${group.providerId}`}>
                 <h3 id={`router-provider-${group.providerId}`}>{group.providerId}</h3>
-                <div className="router-table-wrap">
+                <div className="router-table-wrap" role="region" aria-label={`${group.providerId} Router Catalog model table`} tabIndex={0}>
                   <table className="router-catalog-table">
                     <thead>
                       <tr>

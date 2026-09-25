@@ -80,6 +80,17 @@ describe("Router Catalog settings", () => {
     expect(html).toContain("does not guarantee live, account, Goal, or Mission Bundle readiness");
   });
 
+  it("exposes provider tables as uniquely named keyboard-focusable scroll regions", () => {
+    const html = renderToStaticMarkup(<RouterCatalogPanel {...props} />);
+    const wrappers = html.match(/<div class="router-table-wrap"[^>]*>/g) ?? [];
+    expect(wrappers).toHaveLength(3);
+    for (const provider of ["anthropic", "openai", "openai-codex"]) {
+      expect(wrappers).toContain(
+        `<div class="router-table-wrap" role="region" aria-label="${provider} Router Catalog model table" tabindex="0">`,
+      );
+    }
+  });
+
   it("does not render a profile-only row as enabled", () => {
     const nonCandidate: RouterCatalogRead["entries"][number] = {
       modelRef: "openai/model-b",

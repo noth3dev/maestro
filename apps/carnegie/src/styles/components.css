@@ -460,7 +460,8 @@
 .provider-api-section .form-field { margin-bottom:4px; }
 .provider-api-section .provider-row + .provider-row { margin-top:2px; }
 .router-catalog-panel {
-  max-width: 1180px;
+  --text-muted: var(--text-secondary);
+  width: min(100%, 1180px);
 }
 .router-catalog-header {
   display: flex;
@@ -622,6 +623,7 @@
   background: var(--accent-bg);
   color: var(--accent-text);
 }
+.router-catalog-panel .router-table-wrap:focus-visible,
 .router-toggle:focus-visible,
 .router-catalog-panel button:focus-visible,
 .router-catalog-panel input:focus-visible,
