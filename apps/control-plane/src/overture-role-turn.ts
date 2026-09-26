@@ -9,7 +9,7 @@ import {
 } from "@maestro/agent-runtime";
 import { OVERTURE_ROLE_DEFINITIONS, RETIRED_OVERTURE_ROLE_IDS, createOvertureRoleRuntimePolicy, type OvertureRoleId } from "@maestro/domain";
 import type { OvertureMessage } from "@maestro/contracts";
-import { OVERTURE_TRIAGE_SYSTEM_PROMPT, overtureJoinPrompt, overtureTriagePrompt } from "@maestro/prompts";
+import { OVERTURE_TRIAGE_SYSTEM_PROMPT, overtureJoinPrompt, overtureRoundSummaryPrompt, overtureTriagePrompt } from "@maestro/prompts";
 
 export class OvertureProviderUnavailableError extends Error {}
 
@@ -268,6 +268,14 @@ export function createOvertureRoleTurnRunner(options: {
         for (const roleId of addressedRoles(message.content, input.assignedRoles.filter((role) => !RETIRED_OVERTURE_ROLE_IDS.includes(role)))) {
           if (roleId === member.roleId || queue.some((queued) => queued.roleId === roleId)) continue;
           queue.push({ roleId, reason: `the ${roleLabel(member.roleId)} addressed you` });
+        }
+      }
+      // A round with specialists closes with the lead's summary and decision log.
+      if (messages.some((message) => message.actor !== LEAD)) {
+        try {
+          messages.push(await reply(input, LEAD, overtureRoundSummaryPrompt(input.content)));
+        } catch {
+          // The round's replies already stand on their own without a summary.
         }
       }
       return messages;

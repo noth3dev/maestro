@@ -78,3 +78,14 @@ export function overtureTriagePrompt(operatorMessage: string, candidates: readon
 export function overtureJoinPrompt(operatorMessage: string, displayName: string, reason: string): string {
   return `${operatorMessage}\n\n(You are speaking as the ${displayName} because ${reason}. Add only what your role contributes, answer crew members who addressed you, and do not repeat earlier replies.)`;
 }
+
+/** The lead's closing message after several crew members spoke in one round. */
+export function overtureRoundSummaryPrompt(operatorMessage: string): string {
+  return [
+    `${operatorMessage}`,
+    "",
+    "(Several crew members replied this round. As the conversation lead, close the round for the operator in at most six short lines:",
+    "Decided — what the crew settled; Open — questions still waiting for the operator, each with its options; Next — who does what next.",
+    "Append every new decision as a dated bullet to decisions.md in the session workspace (read it first, keep earlier entries). Do not repeat the crew's full replies.)",
+  ].join("\n");
+}

@@ -15,6 +15,7 @@ describe("prompts surface", () => {
         "maestroSystemPrompt",
         "overtureJoinPrompt",
         "overtureRoleSystemPrompt",
+        "overtureRoundSummaryPrompt",
         "overtureTriagePrompt",
         "semanticReviewerPrompt",
       ]

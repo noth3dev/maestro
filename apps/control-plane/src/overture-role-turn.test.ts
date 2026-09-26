@@ -151,7 +151,8 @@ describe("Overture crew conversation", () => {
       return "unexpected";
     });
     await runner.runCrew!({ ...ids, operatorId: "operator-1", content: "Plan a sign-up page", assignedRoles: roles });
-    expect(appended.map((message) => message.actor)).toEqual(["conversation-lead", "design-mock-specialist", "security-evaluator", "task-editor"]);
+    // The round closes with the lead's summary.
+    expect(appended.map((message) => message.actor)).toEqual(["conversation-lead", "design-mock-specialist", "security-evaluator", "task-editor", "conversation-lead"]);
   });
 
   it("keeps the lead alone for small talk and bounds crew-to-crew ping-pong", async () => {
@@ -161,7 +162,8 @@ describe("Overture crew conversation", () => {
 
     const noisy = crewRunner((speaker) => (speaker === "triage" ? "not json" : speaker === "Security Evaluator" ? "@design again?" : "@security what do you think?"));
     await noisy.runner.runCrew!({ ...ids, operatorId: "operator-1", content: "@design start", assignedRoles: roles });
-    expect(noisy.appended.length).toBe(8);
+    // Eight crew replies plus the lead's closing summary.
+    expect(noisy.appended.length).toBe(9);
   });
 });
 
