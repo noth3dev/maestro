@@ -118,6 +118,7 @@ const TITLES: Record<string, string> = {
   channel_closed: "Channel is closed",
   overture_run_not_found: "Overture run not found",
   overture_conflict: "Overture changed elsewhere",
+  workspace_file_not_found: "Workspace file not found",
 };
 
 /** Turns any thrown value from a bridged API call into stable, renderable state. Never inspects a token or header. */

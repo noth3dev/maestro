@@ -175,6 +175,8 @@ export interface ApiClient {
   logoutAccount(providerId: "openai-codex" | "anthropic-claude"): Promise<void>;
   createConversation(input: CreateConversationInput, options?: { idempotencyKey?: string }): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  listSessionWorkspaceFiles(conversationId: string, query: GoalQuery): Promise<import("@maestro/contracts").SessionWorkspaceListing>;
+  readSessionWorkspaceFile(conversationId: string, query: import("@maestro/contracts").SessionWorkspaceFileQuery): Promise<import("@maestro/contracts").SessionWorkspaceFile>;
   listConversations(query: import("@maestro/contracts").ConversationListQuery): Promise<readonly import("@maestro/contracts").ConversationSummary[]>;
   sendConversationTurn(
     conversationId: string,

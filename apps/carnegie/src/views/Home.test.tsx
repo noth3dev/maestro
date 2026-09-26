@@ -1,11 +1,15 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { Home, OvertureClarificationPanel, projectOpenOvertureClarification, submitHomeComposer } from "./Home.js";
+import { Home, submitHomeComposer } from "./Home.js";
 
 vi.mock("../connection.js", () => ({ useConnection: () => ({ config: { projectId: "11111111-1111-4111-8111-111111111111" } }) }));
 vi.mock("../goals.js", () => ({ useGoals: () => ({ selectedGoalId: undefined }) }));
 vi.mock("../icons.js", () => ({ Icon: () => null }));
+const sessionsState = { activeConversationId: undefined as string | undefined };
+vi.mock("../sessions.js", () => ({
+  useSessions: () => ({ sessions: [], activeConversationId: sessionsState.activeConversationId, openSession: vi.fn(), newSessionRequest: 0, refresh: vi.fn() }),
+}));
 vi.stubGlobal("React", React);
 
 describe("Home Concertmaster conversation", () => {
@@ -16,33 +20,22 @@ describe("Home Concertmaster conversation", () => {
     expect(html).toContain('id="home-concertmaster-model"');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('aria-pressed="false"');
-    expect(html).not.toContain("conversation not started");
     expect(html).not.toContain("continue conversation");
     expect(html).not.toContain("retry turn");
     expect(html).not.toContain("cancel turn");
   });
 
-  it("projects an open clarification event and renders an answer form", () => {
-    const clarification = projectOpenOvertureClarification([
-      {
-        eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-        runId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        projectId: "11111111-1111-4111-8111-111111111111",
-        cursor: "1",
-        eventType: "clarification_opened",
-        payload: { clarificationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", question: "Which repository is in scope?" },
-        createdAt: "2026-09-24T00:00:00.000Z",
-      },
-    ]);
-    expect(clarification).toEqual({
-      clarificationId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-      question: "Which repository is in scope?",
-    });
-    if (clarification === undefined) throw new Error("expected open clarification");
-    const html = renderToStaticMarkup(<OvertureClarificationPanel clarification={clarification} answer="" onAnswer={vi.fn()} onSubmitAnswer={vi.fn()} busy={false} />);
-    expect(html).toContain("Which repository is in scope?");
-    expect(html).toContain('id="overture-clarification-answer"');
-    expect(html).toContain("answer clarification");
+  it("opens the chat session view for a selected session", () => {
+    sessionsState.activeConversationId = "22222222-2222-4222-8222-222222222222";
+    try {
+      const html = renderToStaticMarkup(<Home onNavigate={vi.fn()} mode="maestro" onModeChange={vi.fn()} />);
+      expect(html).toContain('aria-label="Concertmaster session"');
+      expect(html).toContain("message the concertmaster");
+      expect(html).toContain("workspace");
+      expect(html).not.toContain('id="home-concertmaster-model"');
+    } finally {
+      sessionsState.activeConversationId = undefined;
+    }
   });
 
   it("keeps the deferred Flashmob composer from submitting", () => {

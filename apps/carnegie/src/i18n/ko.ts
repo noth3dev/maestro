@@ -2,7 +2,9 @@ import type { Translations } from "./en.js";
 
 export const ko: Translations = {
   nav: {
-    search: "검색",
+    concertmaster: "콘서트마스터",
+    newSession: "새 세션",
+    untitledSession: "제목 없는 세션",
     inbox: "받은 편지함",
     dashboard: "대시보드",
     planning: "기획",

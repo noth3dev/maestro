@@ -95,6 +95,7 @@ import { GitAuthorizationError } from "@maestro/git-adapter";
 import { PersonaInspectionError } from "./persona-inspection-service.js";
 import { EnsembleRoutingShortfallError } from "./ensemble-admission.js";
 import { OvertureProviderUnavailableError } from "./overture-role-turn.js";
+import { SessionWorkspaceFileNotFoundError, SessionWorkspacePathError } from "./session-workspace.js";
 import { RouterConfigInvalidError } from "./composition/router-catalog.js";
 import {
   AuthenticationRequiredError,
@@ -165,6 +166,8 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof WorkerMessageRejectedError) return apiError(409, "worker_message_rejected", error.message);
   if (error instanceof WorkerNotFoundError) return apiError(404, "worker_not_found", error.message);
   if (error instanceof WorkerError) return apiError(409, "worker_conflict", error.message);
+  if (error instanceof SessionWorkspaceFileNotFoundError) return apiError(404, "workspace_file_not_found", error.message);
+  if (error instanceof SessionWorkspacePathError) return apiError(400, "validation_error", error.message);
   if (error instanceof OvertureProviderUnavailableError) return apiError(503, "provider_unavailable", error.message);
   if (error instanceof OvertureRunNotFoundError) return apiError(404, "overture_run_not_found", error.message);
   if (error instanceof OvertureVersionConflictError || error instanceof OvertureConflictError || error instanceof OvertureIntegrityError)

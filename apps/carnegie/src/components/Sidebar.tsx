@@ -4,6 +4,7 @@ import { useT } from "../i18n/index.js";
 import { useTheme } from "../theme.js";
 import { useGoals } from "../goals.js";
 import { useConnection } from "../connection.js";
+import { useSessions } from "../sessions.js";
 import { loadPendingApprovalCount } from "../lib/inbox-data.js";
 import type { ViewName } from "../views.js";
 
@@ -12,6 +13,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   const { theme, setTheme } = useTheme();
   const { goals, orchestrationByGoalId = {}, selectedGoalId, selectGoal } = useGoals();
   const { config } = useConnection();
+  const { sessions, activeConversationId, openSession } = useSessions();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingApprovalCount, setPendingApprovalCount] = useState<number | undefined>(undefined);
 
@@ -58,7 +60,35 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
 
       <div className="sb-scroll">
         <div className="sb-menu">
-          {navItem("home", "search", t.nav.search)}
+          <button
+            type="button"
+            className={`sb-item${view === "home" && activeConversationId === undefined ? " on" : ""}`}
+            aria-current={view === "home" && activeConversationId === undefined ? "page" : undefined}
+            onClick={() => { openSession(undefined); onNavigate("home"); }}
+          >
+            <Icon name="message-square-text" /> <span className="lbl">{t.nav.concertmaster}</span>
+            <Icon name="plus" className="sb-item-trailing" aria-hidden="true" />
+          </button>
+          {sessions !== undefined && sessions.length > 0 && (
+            <div className="sb-sessions" role="list" aria-label="Concertmaster sessions">
+              {sessions.map((session) => {
+                const active = view === "home" && session.conversationId === activeConversationId;
+                return (
+                  <button
+                    key={session.conversationId}
+                    type="button"
+                    role="listitem"
+                    className={`sb-session${active ? " on" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                    title={session.title ?? t.nav.untitledSession}
+                    onClick={() => { openSession(session.conversationId); onNavigate("home"); }}
+                  >
+                    <span className="lbl">{session.title ?? t.nav.untitledSession}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {navItem("inbox", "inbox", t.nav.inbox, pendingApprovalCount)}
           {navItem("dashboard", "layout-dashboard", t.nav.dashboard)}
           {navItem("planning", "clipboard-list", t.nav.planning)}

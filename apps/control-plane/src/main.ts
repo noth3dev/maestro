@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { createSessionWorkspace } from "./session-workspace.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
@@ -118,6 +119,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const authorityExecutor = new AuthorizedEffectExecutor(authorityRepository);
   const ipythonSessions = createControlPlaneIpPythonSessions({ pool, config, overrides, authorityExecutor });
   overrides.onIpPythonSessionManager?.(ipythonSessions);
+  const sessionWorkspace = createSessionWorkspace({ root: config.worktreeRoot });
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
   const executionKernel =
@@ -187,6 +189,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
       tools,
     }),
+    sessionWorkspace,
     settingsService,
     routerCatalogService,
     ...(accountLoginStore === undefined ? {} : { accountLoginStore, accountLoginOwnerId }),

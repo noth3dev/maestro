@@ -5,6 +5,9 @@ import {
   ConversationSchema,
   ConversationListQuerySchema,
   ConversationSummarySchema,
+  SessionWorkspaceFileQuerySchema,
+  SessionWorkspaceFileSchema,
+  SessionWorkspaceListingSchema,
   CreateConversationInputSchema,
   ConversationTurnInputSchema,
   ConversationTurnResultSchema,
@@ -19,7 +22,7 @@ import { DurableStoreUnavailableError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
 export function registerConversationRoutes(app: FastifyInstance, deps: ConversationRouteDeps): void {
-  const { pollingScheduler, conversations, activeStreams, maxActiveStreams } = deps;
+  const { pollingScheduler, conversations, activeStreams, maxActiveStreams, sessionWorkspace } = deps;
   app.post("/v1/conversations", async (request, reply) => {
     const input = parse(CreateConversationInputSchema, request.body);
     const header = request.headers["idempotency-key"];
@@ -45,6 +48,22 @@ export function registerConversationRoutes(app: FastifyInstance, deps: Conversat
       requestOperator(request as { operator?: OperatorContext }),
     );
     return reply.status(200).send(ConversationSchema.parse(conversation));
+  });
+
+  app.get("/v1/conversations/:conversationId/workspace/files", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(GoalQuerySchema, request.query);
+    if (sessionWorkspace === undefined) throw new DurableStoreUnavailableError();
+    await conversations.get(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(SessionWorkspaceListingSchema.parse(await sessionWorkspace.list(query.projectId, conversationId)));
+  });
+
+  app.get("/v1/conversations/:conversationId/workspace/file", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(SessionWorkspaceFileQuerySchema, request.query);
+    if (sessionWorkspace === undefined) throw new DurableStoreUnavailableError();
+    await conversations.get(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(SessionWorkspaceFileSchema.parse(await sessionWorkspace.read(query.projectId, conversationId, query.path)));
   });
 
   app.post("/v1/conversations/:conversationId/turns", async (request, reply) => {

@@ -1,6 +1,8 @@
 export const en = {
   nav: {
-    search: "search",
+    concertmaster: "concertmaster",
+    newSession: "new session",
+    untitledSession: "untitled session",
     inbox: "inbox",
     dashboard: "dashboard",
     planning: "planning",

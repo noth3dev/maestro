@@ -169,6 +169,7 @@ export interface RouteDeps {
   discordSignal: DiscordSignalService;
   conversations: ConversationService;
   overture?: OvertureService;
+  sessionWorkspace?: import("./session-workspace.js").SessionWorkspace;
   projections: ProjectionService;
   personaInspection: PersonaInspectionService;
   organizations: OrganizationService;

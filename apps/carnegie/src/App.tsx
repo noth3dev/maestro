@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ConnectionProvider, SessionRecoveryNotice, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
+import { SessionsProvider } from "./sessions.js";
 import { ThemeProvider } from "./theme.js";
 import { I18nProvider, localeFromPreferences, useT, type Locale } from "./i18n/index.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -82,7 +83,9 @@ function ConnectedWorkspace({ projectId }: { projectId: string }) {
   const eventState = useDurableEvents(durableEventsApi, projectId);
   return (
     <GoalsProvider refreshKey={eventState.cursor}>
-      <Shell eventState={eventState} />
+      <SessionsProvider>
+        <Shell eventState={eventState} />
+      </SessionsProvider>
     </GoalsProvider>
   );
 }

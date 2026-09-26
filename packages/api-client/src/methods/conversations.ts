@@ -3,6 +3,9 @@ import {
   ConversationSchema,
   ConversationListQuerySchema,
   ConversationSummarySchema,
+  SessionWorkspaceFileQuerySchema,
+  SessionWorkspaceFileSchema,
+  SessionWorkspaceListingSchema,
   CreateConversationInputSchema,
   ConversationTurnInputSchema,
   ConversationTurnResultSchema,
@@ -20,6 +23,8 @@ export function createConversationsMethods(
   ApiClient,
   | "createConversation"
   | "listConversations"
+  | "listSessionWorkspaceFiles"
+  | "readSessionWorkspaceFile"
   | "getConversation"
   | "sendConversationTurn"
   | "cancelConversation"
@@ -50,6 +55,22 @@ export function createConversationsMethods(
         `v1/conversations?${new URLSearchParams({ projectId: parsed.projectId, limit: String(parsed.limit) })}`,
         { headers },
         ConversationSummarySchema.array(),
+      );
+    },
+    listSessionWorkspaceFiles(conversationId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(
+        `v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/workspace/files?${new URLSearchParams({ projectId: parsed.projectId })}`,
+        { headers },
+        SessionWorkspaceListingSchema,
+      );
+    },
+    readSessionWorkspaceFile(conversationId, query) {
+      const parsed = SessionWorkspaceFileQuerySchema.parse(query);
+      return request(
+        `v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}/workspace/file?${new URLSearchParams({ projectId: parsed.projectId, path: parsed.path })}`,
+        { headers },
+        SessionWorkspaceFileSchema,
       );
     },
     getConversation(conversationId, query) {

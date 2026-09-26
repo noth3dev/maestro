@@ -123,6 +123,7 @@ export function buildServer({
   readinessCheck,
   conversationService,
   overture,
+  sessionWorkspace,
   projectionService,
   settingsService,
   routerCatalogService,
@@ -181,6 +182,8 @@ export function buildServer({
   readinessCheck?: () => Promise<void>;
   conversationService?: ConversationService;
   overture?: OvertureService;
+  /** Per-session Git workspaces shown in the Carnegie file panel. */
+  sessionWorkspace?: import("./session-workspace.js").SessionWorkspace;
   /** Durable projection composition over existing source tables for Carnegie panels. */
   projectionService?: ProjectionService;
   settingsService?: SettingsService;
@@ -315,6 +318,7 @@ export function buildServer({
     discordSignal,
     conversations,
     ...(overture === undefined ? {} : { overture }),
+    ...(sessionWorkspace === undefined ? {} : { sessionWorkspace }),
     projections,
     personaInspection,
     organizations,

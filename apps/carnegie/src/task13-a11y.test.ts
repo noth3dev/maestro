@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const read = (relativePath: string): string => readFileSync(new URL(relativePath, import.meta.url), "utf8");
 const home = read("./views/Home.tsx");
+const session = read("./views/ConcertmasterSession.tsx");
 const sidebar = read("./components/Sidebar.tsx");
 const channel = read("./views/Channel.tsx");
 const approvals = read("./views/Approvals.tsx");
@@ -33,7 +34,7 @@ describe("Task 13 Carnegie accessibility and scale contract", () => {
     expect(channel).toContain('role="alert"');
     expect(approvals).toContain('role="status"');
     expect(approvals).toContain('role="alert"');
-    expect(home).toContain('aria-live="polite"');
+    expect(session).toContain('aria-live="polite"');
   });
 
   it("keeps semantic focus indicators and narrow layouts usable", () => {

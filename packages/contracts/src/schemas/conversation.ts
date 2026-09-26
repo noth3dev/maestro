@@ -32,6 +32,20 @@ export const ConversationListQuerySchema = z
   .object({ projectId: UuidSchema, limit: z.coerce.number().int().min(1).max(200).default(50) })
   .strict();
 export type ConversationListQuery = z.input<typeof ConversationListQuerySchema>;
+const WorkspaceRevisionSchema = z.string().regex(/^[0-9a-f]{40}$/).nullable();
+export const SessionWorkspaceListingSchema = z
+  .object({
+    files: z.array(z.object({ path: z.string().min(1).max(256), size: z.number().int().min(0) }).strict()).max(2000),
+    revision: WorkspaceRevisionSchema,
+  })
+  .strict();
+export type SessionWorkspaceListing = z.infer<typeof SessionWorkspaceListingSchema>;
+export const SessionWorkspaceFileSchema = z
+  .object({ path: z.string().min(1).max(256), content: z.string(), revision: WorkspaceRevisionSchema })
+  .strict();
+export type SessionWorkspaceFile = z.infer<typeof SessionWorkspaceFileSchema>;
+export const SessionWorkspaceFileQuerySchema = z.object({ projectId: UuidSchema, path: z.string().min(1).max(256) }).strict();
+export type SessionWorkspaceFileQuery = z.infer<typeof SessionWorkspaceFileQuerySchema>;
 export const CreateConversationInputSchema = z
   .object({ projectId: UuidSchema, goalId: UuidSchema.nullable().default(null), model: ModelRefSchema, reasoningEffort: z.string().min(1).optional() })
   .strict();

@@ -51,6 +51,8 @@ export const exposedApiMethods = [
   "createConversation",
   "getConversation",
   "listConversations",
+  "listSessionWorkspaceFiles",
+  "readSessionWorkspaceFile",
   "sendConversationTurn",
   "cancelConversation",
   "listConversationEvents",
