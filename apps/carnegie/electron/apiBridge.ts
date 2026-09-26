@@ -58,6 +58,7 @@ export const exposedApiMethods = [
   "readSessionWorkspaceFile",
   "sendConversationTurn",
   "cancelConversation",
+  "deleteConversation",
   "listConversationEvents",
   "createOvertureRun",
   "getOvertureRun",

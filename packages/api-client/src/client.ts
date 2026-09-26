@@ -192,6 +192,8 @@ export interface ApiClient {
     options?: { signal?: AbortSignal; idempotencyKey?: string },
   ): Promise<ConversationTurnResult>;
   cancelConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  /** Remove a Concertmaster session from the list. */
+  deleteConversation(conversationId: string, query: GoalQuery): Promise<void>;
   listConversationEvents(conversationId: string, query: ConversationEventQuery): Promise<readonly ConversationEvent[]>;
   streamConversationEvents(
     conversationId: string,

@@ -727,3 +727,12 @@
 .billing-projects th, .billing-projects td { padding:6px 8px; text-align:right; border-bottom:1px solid var(--border); }
 .billing-projects th[scope="row"], .billing-projects thead th:first-child { text-align:left; font-weight:600; }
 .billing-projects thead th { font-size:11px; color:var(--text-secondary); font-weight:600; }
+
+.sb-session-row { position:relative; display:flex; align-items:center; }
+.sb-session-row .sb-session { flex:1; min-width:0; padding-right:26px; }
+.sb-session-delete { position:absolute; right:2px; width:22px; height:22px; display:grid; place-items:center; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--text-secondary); cursor:pointer; opacity:0; }
+.sb-session-delete svg { width:13px; height:13px; }
+.sb-session-row:hover .sb-session-delete, .sb-session-delete:focus-visible { opacity:1; }
+.sb-session-delete:hover { color:var(--rust-text); background:var(--rust-bg); }
+.sb-session-delete:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.sidebar.collapsed .sb-session-delete { display:none; }

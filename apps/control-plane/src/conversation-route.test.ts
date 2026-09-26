@@ -49,6 +49,16 @@ describe("conversation routes", () => {
     await app.close();
   });
 
+  it("deletes a session from the operator's list", async () => {
+    const archive = vi.fn(async () => undefined);
+    const service: ConversationService = { listModels: vi.fn(async () => []), create: vi.fn(), get: vi.fn(), turn: vi.fn(), cancel: vi.fn(), listEvents: vi.fn(async () => []), archive };
+    const app = buildServer({ goalService, authenticator, conversationService: service });
+    const response = await app.inject({ method: "DELETE", url: `/v1/conversations/${conversationId}?projectId=${projectId}`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(204);
+    expect(archive).toHaveBeenCalledWith(conversationId, projectId, operator);
+    await app.close();
+  });
+
   it("requires idempotency keys for conversation writes", async () => {
     const create = vi.fn(async () => conversation);
     const service: ConversationService = { listModels: vi.fn(async () => []), create, get: vi.fn(), turn: vi.fn(), cancel: vi.fn(), listEvents: vi.fn(async () => []) };

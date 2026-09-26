@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyAllMigrations } from "./test-migrations.js";
-import { listConversationSummaries } from "./conversation.js";
+import { archiveConversation, listConversationSummaries } from "./conversation.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
 const describeDatabase = databaseUrl ? describe : describe.skip;
@@ -55,6 +55,11 @@ describeDatabase("Concertmaster session summaries", () => {
     expect(sessions[0]!.title!.endsWith("…")).toBe(true);
     expect(sessions[2]!.title).toBeNull();
     await expect(listConversationSummaries(pool, { operatorId: "operator-1", projectId, limit: 1 })).resolves.toHaveLength(1);
+
+    // A deleted session leaves the list; only its operator can delete it.
+    await expect(archiveConversation(pool, { operatorId: "operator-2", projectId, conversationId: older })).resolves.toBe(false);
+    await expect(archiveConversation(pool, { operatorId: "operator-1", projectId, conversationId: older })).resolves.toBe(true);
+    expect((await listConversationSummaries(pool, { operatorId: "operator-1", projectId, limit: 10 })).map((session) => session.conversationId)).toEqual([newer, empty]);
   });
 
   it("lists sessions across every project the operator belongs to when no project is given", async () => {

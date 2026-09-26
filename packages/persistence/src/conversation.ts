@@ -63,6 +63,7 @@ export async function listConversationSummaries(
          ORDER BY t.created_at, t.turn_id LIMIT 1) AS first_text
      FROM conversations c
      WHERE c.operator_id = $1
+       AND c.archived_at IS NULL
        AND (c.project_id = $2
             OR ($2::uuid IS NULL AND EXISTS (SELECT 1 FROM operator_project_memberships m WHERE m.operator_id::text = c.operator_id AND m.project_id = c.project_id AND m.active)))
      ORDER BY c.updated_at DESC, c.conversation_id
@@ -477,4 +478,13 @@ export async function fenceInterruptedTurn(pool: Pool, args: { conversationId: s
     client.release();
     throw error;
   }
+}
+
+/** Remove a session from the operator's list. Its records stay for the Goals and meetings that use them. */
+export async function archiveConversation(pool: Pick<Pool, "query">, input: { operatorId: string; projectId: string; conversationId: string }): Promise<boolean> {
+  const result = await pool.query(
+    "UPDATE conversations SET archived_at = COALESCE(archived_at, transaction_timestamp()) WHERE conversation_id = $1 AND project_id = $2 AND operator_id = $3",
+    [input.conversationId, input.projectId, input.operatorId],
+  );
+  return result.rowCount === 1;
 }

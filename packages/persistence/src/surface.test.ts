@@ -164,6 +164,7 @@ describe("persistence surface", () => {
         "appendTurnDelta",
         "applyAllMigrations",
         "applyPersonaTaskClassApplication",
+        "archiveConversation",
         "arrangementCouncilQuestionMatchesCandidate",
         "assembleEvidenceBundle",
         "assertCurrentWorkerLease",

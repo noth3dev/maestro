@@ -14,6 +14,7 @@ import {
   listActiveConversations,
   listConversationEvents,
   listConversationSummaries,
+  archiveConversation,
   markConversationUnknown,
   readConversationRecord,
   type AssistantTurnRow,
@@ -77,6 +78,8 @@ export interface ConversationService {
     requestId?: string,
   ): Promise<ConversationTurnResult>;
   cancel(conversationId: string, projectId: string, operator: OperatorContext): Promise<Conversation>;
+  /** Remove the session from the operator's list. */
+  archive?(conversationId: string, projectId: string, operator: OperatorContext): Promise<void>;
   listEvents(conversationId: string, projectId: string, after: string, operator: OperatorContext): Promise<readonly ConversationEvent[]>;
   /** The operator's Concertmaster sessions in one project, most recently active first. */
   list?(projectId: string | undefined, limit: number, operator: OperatorContext): Promise<readonly ConversationSummary[]>;
@@ -515,6 +518,9 @@ export function createPostgresConversationService(options: {
           createdAt: now(),
         },
       };
+    },
+    async archive(conversationId, projectId, operator) {
+      if (!(await archiveConversation(options.pool, { operatorId: operator.operatorId, projectId, conversationId }))) throw new ConversationNotFoundError();
     },
     async cancel(conversationId, projectId, operator) {
       await read(conversationId, projectId, operator.operatorId);

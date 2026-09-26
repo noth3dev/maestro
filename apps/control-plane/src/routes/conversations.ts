@@ -76,6 +76,14 @@ export function registerConversationRoutes(app: FastifyInstance, deps: Conversat
     return reply.status(200).send(ConversationTurnResultSchema.parse(result));
   });
 
+  app.delete("/v1/conversations/:conversationId", async (request, reply) => {
+    const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
+    const query = parse(GoalQuerySchema, request.query);
+    if (conversations.archive === undefined) throw new DurableStoreUnavailableError();
+    await conversations.archive(conversationId, query.projectId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(204).send();
+  });
+
   app.post("/v1/conversations/:conversationId/cancel", async (request, reply) => {
     const conversationId = parse(UuidSchema, (request.params as { conversationId?: unknown }).conversationId);
     const query = parse(GoalQuerySchema, request.body);

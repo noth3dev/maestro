@@ -23,6 +23,7 @@ export function createConversationsMethods(
   ApiClient,
   | "createConversation"
   | "listConversations"
+  | "deleteConversation"
   | "listSessionWorkspaceFiles"
   | "readSessionWorkspaceFile"
   | "getConversation"
@@ -97,6 +98,14 @@ export function createConversationsMethods(
         ConversationTurnResultSchema,
         // A model turn can legitimately take minutes.
         300_000,
+      );
+    },
+    deleteConversation(conversationId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(
+        `v1/conversations/${encodeURIComponent(UuidSchema.parse(conversationId))}?${new URLSearchParams({ projectId: parsed.projectId })}`,
+        { method: "DELETE", headers },
+        { parse: () => undefined },
       );
     },
     cancelConversation(conversationId, query) {

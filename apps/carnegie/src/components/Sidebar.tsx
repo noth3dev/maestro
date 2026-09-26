@@ -7,6 +7,8 @@ import { useConnection } from "../connection.js";
 import { useSessions } from "../sessions.js";
 import { projectName, useProjects } from "../projects.js";
 import { ProjectSwitcher } from "./ProjectSwitcher.js";
+import { ConfirmActionDialog } from "./ConfirmActionDialog.js";
+import type { ConversationSummary } from "@maestro/contracts";
 import { loadPendingApprovalCount } from "../lib/inbox-data.js";
 import type { ViewName } from "../views.js";
 
@@ -16,7 +18,14 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   const { goals, orchestrationByGoalId = {}, selectedGoalId, selectGoal } = useGoals();
   const { config } = useConnection();
   const { projects, projectId, homeProjectId } = useProjects();
-  const { sessions, activeConversationId, openSession } = useSessions();
+  const { sessions, activeConversationId, openSession, refresh: refreshSessions } = useSessions();
+  const [pendingDelete, setPendingDelete] = useState<ConversationSummary | undefined>(undefined);
+  const deleteSession = async (session: ConversationSummary) => {
+    setPendingDelete(undefined);
+    await window.maestro.api.deleteConversation(session.conversationId, { projectId: session.projectId }).catch(() => undefined);
+    if (session.conversationId === activeConversationId) { openSession(undefined); onNavigate("home"); }
+    await refreshSessions();
+  };
   const [collapsed, setCollapsed] = useState(false);
   const [pendingApprovalCount, setPendingApprovalCount] = useState<number | undefined>(undefined);
 
@@ -79,18 +88,21 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
               {sessions.map((session) => {
                 const active = view === "home" && session.conversationId === activeConversationId;
                 return (
-                  <button
-                    key={session.conversationId}
-                    type="button"
-                    role="listitem"
-                    className={`sb-session${active ? " on" : ""}`}
-                    aria-current={active ? "page" : undefined}
-                    title={session.title ?? t.nav.untitledSession}
-                    onClick={() => { openSession(session.conversationId); onNavigate("home"); }}
-                  >
-                    <span className="lbl">{session.title ?? t.nav.untitledSession}</span>
-                    {session.projectId !== homeProjectId && <span className="sb-session-project">{projectName(projects, session.projectId)}</span>}
-                  </button>
+                  <div key={session.conversationId} role="listitem" className="sb-session-row">
+                    <button
+                      type="button"
+                      className={`sb-session${active ? " on" : ""}`}
+                      aria-current={active ? "page" : undefined}
+                      title={session.title ?? t.nav.untitledSession}
+                      onClick={() => { openSession(session.conversationId); onNavigate("home"); }}
+                    >
+                      <span className="lbl">{session.title ?? t.nav.untitledSession}</span>
+                      {session.projectId !== homeProjectId && <span className="sb-session-project">{projectName(projects, session.projectId)}</span>}
+                    </button>
+                    <button type="button" className="sb-session-delete" aria-label={`Delete session: ${session.title ?? t.nav.untitledSession}`} onClick={() => setPendingDelete(session)}>
+                      <Icon name="trash-2" aria-hidden="true" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -134,6 +146,15 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
         </div>
       </div>
 
+      <ConfirmActionDialog
+        open={pendingDelete !== undefined}
+        title="Delete this session?"
+        effectSummary={`"${pendingDelete?.title ?? t.nav.untitledSession}" disappears from the list. Goals and plans it started are kept.`}
+        confirmLabel="delete"
+        danger
+        onCancel={() => setPendingDelete(undefined)}
+        onConfirm={() => { if (pendingDelete !== undefined) void deleteSession(pendingDelete); }}
+      />
       <ProjectSwitcher />
       <div className="sb-bottom">
         <div className="avatar avatar-sm av-slate">U</div>
