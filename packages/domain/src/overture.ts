@@ -1,4 +1,4 @@
-import { overtureRoleSystemPrompt } from "@maestro/prompts";
+import { OVERTURE_ROLE_BRIEFS, overtureRoleSystemPrompt } from "@maestro/prompts";
 import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 import type { ModelCapabilityAxis } from "./model-profile.js";
@@ -143,6 +143,7 @@ export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeCont
       allowedTools: definition.allowedTools,
       forbiddenActions: definition.forbiddenActions,
       usesWorkspace: definition.allowedTools.includes("ipython"),
+      ...(OVERTURE_ROLE_BRIEFS[definition.id] === undefined ? {} : { brief: OVERTURE_ROLE_BRIEFS[definition.id] }),
     }),
     modelCapabilityAxes: [...definition.modelCapabilityAxes],
     allowedTools: [...definition.allowedTools],

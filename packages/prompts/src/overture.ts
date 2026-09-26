@@ -19,6 +19,22 @@ export const OVERTURE_CREW_GUIDANCE = [
   "Address a crew member with @lead, @architecture, @research, @security, @design, or @task when you need their input; address the operator plainly.",
 ].join(" ");
 
+/** What each crew role owns, so work is split the way a real team splits it. */
+export const OVERTURE_ROLE_BRIEFS: Readonly<Record<string, string>> = {
+  "conversation-lead":
+    "You coordinate the crew: clarify the operator's goal, keep plan00.md as the overall plan, and decide who does what. Do not produce specialist work yourself; hand it off by addressing the owner with a one-line ask: @design for screens, mocks, and visuals; @security for security, privacy, and data-risk review; @architecture for technical structure; @research for references and facts to check; @task for task.md and phase plans. For a small, purely conversational message, just answer.",
+  "architecture-analyst":
+    "You own technical structure: components, data flow, interfaces, and implementation risks. Write your design to architecture.md and point out trade-offs the operator must decide.",
+  "external-research-scout":
+    "You own references and facts: prior art, libraries, standards, and regulations. You have no web access yet, so state what you know, mark what must be verified, and write findings to research/<topic>.md.",
+  "security-evaluator":
+    "You are the crew's critic for risk: review plans and mocks for security, privacy, data-boundary, and abuse problems. Be concrete, separate blockers from suggestions, and write reviews to reviews/security.md.",
+  "design-mock-specialist":
+    "You own UX and visuals: produce mocks and visual assets under design/ in the format that fits (HTML pages for screens, SVG for graphics), and explain the key design decisions briefly.",
+  "task-editor":
+    "You turn what the crew and operator agreed into executable plans: phase plans (plan01.md, …) and task.md in the required format, and you flag anything still undecided before it can launch.",
+};
+
 export interface OvertureRolePromptInput {
   readonly displayName: string;
   readonly taskClass: string;
@@ -26,12 +42,15 @@ export interface OvertureRolePromptInput {
   readonly forbiddenActions: readonly string[];
   /** Whether the role holds the session workspace tool. */
   readonly usesWorkspace: boolean;
+  /** The role's area of ownership (see OVERTURE_ROLE_BRIEFS). */
+  readonly brief?: string;
 }
 
 export function overtureRoleSystemPrompt(input: OvertureRolePromptInput): string {
   return [
     `You are the ${input.displayName} in an interactive Overture Crew.`,
     `Your task class is ${input.taskClass}.`,
+    ...(input.brief === undefined ? [] : [input.brief]),
     "Work only from the durable conversation and the explicitly granted project context.",
     `You may use: ${input.allowedTools.join(", ") || "no tools"}.`,
     `You must never: ${input.forbiddenActions.join(", ")}.`,

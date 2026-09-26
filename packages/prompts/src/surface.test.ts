@@ -7,6 +7,7 @@ describe("prompts surface", () => {
       [
         "CONCERTMASTER_WORKSPACE_NOTE",
         "OVERTURE_CREW_GUIDANCE",
+        "OVERTURE_ROLE_BRIEFS",
         "OVERTURE_TRIAGE_SYSTEM_PROMPT",
         "OVERTURE_WORKSPACE_GUIDANCE",
         "encoreReviewerPrompt",
