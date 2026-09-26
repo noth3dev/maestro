@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import {
   bootstrapLocalOperator,
   bootstrapPermanentOrganization,
+  ensureHomeProject,
   runMigrations,
 } from "@maestro/persistence";
 import { grantProjectMembership, grantProjectRole } from "@maestro/persistence/testing";
@@ -34,6 +35,7 @@ export async function bootstrapLocalOperatorForCli(
     const operator = await bootstrapLocalOperator(pool, { operatorId, credentialId, secret });
     await grantProjectMembership(pool, operator.operatorId, projectId);
     await grantProjectRole(pool, operator.operatorId, projectId, "concertmaster");
+    await ensureHomeProject(pool, operator.operatorId, projectId);
     return { operatorId: operator.operatorId, credentialId: operator.credentialId, projectId };
   } finally {
     await pool.end();

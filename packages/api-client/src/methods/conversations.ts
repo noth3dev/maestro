@@ -52,7 +52,7 @@ export function createConversationsMethods(
     listConversations(query) {
       const parsed = ConversationListQuerySchema.parse(query);
       return request(
-        `v1/conversations?${new URLSearchParams({ projectId: parsed.projectId, limit: String(parsed.limit) })}`,
+        `v1/conversations?${new URLSearchParams({ ...(parsed.projectId === undefined ? {} : { projectId: parsed.projectId }), limit: String(parsed.limit) })}`,
         { headers },
         ConversationSummarySchema.array(),
       );

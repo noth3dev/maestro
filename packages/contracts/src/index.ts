@@ -1,6 +1,7 @@
 export * from "./schemas/common.js";
 export * from "./schemas/goal.js";
 export * from "./schemas/goal-plan.js";
+export * from "./schemas/project.js";
 export * from "./schemas/conversation.js";
 export * from "./schemas/task-contract.js";
 export * from "./schemas/billing.js";

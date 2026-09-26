@@ -63,6 +63,7 @@ export {
   revokeProjectRole,
   provisionProjectAccess,
 } from "./project-membership.js";
+export * from "./project-catalog.js";
 export * from "./device-session.js";
 export * from "./device-agent-runtime.js";
 export * from "./improvement-digest.js";

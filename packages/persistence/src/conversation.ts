@@ -44,7 +44,7 @@ function conversationTitle(text: string | null): string | null {
 /** Operator-scoped Concertmaster sessions for one project, most recently active first. */
 export async function listConversationSummaries(
   pool: Pick<Pool, "query">,
-  input: { operatorId: string; projectId: string; limit: number },
+  input: { operatorId: string; projectId?: string; limit: number },
 ): Promise<ConversationSummary[]> {
   const result = await pool.query<{
     conversation_id: string;
@@ -62,10 +62,12 @@ export async function listConversationSummaries(
          WHERE t.conversation_id = c.conversation_id AND t.project_id = c.project_id AND t.role = 'user'
          ORDER BY t.created_at, t.turn_id LIMIT 1) AS first_text
      FROM conversations c
-     WHERE c.operator_id = $1 AND c.project_id = $2
+     WHERE c.operator_id = $1
+       AND (c.project_id = $2
+            OR ($2::uuid IS NULL AND EXISTS (SELECT 1 FROM operator_project_memberships m WHERE m.operator_id::text = c.operator_id AND m.project_id = c.project_id AND m.active)))
      ORDER BY c.updated_at DESC, c.conversation_id
      LIMIT $3`,
-    [input.operatorId, input.projectId, input.limit],
+    [input.operatorId, input.projectId ?? null, input.limit],
   );
   return result.rows.map((row) => ({
     conversationId: row.conversation_id,

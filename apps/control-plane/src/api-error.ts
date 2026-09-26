@@ -33,6 +33,8 @@ import {
   ProjectRoleRequiredError,
   ChannelError,
   ChannelNotFoundError,
+  ProjectNotFoundError,
+  InvalidProjectNameError,
   ChannelConflictError,
   ChannelClosedError,
   OvertureRunNotFoundError,
@@ -229,6 +231,8 @@ export function mapError(error: unknown): { status: number; body: StableApiError
   if (error instanceof ProjectMembershipRequiredError || error instanceof ProjectRoleRequiredError)
     return apiError(403, "project_access_forbidden", error.message);
   if (error instanceof ChannelNotFoundError) return apiError(404, "channel_not_found", error.message);
+  if (error instanceof ProjectNotFoundError) return apiError(404, "project_not_found", error.message);
+  if (error instanceof InvalidProjectNameError) return apiError(400, "invalid_project_name", error.message);
   if (error instanceof ChannelClosedError) return apiError(409, "channel_closed", error.message);
   if (error instanceof ChannelConflictError) return apiError(409, "channel_conflict", error.message);
   if (error instanceof ChannelError) return apiError(400, "validation_error", error.message);

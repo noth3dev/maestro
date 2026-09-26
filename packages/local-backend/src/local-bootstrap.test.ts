@@ -410,15 +410,14 @@ describe("resolveLocalConnection", () => {
     });
   });
 
-  it("reuses a keychain token and repairs a missing default Goal", async () => {
+  it("reuses a keychain token without creating a placeholder Goal", async () => {
+    // Goals come from approved PRDs; an empty project stays empty.
     const fetch = vi.fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ projects: ["11111111-1111-4111-8111-111111111111"] }))
-      .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ goals: [] }))
-      .mockResolvedValueOnce(response({ goalId: "22222222-2222-4222-8222-222222222222", projectId: "11111111-1111-4111-8111-111111111111", state: "draft", version: 1 }, 201));
+      .mockResolvedValueOnce(response([]));
 
     const store = secretStore("credential.secret");
     const runCommand = vi.fn();
@@ -429,7 +428,8 @@ describe("resolveLocalConnection", () => {
       token: "credential.secret",
     });
     expect(runCommand).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledTimes(7);
+    expect(fetch).toHaveBeenCalledTimes(5);
+    expect(fetch.mock.calls.some(([url]) => String(url).includes("/v1/goals"))).toBe(false);
   });
 
   it("returns the single local project when a consumer requests it", async () => {
@@ -448,6 +448,21 @@ describe("resolveLocalConnection", () => {
       token: "credential.secret",
       projectId,
     });
+  });
+
+  it("returns the Home project when the operator has several projects", async () => {
+    const home = "11111111-1111-4111-8111-111111111111";
+    const other = "33333333-3333-4333-8333-333333333333";
+    const project = (projectId: string, kind: "home" | "project") => ({ projectId, name: kind, kind, createdAt: "2026-09-26T00:00:00.000Z", goalCount: 0, activeGoalCount: 0 });
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response({ status: "ok" }))
+      .mockResolvedValueOnce(response([]))
+      .mockResolvedValueOnce(response({ projects: [other, home] }))
+      .mockResolvedValueOnce(response({ projects: [project(home, "home"), project(other, "project")] }))
+      .mockResolvedValueOnce(response([]));
+
+    await expect(resolveLocalConnection({ env: {}, fetch, includeProjectId: true, secretStore: secretStore("credential.secret"), runCommand: vi.fn() })).resolves.toMatchObject({ kind: "configured", projectId: home });
   });
 
   it("restarts a missing model gateway while retaining the Control Plane session", async () => {

@@ -42,6 +42,10 @@ export interface EventService {
 export interface ProjectDiscoveryService {
   /** Lists only active projects visible to this authenticated operator. */
   listProjects(operatorId: string): Promise<readonly string[]>;
+  /** Named projects (Home first) with Goal counts. */
+  listCatalog?(operatorId: string): Promise<readonly import("@maestro/contracts").ProjectSummary[]>;
+  create?(operatorId: string, name: string, commandId: string): Promise<import("@maestro/contracts").ProjectSummary>;
+  rename?(operatorId: string, projectId: string, name: string): Promise<import("@maestro/contracts").ProjectSummary>;
 }
 
 export interface InboxService {

@@ -1,5 +1,8 @@
 import {
   ProjectListSchema,
+  ProjectCatalogSchema,
+  ProjectNameInputSchema,
+  ProjectSummarySchema,
   OrganizationReadModelSchema,
   ChannelSelectorSchema,
   ChannelQuerySchema,
@@ -25,6 +28,9 @@ export function createReadsMethods(
   | "getBillingSummary"
   | "listInbox"
   | "listProjects"
+  | "listProjectCatalog"
+  | "createProject"
+  | "renameProject"
   | "getOrganization"
   | "getChannel"
   | "postChannelMessage"
@@ -43,6 +49,27 @@ export function createReadsMethods(
     },
     listProjects() {
       return request("v1/projects", { headers }, ProjectListSchema);
+    },
+    listProjectCatalog() {
+      return request("v1/projects/catalog", { headers }, ProjectCatalogSchema);
+    },
+    createProject(input, commandId) {
+      return request(
+        "v1/projects",
+        {
+          method: "POST",
+          headers: { ...headers, "content-type": "application/json", "idempotency-key": UuidSchema.parse(commandId) },
+          body: JSON.stringify(ProjectNameInputSchema.parse(input)),
+        },
+        ProjectSummarySchema,
+      );
+    },
+    renameProject(projectId, input) {
+      return request(
+        `v1/projects/${encodeURIComponent(UuidSchema.parse(projectId))}`,
+        { method: "PATCH", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(ProjectNameInputSchema.parse(input)) },
+        ProjectSummarySchema,
+      );
     },
     getOrganization() {
       return request("v1/organization", { headers }, OrganizationReadModelSchema);

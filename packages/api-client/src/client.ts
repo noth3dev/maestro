@@ -52,6 +52,9 @@ import {
   type GoalQuery,
   type GoalList,
   type ProjectList,
+  type ProjectCatalog,
+  type ProjectNameInput,
+  type ProjectSummary,
   type OrganizationReadModel,
   type ChannelSelector,
   type ChannelQuery,
@@ -153,6 +156,10 @@ export interface ApiClient {
   listGoals(projectId: string): Promise<GoalList>;
   listInbox(projectId: string): Promise<InboxRead>;
   listProjects(): Promise<ProjectList>;
+  /** Named projects, Home first, with Goal counts. */
+  listProjectCatalog(): Promise<ProjectCatalog>;
+  createProject(input: ProjectNameInput, commandId: string): Promise<ProjectSummary>;
+  renameProject(projectId: string, input: ProjectNameInput): Promise<ProjectSummary>;
   getOrganization(): Promise<OrganizationReadModel>;
   getChannel(goalId: string, selector: ChannelSelector, query: ChannelQuery): Promise<ChannelRead>;
   postChannelMessage(goalId: string, selector: ChannelSelector, input: ChannelMessageInput, commandId?: string): Promise<ChannelMessage>;

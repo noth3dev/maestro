@@ -29,6 +29,9 @@ import {
   runMigrations,
   getChannel,
   postChannelMessage,
+  listProjectCatalog,
+  createProject,
+  renameProject,
   appendOvertureToolActivity,
 } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
@@ -244,7 +247,12 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
           discordSignalService: { record: (envelope) => recordDiscordSignal(pool, envelope, config.discordSignalCredential!) },
         }),
     projectMembership: { assertProjectMembership: (operatorId, projectId) => assertProjectMembership(pool, operatorId, projectId) },
-    projectDiscovery: { listProjects: (operatorId) => listProjectMemberships(pool, operatorId) },
+    projectDiscovery: {
+      listProjects: (operatorId) => listProjectMemberships(pool, operatorId),
+      listCatalog: (operatorId) => listProjectCatalog(pool, operatorId),
+      create: (operatorId, name, commandId) => createProject(pool, { operatorId, name, commandId }),
+      rename: (operatorId, projectId, name) => renameProject(pool, { operatorId, projectId, name }),
+    },
     organizationService: { listOrganization: () => listPermanentOrganization(pool) },
     channelService: {
       get: (input) => getChannel(pool, input),

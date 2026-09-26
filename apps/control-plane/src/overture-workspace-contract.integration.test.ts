@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { appendOvertureToolActivity, applyAllMigrations, markOvertureRunLaunchedForTaskContract } from "@maestro/persistence";
+import { appendOvertureToolActivity, applyAllMigrations, listProjectCatalog, markOvertureRunLaunchedForTaskContract, markOvertureRunLaunchedForTaskContractInTransaction } from "@maestro/persistence";
 import { createPostgresOvertureService } from "./overture-service.js";
 import { createSessionWorkspace } from "./session-workspace.js";
 
@@ -140,5 +140,47 @@ describeDatabase("Overture workspace Task Contract", () => {
       operator,
     );
     expect(contract.liveEvidence.at(-1)).toMatch(/^review-gate:missing accepted by operator \(Ask @review/);
+  });
+
+  it("starts the Goal in a new project created at PRD approval", async () => {
+    const service = createPostgresOvertureService({ pool, sessionWorkspace: workspace });
+    const sessionId = randomUUID();
+    const sessionRunId = randomUUID();
+    await pool.query(
+      "INSERT INTO conversations (conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding) VALUES ($1, $2, $3, NULL, 'openai-codex', 'gpt-5.6-sol', 'active', 1, '{}'::jsonb)",
+      [sessionId, operatorId, projectId],
+    );
+    await service.createRun({ runId: sessionRunId, projectId, conversationId: sessionId, roles: ["conversation-lead"], commandId: randomUUID() }, operator);
+    const broken = await workspace.write(projectId, sessionId, [{ path: "prd.md", content: "# PRD\n## Goal\nx\n" }], "Incomplete PRD");
+    const before = (await listProjectCatalog(pool, operatorId)).length;
+    await expect(
+      service.createWorkspaceTaskContract!({ runId: sessionRunId, projectId, conversationId: sessionId, revision: broken.revision!, acceptReviewBlockers: true, target: { kind: "new", name: "Homepage" }, commandId: randomUUID() }, operator),
+    ).rejects.toThrow(/missing/);
+    expect(await listProjectCatalog(pool, operatorId)).toHaveLength(before);
+
+    const written = await workspace.write(projectId, sessionId, [{ path: "prd.md", content: prdMarkdown }], "PRD");
+    const commandId = randomUUID();
+    const input = { runId: sessionRunId, projectId, conversationId: sessionId, revision: written.revision!, acceptReviewBlockers: true, target: { kind: "new" as const, name: "Homepage" }, commandId };
+    const contract = await service.createWorkspaceTaskContract!(input, operator);
+    const created = (await listProjectCatalog(pool, operatorId)).find((project) => project.name === "Homepage")!;
+    expect(created).toMatchObject({ kind: "project" });
+    expect(contract.project.projectId).toBe(created.projectId);
+    expect((await service.createWorkspaceTaskContract!(input, operator)).contractId).toBe(contract.contractId);
+    expect((await listProjectCatalog(pool, operatorId)).filter((project) => project.name === "Homepage")).toHaveLength(1);
+    // The session stays where it was; the run points at the Goal's project.
+    await expect(service.getRun(sessionRunId, projectId, sessionId, operator)).resolves.toMatchObject({ targetProjectId: created.projectId, taskContractId: contract.contractId });
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await expect(markOvertureRunLaunchedForTaskContractInTransaction(client, contract.contractId, randomUUID(), projectId)).rejects.toThrow(/does not match/);
+      await client.query("ROLLBACK");
+      await client.query("BEGIN");
+      await markOvertureRunLaunchedForTaskContractInTransaction(client, contract.contractId, randomUUID(), created.projectId);
+      await client.query("COMMIT");
+    } finally {
+      client.release();
+    }
+    await expect(service.getRun(sessionRunId, projectId, sessionId, operator)).resolves.toMatchObject({ state: "launched" });
   });
 });

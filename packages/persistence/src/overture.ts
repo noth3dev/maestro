@@ -40,6 +40,7 @@ type RunRow = {
   execution_phase: "overture";
   task_contract_ref: Record<string, unknown> | null;
   task_contract_id: string | null;
+  target_project_id: string | null;
   state: OvertureRun["state"];
   version: string;
   role_taxonomy_version: number;
@@ -123,7 +124,7 @@ export async function createOvertureRun(
   try {
     await client.query("BEGIN");
     const existing = await client.query<RunRow>(
-      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 FOR UPDATE",
+      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, target_project_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 FOR UPDATE",
       [args.runId],
     );
     if (existing.rowCount === 1) {
@@ -254,7 +255,7 @@ export async function appendOvertureMessage(
   try {
     await client.query("BEGIN");
     const run = await client.query<RunRow>(
-      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
+      "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, target_project_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
       [args.runId, args.projectId],
     );
     if (run.rowCount !== 1 || run.rows[0]!.conversation_id !== args.conversationId)
@@ -763,8 +764,11 @@ export async function attachOvertureWorkspaceTaskContract(
     readonly taskPath: string;
     readonly contentHash: string;
     readonly commandId: string;
+    /** The project the contract (and its Goal) lives in, when it is not the run's own. */
+    readonly targetProjectId?: string;
   },
 ): Promise<void> {
+  const targetProjectId = args.targetProjectId ?? args.projectId;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -772,8 +776,8 @@ export async function attachOvertureWorkspaceTaskContract(
       "SELECT content->'project'->>'projectId' AS project_id FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE",
       [args.contractId],
     );
-    if (contract.rowCount !== 1 || contract.rows[0]!.project_id !== args.projectId)
-      throw new OvertureConflictError("Overture Task Contract project does not match its Run");
+    if (contract.rowCount !== 1 || contract.rows[0]!.project_id !== targetProjectId)
+      throw new OvertureConflictError("Overture Task Contract project does not match its target project");
     const run = await client.query<{ conversation_id: string; task_contract_id: string | null; state: OvertureRun["state"] }>(
       "SELECT conversation_id, task_contract_id, state FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
       [args.runId, args.projectId],
@@ -791,8 +795,8 @@ export async function attachOvertureWorkspaceTaskContract(
       throw new OvertureConflictError("Overture Run cannot attach a Task Contract in its current state");
     const ref = { workspaceRevision: args.workspaceRevision, taskPath: args.taskPath, contentHash: args.contentHash };
     await client.query(
-      "UPDATE overture_runs SET task_contract_id = $2, task_contract_ref = $3::jsonb, state = 'review', version = version + 1, updated_at = transaction_timestamp() WHERE run_id = $1 AND project_id = $4",
-      [args.runId, args.contractId, JSON.stringify(ref), args.projectId],
+      "UPDATE overture_runs SET task_contract_id = $2, task_contract_ref = $3::jsonb, target_project_id = $5, state = 'review', version = version + 1, updated_at = transaction_timestamp() WHERE run_id = $1 AND project_id = $4",
+      [args.runId, args.contractId, JSON.stringify(ref), args.projectId, targetProjectId === args.projectId ? null : targetProjectId],
     );
     await appendEvent(client, {
       runId: args.runId,
@@ -850,13 +854,13 @@ export async function appendOvertureToolActivity(pool: Pool, activity: OvertureT
 }
 
 export async function markOvertureRunLaunchedForTaskContractInTransaction(client: PoolClient, contractId: string, commandId: string = randomUUID(), expectedProjectId?: string): Promise<void> {
-  const run = await client.query<{ run_id: string; project_id: string; state: OvertureRun["state"]; attached_manifest_hash: string | null; plan_manifest_hash: string | null; workspace_revision: string | null }>(
-    "SELECT run_id, project_id, state, task_contract_ref->>'manifestHash' AS attached_manifest_hash, plan_manifest_hash, task_contract_ref->>'workspaceRevision' AS workspace_revision FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",
+  const run = await client.query<{ run_id: string; project_id: string; contract_project_id: string; state: OvertureRun["state"]; attached_manifest_hash: string | null; plan_manifest_hash: string | null; workspace_revision: string | null }>(
+    "SELECT run_id, project_id, COALESCE(target_project_id, project_id) AS contract_project_id, state, task_contract_ref->>'manifestHash' AS attached_manifest_hash, plan_manifest_hash, task_contract_ref->>'workspaceRevision' AS workspace_revision FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",
     [contractId],
   );
   if (run.rowCount === 0) return;
   const current = run.rows[0]!;
-  if (expectedProjectId !== undefined && current.project_id !== expectedProjectId) throw new OvertureConflictError("Overture Run project does not match the Task Contract");
+  if (expectedProjectId !== undefined && current.contract_project_id !== expectedProjectId) throw new OvertureConflictError("Overture Run project does not match the Task Contract");
   // A workspace-bound contract pins an immutable Git commit, so later
   // workspace edits cannot change what was reviewed.
   if (current.workspace_revision === null && (current.attached_manifest_hash === null || current.attached_manifest_hash.trim() !== current.plan_manifest_hash?.trim()))
@@ -1051,7 +1055,7 @@ async function readRunWithinTransaction(
   conversationId: string,
 ): Promise<OvertureRun | undefined> {
   const result = await queryable.query<RunRow>(
-    "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3",
+    "SELECT run_id, conversation_id, project_id, goal_id, execution_phase, task_contract_ref, task_contract_id, target_project_id, state, version, role_taxonomy_version, plan_manifest_hash FROM overture_runs WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3",
     [runId, projectId, conversationId],
   );
   if (result.rowCount !== 1) return undefined;
@@ -1068,6 +1072,7 @@ async function readRunWithinTransaction(
     executionPhase: row.execution_phase,
     taskContractRef: row.task_contract_ref,
     taskContractId: row.task_contract_id,
+    targetProjectId: row.target_project_id,
     state: row.state,
     version: Number(row.version),
     roleTaxonomyVersion: row.role_taxonomy_version,

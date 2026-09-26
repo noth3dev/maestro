@@ -40,8 +40,12 @@ describe("conversation routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual([summary]);
     expect(list).toHaveBeenCalledWith(projectId, 20, operator);
-    const missingProject = await app.inject({ method: "GET", url: "/v1/conversations", headers: { authorization: "Bearer test-secret" } });
-    expect(missingProject.statusCode).toBe(400);
+    // Without a project, Concertmaster sessions from every project are listed.
+    const global = await app.inject({ method: "GET", url: "/v1/conversations", headers: { authorization: "Bearer test-secret" } });
+    expect(global.statusCode).toBe(200);
+    expect(list).toHaveBeenLastCalledWith(undefined, 50, operator);
+    const badProject = await app.inject({ method: "GET", url: "/v1/conversations?projectId=nope", headers: { authorization: "Bearer test-secret" } });
+    expect(badProject.statusCode).toBe(400);
     await app.close();
   });
 

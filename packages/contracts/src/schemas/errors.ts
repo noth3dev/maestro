@@ -60,6 +60,8 @@ export const StableApiErrorCodeSchema = z.enum([
   "overture_run_not_found",
   "overture_conflict",
   "workspace_file_not_found",
+  "project_not_found",
+  "invalid_project_name",
 ]);
 const RoutingShortfallApiSchema = z
   .object({

@@ -120,6 +120,25 @@ describe("project discovery route", () => {
     await app.close();
   });
 
+  it("lists, creates, and renames named projects for the operator", async () => {
+    const summary = { projectId: goal.projectId, name: "Homepage", kind: "project" as const, createdAt: "2026-09-26T00:00:00.000Z", goalCount: 0, activeGoalCount: 0 };
+    const create = vi.fn(async () => summary);
+    const rename = vi.fn(async () => ({ ...summary, name: "Home page" }));
+    const projectDiscovery: ProjectDiscoveryService = { listProjects: async () => [goal.projectId], listCatalog: async () => [summary], create, rename };
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), projectDiscovery });
+    const headers = { authorization: "Bearer test-secret", "content-type": "application/json" };
+    expect((await app.inject({ method: "GET", url: "/v1/projects/catalog", headers })).json()).toEqual({ projects: [summary] });
+    const commandId = "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f99";
+    const created = await app.inject({ method: "POST", url: "/v1/projects", headers: { ...headers, "idempotency-key": commandId }, payload: { name: " Homepage " } });
+    expect(created.statusCode).toBe(201);
+    expect(create).toHaveBeenCalledWith(operator.operatorId, "Homepage", commandId);
+    expect((await app.inject({ method: "POST", url: "/v1/projects", headers: { ...headers, "idempotency-key": commandId }, payload: { name: "" } })).statusCode).toBe(400);
+    const renamed = await app.inject({ method: "PATCH", url: `/v1/projects/${goal.projectId}`, headers, payload: { name: "Home page" } });
+    expect(renamed.json()).toMatchObject({ name: "Home page" });
+    expect(rename).toHaveBeenCalledWith(operator.operatorId, goal.projectId, "Home page");
+    await app.close();
+  });
+
   it("fails closed when project discovery is not composed", async () => {
     const app = buildServer({ goalService: fakeService(), authenticator: authenticated() });
     const response = await app.inject({ method: "GET", url: "/v1/projects", headers: { authorization: "Bearer test-secret" } });

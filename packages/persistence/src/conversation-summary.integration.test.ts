@@ -56,4 +56,17 @@ describeDatabase("Concertmaster session summaries", () => {
     expect(sessions[2]!.title).toBeNull();
     await expect(listConversationSummaries(pool, { operatorId: "operator-1", projectId, limit: 1 })).resolves.toHaveLength(1);
   });
+
+  it("lists sessions across every project the operator belongs to when no project is given", async () => {
+    const operatorId = randomUUID();
+    await pool.query("INSERT INTO local_operators (operator_id) VALUES ($1)", [operatorId]);
+    const home = randomUUID(), project = randomUUID(), revoked = randomUUID();
+    for (const [projectId, active] of [[home, true], [project, true], [revoked, false]] as const)
+      await pool.query("INSERT INTO operator_project_memberships (membership_id, operator_id, project_id, active, revoked_at) VALUES ($1, $2, $3, $4, $5)", [randomUUID(), operatorId, projectId, active, active ? null : new Date()]);
+    const a = await conversation(operatorId, home, "2026-09-01T00:00:00Z", []);
+    const b = await conversation(operatorId, project, "2026-09-02T00:00:00Z", []);
+    await conversation(operatorId, revoked, "2026-09-03T00:00:00Z", []);
+    const sessions = await listConversationSummaries(pool, { operatorId, limit: 10 });
+    expect(sessions.map((session) => [session.conversationId, session.projectId])).toEqual([[b, project], [a, home]]);
+  });
 });

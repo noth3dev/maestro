@@ -29,7 +29,8 @@ export const ConversationSummarySchema = z
   .strict();
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 export const ConversationListQuerySchema = z
-  .object({ projectId: UuidSchema, limit: z.coerce.number().int().min(1).max(200).default(50) })
+  /** Without `projectId`, sessions from every project the operator belongs to (Concertmaster is global). */
+  .object({ projectId: UuidSchema.optional(), limit: z.coerce.number().int().min(1).max(200).default(50) })
   .strict();
 export type ConversationListQuery = z.input<typeof ConversationListQuerySchema>;
 const WorkspaceRevisionSchema = z.string().regex(/^[0-9a-f]{40}$/).nullable();

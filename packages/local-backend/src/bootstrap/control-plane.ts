@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { ApiError, createApiClient } from "@maestro/api-client";
 import type { ConnectionEnvironment } from "../connection.js";
@@ -20,19 +19,12 @@ export async function validateLocalToken(apiUrl: string, token: string, fetch: t
     const projects = (await client.listProjects()).projects;
     throwIfAborted(signal);
     if (projects.length === 0) return { kind: "invalid" };
-    const projectId = projects.length === 1 ? projects[0] : undefined;
+    // With several projects the default is the operator's Home (global workspace).
+    const projectId = projects.length === 1 ? projects[0] : await homeProjectId(client, projects);
     // A healthy Control Plane alone is not enough for conversations or login:
     // this authenticated read proves its model-gateway composition is usable.
     await client.listModels();
     throwIfAborted(signal);
-    if (projects.length !== 1) return { kind: "valid", ...(projectId === undefined ? {} : { projectId }) };
-    const singleProjectId = projects[0]!;
-    const goals = (await client.listGoals(singleProjectId)).goals;
-    throwIfAborted(signal);
-    if (goals.length === 0) {
-      await client.createGoal({ projectId: singleProjectId }, randomUUID());
-      throwIfAborted(signal);
-    }
     return { kind: "valid", ...(projectId === undefined ? {} : { projectId }) };
   } catch (error) {
     if (signal?.aborted) throw error;
@@ -80,5 +72,14 @@ export async function runBootstrapHelper(options: {
     return { kind: "ready", credentialId: parsed.credentialId, ...(projectId === undefined ? {} : { projectId }) };
   } catch {
     return { kind: "unavailable", reason: "Local operator bootstrap returned an invalid result" };
+  }
+}
+
+async function homeProjectId(client: ReturnType<typeof createApiClient>, projects: readonly string[]): Promise<string | undefined> {
+  try {
+    const catalog = await client.listProjectCatalog();
+    return catalog.projects.find((project) => project.kind === "home")?.projectId ?? projects[0];
+  } catch {
+    return projects[0];
   }
 }

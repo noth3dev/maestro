@@ -119,6 +119,8 @@ const TITLES: Record<string, string> = {
   overture_run_not_found: "Overture run not found",
   overture_conflict: "Overture changed elsewhere",
   workspace_file_not_found: "Workspace file not found",
+  project_not_found: "Project not found",
+  invalid_project_name: "Invalid project name",
 };
 
 /** Turns any thrown value from a bridged API call into stable, renderable state. Never inspects a token or header. */

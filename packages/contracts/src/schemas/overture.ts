@@ -60,6 +60,8 @@ export const OvertureRunSchema = z
     roleTaxonomyVersion: z.union(OVERTURE_ROLE_TAXONOMY_VERSIONS.map((version) => z.literal(version)) as [z.ZodLiteral<2>, z.ZodLiteral<3>]),
     planManifestHash: HashSchema.nullable(),
     taskContractId: UuidSchema.nullable(),
+    /** Where the Task Contract and its Goal live, when not the run's own project (e.g. a project created at PRD approval). */
+    targetProjectId: UuidSchema.nullable().optional(),
     roles: z.array(OvertureRoleAssignmentSchema).min(1).readonly(),
   })
   .strict()
@@ -293,6 +295,16 @@ export const CreateOvertureWorkspaceTaskContractInputSchema = z
     revision: z.string().regex(/^[0-9a-f]{40}$/),
     /** The operator explicitly accepts an unmet plan review gate; recorded as evidence. */
     acceptReviewBlockers: z.boolean().optional(),
+    /**
+     * Where the Goal starts: a new project named here, or an existing one.
+     * Omitted means the session's own project.
+     */
+    target: z
+      .discriminatedUnion("kind", [
+        z.object({ kind: z.literal("new"), name: z.string().trim().min(1).max(120) }).strict(),
+        z.object({ kind: z.literal("existing"), projectId: UuidSchema }).strict(),
+      ])
+      .optional(),
     commandId: UuidSchema,
   })
   .strict();

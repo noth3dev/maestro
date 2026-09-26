@@ -28,6 +28,7 @@ import {
   assertProjectRole,
   attachOvertureTaskContract,
   attachOvertureWorkspaceTaskContract,
+  createProject,
   createDurableTaskContract,
   reviseOverturePlan,
   openOvertureClarification,
@@ -307,13 +308,24 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
           : `review-gate:${gate.state} accepted by operator (${gate.reason}${gate.state === "blocked" ? `: ${gate.blockers.join("; ")}` : ""})`.slice(0, 1000),
       ];
       const task = files.find((file) => file.path === PRD_PATH)!;
-      const substance = taskContractFromPrd({
-        markdown: task.content,
-        projectId: input.projectId,
-        evidence,
-        documents: files.filter((file) => file.path.endsWith(".md")).map((file) => file.path),
-      });
-      const contract = await createDurableTaskContract(pool, input.commandId, substance);
+      const draft = (projectId: string) =>
+        taskContractFromPrd({
+          markdown: task.content,
+          projectId,
+          evidence,
+          documents: files.filter((file) => file.path.endsWith(".md")).map((file) => file.path),
+        });
+      // Validate the PRD before creating anything, so a rejected approval leaves no empty project.
+      draft(input.projectId);
+      let targetProjectId = input.projectId;
+      if (input.target?.kind === "new") {
+        const project = await createProject(pool, { operatorId: operator.operatorId, name: input.target.name, commandId: derivedCommandId(input.commandId, "project") });
+        targetProjectId = project.projectId;
+      } else if (input.target?.kind === "existing") {
+        await assertRole(operator, input.target.projectId);
+        targetProjectId = input.target.projectId;
+      }
+      const contract = await createDurableTaskContract(pool, input.commandId, draft(targetProjectId));
       await attachOvertureWorkspaceTaskContract(pool, {
         runId: input.runId,
         projectId: input.projectId,
@@ -323,6 +335,7 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
         taskPath: PRD_PATH,
         contentHash: hash(task.content),
         commandId: input.commandId,
+        targetProjectId,
       });
       return contract;
     },
@@ -341,4 +354,13 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
       return readOvertureEvents(pool, runId, projectId, conversationId, afterCursor);
     },
   };
+}
+
+/** A stable UUID derived from a command, for its sub-steps (idempotent on retry). */
+function derivedCommandId(commandId: string, step: string): string {
+  const hex = createHash("sha256").update(`${commandId}:${step}`).digest("hex").slice(0, 32).split("");
+  hex[12] = "5";
+  hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x03) | 0x08).toString(16);
+  const id = hex.join("");
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
 }

@@ -79,7 +79,7 @@ export interface ConversationService {
   cancel(conversationId: string, projectId: string, operator: OperatorContext): Promise<Conversation>;
   listEvents(conversationId: string, projectId: string, after: string, operator: OperatorContext): Promise<readonly ConversationEvent[]>;
   /** The operator's Concertmaster sessions in one project, most recently active first. */
-  list?(projectId: string, limit: number, operator: OperatorContext): Promise<readonly ConversationSummary[]>;
+  list?(projectId: string | undefined, limit: number, operator: OperatorContext): Promise<readonly ConversationSummary[]>;
   /** Best-effort, non-replayable live activity. Payloads exclude reasoning text, tool arguments, and tool output. */
   subscribeActivity?(
     conversationId: string,
@@ -416,7 +416,7 @@ export function createPostgresConversationService(options: {
       return { conversationId, projectId: input.projectId, goalId, model: input.model, reasoningEffort: binding!.reasoningEffort ?? null, status: "active", version: 1 };
     },
     async list(projectId, limit, operator) {
-      return listConversationSummaries(options.pool, { operatorId: operator.operatorId, projectId, limit });
+      return listConversationSummaries(options.pool, { operatorId: operator.operatorId, ...(projectId === undefined ? {} : { projectId }), limit });
     },
     async get(conversationId, projectId, operator) {
       return modelFromRow(await read(conversationId, projectId, operator.operatorId));
