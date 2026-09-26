@@ -107,7 +107,9 @@ export function taskContractFromPrd(input: {
       immutableBaseRevision: singleLine(sections.baseRevision),
       dataBoundary: singleLine(sections.dataBoundary),
     },
-    evidenceReferences: [...input.evidence],
+    // Workspace refs are the review trail (liveEvidence), not durable evidence
+    // records; the Council requires evidenceReferences to be records.
+    evidenceReferences: [],
     approvedPreviewReferences: [...input.documents],
     expectedGroups: groups,
     expectedDepartments: departments,

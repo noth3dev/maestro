@@ -94,7 +94,8 @@ describeDatabase("Overture workspace Task Contract", () => {
       approvedPreviewReferences: ["plan00.md", "prd.md", "reviews/plan.md"],
     });
     expect(contract.liveEvidence).toContain("review-gate:passed by plan-reviewer");
-    expect(contract.evidenceReferences).toEqual([
+    expect(contract.evidenceReferences).toEqual([]);
+    expect(contract.liveEvidence).toEqual([
       expect.stringMatching(new RegExp(`^workspace@${reviewed.revision}:plan00\\.md#[0-9a-f]{64}$`)),
       expect.stringMatching(new RegExp(`^workspace@${reviewed.revision}:prd\\.md#[0-9a-f]{64}$`)),
       expect.stringMatching(new RegExp(`^workspace@${reviewed.revision}:reviews/plan\\.md#[0-9a-f]{64}$`)),

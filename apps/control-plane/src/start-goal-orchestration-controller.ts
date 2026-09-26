@@ -185,6 +185,7 @@ async function createCouncil(
       stage: "council_creation",
       state: error instanceof CouncilProtocolError ? "blocked" : "unknown",
       reason: error instanceof CouncilProtocolError ? "council_creation_blocked" : "council_creation_outcome_unknown",
+      details: { error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500) },
     });
   }
 }
