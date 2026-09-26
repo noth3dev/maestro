@@ -30,6 +30,8 @@ export interface ChannelInternalAuthorProof {
 export interface PostChannelMessageRequest extends ChannelRequest {
   readonly content: string;
   readonly messageId?: string;
+  /** The message this one answers, in the same channel. */
+  readonly replyToMessageId?: string;
   /** Internal agent posts require a matching runtime proof; HTTP never accepts either field. */
   readonly author?: ChannelAuthor;
   readonly authorProof?: ChannelInternalAuthorProof;
@@ -56,6 +58,7 @@ interface MessageRow {
   author_kind: ChannelMessage["author"]["kind"];
   author_id: string;
   content: string;
+  reply_to_message_id: string | null;
   created_at: Date;
 }
 
@@ -117,6 +120,7 @@ function toMessage(row: MessageRow): ChannelMessage {
     sequence: row.message_sequence,
     author: { kind: row.author_kind, id: row.author_id },
     content: row.content,
+    replyToMessageId: row.reply_to_message_id,
     createdAt: row.created_at.toISOString(),
   });
 }
@@ -209,7 +213,7 @@ export async function getChannel(pool: Pool, request: ChannelRequest): Promise<C
     const channel = await resolveChannel(client, parsed);
     const [messages, members] = await Promise.all([
       client.query<MessageRow>(
-        `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, created_at
+        `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, reply_to_message_id, created_at
            FROM channel_messages WHERE channel_id = $1 ORDER BY message_sequence ASC`, [channel.channel_id],
       ),
       listMembers(client, parsed),
@@ -248,7 +252,7 @@ export async function postChannelMessage(pool: Pool, request: PostChannelMessage
     await assertChannelRole(client, parsed);
     const channel = await resolveChannel(client, parsed);
     const existingBeforeLifecycle = await client.query<MessageRow>(
-      `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, created_at
+      `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, reply_to_message_id, created_at
          FROM channel_messages WHERE channel_id = $1 AND idempotency_key = $2`, [channel.channel_id, messageId],
     );
     if (existingBeforeLifecycle.rowCount === 1) {
@@ -266,15 +270,15 @@ export async function postChannelMessage(pool: Pool, request: PostChannelMessage
       [channel.channel_id, parsed.projectId, parsed.goalId, parsed.selector.kind, parsed.selector.channelId, parsed.selector.kind === "department" ? parsed.selector.channelId : null, channel.display_name],
     );
     const inserted = await client.query<MessageRow>(
-      `INSERT INTO channel_messages (message_id, channel_id, author_kind, author_id, content, idempotency_key)
-       VALUES ($1, $2, $3, $4, $5, $1)
+      `INSERT INTO channel_messages (message_id, channel_id, author_kind, author_id, content, idempotency_key, reply_to_message_id)
+       VALUES ($1, $2, $3, $4, $5, $1, $6)
        ON CONFLICT DO NOTHING
-       RETURNING message_id, message_sequence, channel_id, author_kind, author_id, content, created_at`,
-      [messageId, channel.channel_id, author.kind, author.id, content],
+       RETURNING message_id, message_sequence, channel_id, author_kind, author_id, content, reply_to_message_id, created_at`,
+      [messageId, channel.channel_id, author.kind, author.id, content, request.replyToMessageId ?? null],
     );
     if (inserted.rowCount === 1) { await client.query("COMMIT"); return toMessage(inserted.rows[0]!); }
     const existing = await client.query<MessageRow>(
-      `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, created_at
+      `SELECT message_id, message_sequence, channel_id, author_kind, author_id, content, reply_to_message_id, created_at
          FROM channel_messages WHERE channel_id = $1 AND idempotency_key = $2`, [channel.channel_id, messageId],
     );
     if (existing.rowCount !== 1) throw new ChannelConflictError("Channel message retry could not be recovered");

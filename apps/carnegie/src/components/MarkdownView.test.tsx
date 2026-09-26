@@ -1,7 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MarkdownView } from "./MarkdownView.js";
+import { MarkdownView, renderMentions } from "./MarkdownView.js";
 
 describe("MarkdownView", () => {
   it("renders common Markdown blocks and inline marks", () => {
@@ -24,5 +24,14 @@ describe("MarkdownView", () => {
     expect(html).toContain("&lt;img");
     expect(html).not.toContain("javascript:");
     expect(html).toContain('href="https://example.com"');
+  });
+
+  it("highlights @mentions but not email addresses", () => {
+    const html = renderToStaticMarkup(<MarkdownView source={"@design please mock it; mail a@b.com, cc **@security** and @리뷰"} />);
+    expect(html).toContain('<span class="mention">@design</span>');
+    expect(html).toContain('<strong><span class="mention">@security</span></strong>');
+    expect(html).toContain('<span class="mention">@리뷰</span>');
+    expect(html).not.toContain('<span class="mention">@b</span>');
+    expect(renderToStaticMarkup(<p>{renderMentions("ask @engineering, not me@x.io")}</p>)).toBe('<p>ask <span class="mention">@engineering</span>, not me@x.io</p>');
   });
 });

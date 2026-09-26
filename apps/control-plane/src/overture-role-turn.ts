@@ -33,6 +33,8 @@ export interface OvertureToolScope {
 
 export interface OvertureCrewMember {
   readonly roleId: OvertureRoleId;
+  /** The message this member answers (whoever addressed it). */
+  readonly replyTo?: string;
   /** Why this role joins, shown to the role so it answers only its part. */
   readonly reason: string;
 }
@@ -142,6 +144,7 @@ export function createOvertureRoleTurnRunner(options: {
     modelRef: string;
     content: string;
     commandId: string;
+    replyToMessageId?: string;
   }) => Promise<OvertureMessage>;
 }): OvertureRoleTurnRunner {
   const admit = async (model: ModelIdentity) => {
@@ -159,14 +162,20 @@ export function createOvertureRoleTurnRunner(options: {
     return { model, modelRef: `${model.provider}/${model.id}`, accountRef, binding, requestId };
   };
 
-  // Crew messages carry their author so each role knows who said what.
-  const history = async (input: OvertureRoleTurnInput): Promise<ModelMessage[]> =>
-    (await options.readMessages(input.runId, input.projectId, input.conversationId))
+  // Crew messages carry their author (and whom they answer) so each role knows who said what to whom.
+  const history = async (input: OvertureRoleTurnInput): Promise<ModelMessage[]> => {
+    const messages = await options.readMessages(input.runId, input.projectId, input.conversationId);
+    const authors = new Map(messages.map((message) => [message.messageId, message.actor === "operator" ? "operator" : roleLabel(message.actor)]));
+    return messages
       .filter((message) => message.messageId !== input.operatorMessageId)
-      .map((message) => ({
-        role: message.actor === "operator" ? "user" : "assistant",
-        content: [{ kind: "text", text: message.actor === "operator" ? message.content : `[${roleLabel(message.actor)}] ${message.content}` }],
-      }));
+      .map((message) => {
+        const to = message.replyToMessageId == null ? undefined : authors.get(message.replyToMessageId);
+        const text = message.actor === "operator"
+          ? `${to === undefined ? "" : `(replying to ${to}) `}${message.content}`
+          : `[${roleLabel(message.actor)}${to === undefined ? "" : ` → ${to}`}] ${message.content}`;
+        return { role: message.actor === "operator" ? "user" : "assistant", content: [{ kind: "text", text }] };
+      });
+  };
 
   /** Run one role prompt and return its bounded answer text. */
   const answer = async (
@@ -216,7 +225,7 @@ export function createOvertureRoleTurnRunner(options: {
     }
   };
 
-  const reply = async (input: OvertureRoleTurnInput, roleId: OvertureRoleId, prompt: string) => {
+  const reply = async (input: OvertureRoleTurnInput, roleId: OvertureRoleId, prompt: string, replyTo?: string) => {
     const result = await answer(input, roleId, prompt);
     return options.appendRoleMessage({
       runId: input.runId,
@@ -227,6 +236,7 @@ export function createOvertureRoleTurnRunner(options: {
       modelRef: result.modelRef,
       content: result.text,
       commandId: randomUUID(),
+      ...(replyTo === undefined || replyTo === "" ? {} : { replyToMessageId: replyTo }),
     });
   };
 
@@ -243,7 +253,7 @@ export function createOvertureRoleTurnRunner(options: {
   };
 
   return {
-    run: (input) => reply(input, LEAD, input.content),
+    run: (input) => reply(input, LEAD, input.content, input.operatorMessageId),
     async askLead(ask) {
       const input = { runId: ask.runId, projectId: ask.projectId, conversationId: ask.conversationId, operatorId: ask.operatorId, turnId: "", operatorMessageId: "", content: ask.prompt };
       const result = await answer(input, LEAD, ask.prompt, { systemPrompt: ask.systemPrompt, tools: new ToolRegistry(), outputTokenBudget: ask.outputTokenBudget ?? 4_000 });
@@ -251,7 +261,7 @@ export function createOvertureRoleTurnRunner(options: {
     },
     async runCrew(input) {
       const messages: OvertureMessage[] = [];
-      const lead = await reply(input, LEAD, input.content);
+      const lead = await reply(input, LEAD, input.content, input.operatorMessageId);
       messages.push(lead);
       const others = input.assignedRoles.filter((roleId) => roleId !== LEAD && !RETIRED_OVERTURE_ROLE_IDS.includes(roleId));
       const addressed = addressedRoles(`${input.content}\n${lead.content}`, others);
@@ -259,15 +269,15 @@ export function createOvertureRoleTurnRunner(options: {
       // Crew members can address each other with @handles; each reply may
       // queue the roles it addresses, up to MAX_CREW_REPLIES in total.
       const queue: OvertureCrewMember[] = [
-        ...addressed.map((roleId) => ({ roleId, reason: "you were addressed by name" })),
-        ...volunteers,
+        ...addressed.map((roleId) => ({ roleId, reason: "you were addressed by name", replyTo: lead.messageId })),
+        ...volunteers.map((member) => ({ ...member, replyTo: input.operatorMessageId })),
       ];
       while (queue.length > 0 && messages.length < MAX_CREW_REPLIES) {
         const member = queue.shift()!;
         const prompt = overtureJoinPrompt(input.content, roleLabel(member.roleId), member.reason);
         let message: OvertureMessage;
         try {
-          message = await reply(input, member.roleId, prompt);
+          message = await reply(input, member.roleId, prompt, member.replyTo);
         } catch (error) {
           const reason = error instanceof Error ? error.message : "unknown error";
           messages.push(
@@ -287,7 +297,7 @@ export function createOvertureRoleTurnRunner(options: {
         messages.push(message);
         for (const roleId of addressedRoles(message.content, input.assignedRoles.filter((role) => !RETIRED_OVERTURE_ROLE_IDS.includes(role)))) {
           if (roleId === member.roleId || queue.some((queued) => queued.roleId === roleId)) continue;
-          queue.push({ roleId, reason: `the ${roleLabel(member.roleId)} addressed you` });
+          queue.push({ roleId, reason: `the ${roleLabel(member.roleId)} addressed you`, replyTo: message.messageId });
         }
       }
       // A round where two or more specialists spoke closes with the lead's

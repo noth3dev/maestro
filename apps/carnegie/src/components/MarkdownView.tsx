@@ -81,7 +81,22 @@ function renderBlocks(source: string): ReactNode[] {
   return blocks;
 }
 
-const inlinePattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*|_[^_\s][^_]*_)|(\[[^\]]+\]\([^)\s]+\))/g;
+const inlinePattern = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\*[^*\s][^*]*\*|_[^_\s][^_]*_)|(\[[^\]]+\]\([^)\s]+\))|((?<![\p{L}\p{N}_.])@[\p{L}\p{N}_-]+)/gu;
+const mentionPattern = /(?<![\p{L}\p{N}_.])@[\p{L}\p{N}_-]+/gu;
+
+/** Plain text with `@mentions` highlighted (for messages not rendered as markdown). */
+export function renderMentions(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  for (const match of text.matchAll(mentionPattern)) {
+    const start = match.index ?? 0;
+    if (start > last) nodes.push(text.slice(last, start));
+    nodes.push(<span key={`m${start}`} className="mention">{match[0]}</span>);
+    last = start + match[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
 
 function renderInline(text: string): ReactNode[] {
   const nodes: ReactNode[] = [];
@@ -94,6 +109,7 @@ function renderInline(text: string): ReactNode[] {
     if (match[1] !== undefined) nodes.push(<code key={key}>{token.slice(1, -1)}</code>);
     else if (match[2] !== undefined) nodes.push(<strong key={key}>{renderInline(token.slice(2, -2))}</strong>);
     else if (match[3] !== undefined) nodes.push(<em key={key}>{renderInline(token.slice(1, -1))}</em>);
+    else if (match[5] !== undefined) nodes.push(<span key={key} className="mention">{token}</span>);
     else {
       const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(token)!;
       const href = link[2]!;

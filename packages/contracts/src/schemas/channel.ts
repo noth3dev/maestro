@@ -14,7 +14,9 @@ export type ChannelSelector = z.infer<typeof ChannelSelectorSchema>;
 export const CHANNEL_SELECTORS = DomainChannelSelectors;
 export const ChannelQuerySchema = z.object({ projectId: UuidSchema }).strict();
 export type ChannelQuery = z.infer<typeof ChannelQuerySchema>;
-export const ChannelMessageInputSchema = z.object({ projectId: UuidSchema, content: z.string().trim().min(1).max(64_000) }).strict();
+export const ChannelMessageInputSchema = z
+  .object({ projectId: UuidSchema, content: z.string().trim().min(1).max(64_000), replyToMessageId: UuidSchema.optional() })
+  .strict();
 export type ChannelMessageInput = z.infer<typeof ChannelMessageInputSchema>;
 export const ChannelAuthorSchema = DomainChannelAuthorSchema;
 export const ChannelMessageSchema = DomainChannelMessageSchema;

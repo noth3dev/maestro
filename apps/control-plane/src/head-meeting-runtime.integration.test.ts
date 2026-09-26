@@ -66,9 +66,16 @@ describeDatabase("Heads' planning meeting with PostgreSQL", () => {
   it("chairs a discussion, pauses for the operator, drafts, takes objections, and stores the plan", async () => {
     const { goalId, councilId, run } = await revealedCouncil();
     const posts: string[] = [];
+    const records: { messageId: string; speaker: string; replyTo?: string }[] = [];
     const channel: MeetingChannel = {
-      read: async () => posts.map((line) => { const [speaker, ...rest] = line.split(": "); return { speaker: speaker!, content: rest.join(": ") }; }),
-      post: async (_goal, author, content) => { posts.push(`${author.kind === "role" ? "chair" : author.id.replace(/^head[-:]/, "")}: ${content}`); },
+      read: async () => posts.map((line, index) => { const [speaker, ...rest] = line.split(": "); return { speaker: speaker!, content: rest.join(": "), messageId: records[index]!.messageId, ...(records[index]!.replyTo === undefined ? {} : { replyTo: records[index]!.replyTo! }) }; }),
+      post: async (_goal, author, content, replyTo) => {
+        const speaker = author.kind === "role" ? "chair" : author.id.replace(/^head[-:]/, "");
+        posts.push(`${speaker}: ${content}`);
+        const messageId = randomUUID();
+        records.push({ messageId, speaker, ...(replyTo === undefined ? {} : { replyTo }) });
+        return messageId;
+      },
     };
     let chairTurns = 0, planAttempts = 0;
     const leadPrompts: string[] = [];
@@ -93,6 +100,8 @@ describeDatabase("Heads' planning meeting with PostgreSQL", () => {
     const meeting = createHeadMeetingRuntime({ pool, askHead, askLead, channel, readPrd: async () => "# Newsletter — PRD" });
 
     await expect(meeting.run({ goalId, councilId })).resolves.toBe("waiting_for_operator");
+    // A Head answers the chair message that called on it.
+    expect(records[1]!.replyTo).toBe(records[0]!.messageId);
     expect(posts).toEqual([
       "chair: Welcome. engineering, how do we store emails?",
       "engineering: engineering: Postgres table, I own it.",

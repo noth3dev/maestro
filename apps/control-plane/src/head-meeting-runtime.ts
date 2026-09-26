@@ -23,8 +23,9 @@ export interface LaunchRun {
 
 export interface MeetingChannel {
   /** #head-council so far, oldest first. `speaker` is a department id or "chair". */
-  read(goalId: string): Promise<readonly { readonly speaker: string; readonly content: string }[]>;
-  post(goalId: string, author: { readonly kind: "head" | "role"; readonly id: string }, content: string): Promise<void>;
+  read(goalId: string): Promise<readonly { readonly speaker: string; readonly content: string; readonly messageId?: string; readonly replyTo?: string }[]>;
+  /** Returns the posted message id (to reply to it). */
+  post(goalId: string, author: { readonly kind: "head" | "role"; readonly id: string }, content: string, replyTo?: string): Promise<string | undefined>;
 }
 
 export interface HeadMeetingDependencies {
@@ -105,17 +106,24 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
       const prd = await deps.readPrd?.(goalId);
       const briefsJson = JSON.stringify(Object.fromEntries(briefs.map((entry) => [entry.departmentId, entry.brief])), null, 1);
       const answers = questions.filter((entry) => entry.answer !== null).map((entry) => ({ question: entry.question.slice(QUESTION_PREFIX.length), answer: entry.answer! }));
-      const transcript = [...(await deps.channel.read(goalId))];
+      const transcript: { speaker: string; content: string; messageId?: string; replyTo?: string }[] = [...(await deps.channel.read(goalId))];
+      const speakerOf = (messageId: string | undefined) => transcript.find((line) => line.messageId !== undefined && line.messageId === messageId)?.speaker;
       const context = (): MeetingContext => ({
         ...(prd === undefined ? {} : { prd }),
         briefsJson,
         departments,
         answers,
-        transcript: transcript.map((line) => `[${line.speaker}] ${line.content}`).join("\n"),
+        transcript: transcript
+          .map((line) => {
+            const to = speakerOf(line.replyTo);
+            return `[${line.speaker}${to === undefined ? "" : ` → ${to}`}] ${line.content}`;
+          })
+          .join("\n"),
       });
-      const say = async (speaker: string, author: { kind: "head" | "role"; id: string }, content: string) => {
-        transcript.push({ speaker, content });
-        await deps.channel.post(goalId, author, content);
+      const say = async (speaker: string, author: { kind: "head" | "role"; id: string }, content: string, replyTo?: string) => {
+        const messageId = await deps.channel.post(goalId, author, content, replyTo);
+        transcript.push({ speaker, content, ...(messageId === undefined ? {} : { messageId }), ...(replyTo === undefined ? {} : { replyTo }) });
+        return messageId;
       };
       const lead = (systemPrompt: string, prompt: string) => deps.askLead({ ...run, systemPrompt, prompt });
       const head = (departmentId: string, system: string, prompt: string) =>
@@ -151,7 +159,7 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
         const chairTurns = transcript.filter((line) => line.speaker === "chair").length;
         if (chairTurns >= maxChairTurns) break;
         const turn = chairTurn(await lead(MEETING_CHAIR_SYSTEM_PROMPT, meetingChairTurnPrompt({ ...context(), turnsLeft: maxChairTurns - chairTurns })), departments);
-        if (turn.say !== "") await say("chair", CHAIR, turn.say);
+        const chairMessage = turn.say === "" ? undefined : await say("chair", CHAIR, turn.say);
         if (turn.askOperator !== undefined) {
           await openOvertureClarification(deps.pool, { ...run, question: `${QUESTION_PREFIX}${turn.askOperator}`, commandId: randomUUID() });
           await say("chair", CHAIR, `Asked the operator: ${turn.askOperator} The meeting resumes when they answer.`);
@@ -160,14 +168,14 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
         if (turn.done) break;
         for (const departmentId of turn.next) {
           const reply = (await head(departmentId, HEAD_MEETING_SYSTEM_PROMPT, headMeetingPrompt({ ...context(), departmentId }))).trim();
-          if (reply !== "") await say(departmentId, { kind: "head", id: heads.get(departmentId)!.headRoleId }, reply);
+          if (reply !== "") await say(departmentId, { kind: "head", id: heads.get(departmentId)!.headRoleId }, reply, chairMessage);
         }
       }
 
       // The lead drafts what was agreed; each Head reviews; one revision.
       let plan = await draft();
       const planJson = JSON.stringify(plan);
-      await say("chair", CHAIR, `Draft plan: ${plan.phases.length} phases, ${plan.slices.length} slices. Each Head, review your slices.`);
+      const draftMessage = await say("chair", CHAIR, `Draft plan: ${plan.phases.length} phases, ${plan.slices.length} slices. Each Head, review your slices.`);
       const reviews = await Promise.all(
         departments.map(async (departmentId) => {
           const text = await head(departmentId, HEAD_MEETING_SYSTEM_PROMPT, headPlanReviewPrompt({ ...context(), departmentId, planJson }));
@@ -182,7 +190,7 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
         }),
       );
       for (const review of reviews)
-        await say(review.departmentId, { kind: "head", id: heads.get(review.departmentId)!.headRoleId }, review.objections.length === 0 ? "I approve the draft." : `Objections:\n${review.objections.map((line) => `- ${line}`).join("\n")}`);
+        await say(review.departmentId, { kind: "head", id: heads.get(review.departmentId)!.headRoleId }, review.objections.length === 0 ? "I approve the draft." : `Objections:\n${review.objections.map((line) => `- ${line}`).join("\n")}`, draftMessage);
       const objections = reviews.flatMap((review) => review.objections.map((line) => `${review.departmentId}: ${line}`));
       if (objections.length > 0) plan = await draft(objections.join("\n"));
 
@@ -216,10 +224,13 @@ export function createHeadCouncilChannel(pool: Pool): MeetingChannel {
       return read.messages.map((message) => ({
         speaker: message.author.kind === "head" ? message.author.id.replace(/^head[-:]/, "") : message.author.id === "conversation-lead" ? "chair" : message.author.kind,
         content: message.content,
+        messageId: message.messageId,
+        ...(message.replyToMessageId == null ? {} : { replyTo: message.replyToMessageId }),
       }));
     },
-    async post(goalId, author, content) {
-      await postChannelMessage(pool, { ...(await scope(goalId)), content, author, authorProof: { issuer: "channel-runtime", author } });
+    async post(goalId, author, content, replyTo) {
+      const message = await postChannelMessage(pool, { ...(await scope(goalId)), content, author, authorProof: { issuer: "channel-runtime", author }, ...(replyTo === undefined ? {} : { replyToMessageId: replyTo }) });
+      return message.messageId;
     },
   };
 }

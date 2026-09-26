@@ -99,7 +99,7 @@ describe("Overture crew conversation", () => {
   const roles = ["conversation-lead", "architecture-analyst", "external-research-scout", "security-evaluator", "design-mock-specialist", "task-editor"] as const;
 
   function crewRunner(replyFor: (speaker: string) => string) {
-    const appended: Array<{ actor: string; content: string }> = [];
+    const appended: Array<{ actor: string; content: string; replyTo?: string }> = [];
     const gateway = {
       listModels: async () => [],
       admit: async () => ({
@@ -134,7 +134,7 @@ describe("Overture crew conversation", () => {
       readMessages: async () => [],
       bindRoleModel: async () => undefined,
       appendRoleMessage: async (input) => {
-        appended.push({ actor: input.actor, content: input.content });
+        appended.push({ actor: input.actor, content: input.content, ...(input.replyToMessageId === undefined ? {} : { replyTo: input.replyToMessageId }) });
         return { messageId: `m-${appended.length}`, runId: input.runId, conversationId: input.conversationId, projectId: input.projectId, turnId: input.turnId, cursor: String(appended.length), actor: input.actor, modelRef: input.modelRef, content: input.content, createdAt: "2026-09-26T00:00:00.000Z" };
       },
     });
@@ -153,6 +153,8 @@ describe("Overture crew conversation", () => {
     await runner.runCrew!({ ...ids, operatorId: "operator-1", content: "Plan a sign-up page", assignedRoles: roles });
     // The round closes with the lead's summary.
     expect(appended.map((message) => message.actor)).toEqual(["conversation-lead", "design-mock-specialist", "security-evaluator", "task-editor", "conversation-lead"]);
+    // Each reply points at whoever addressed it: lead → operator, design → lead, volunteer security → operator, task → security.
+    expect(appended.map((message) => message.replyTo)).toEqual([ids.operatorMessageId, "m-1", ids.operatorMessageId, "m-3", undefined]);
   });
 
   it("keeps the lead alone for small talk and bounds crew-to-crew ping-pong", async () => {

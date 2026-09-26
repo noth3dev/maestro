@@ -329,7 +329,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     withGoalLease,
     ask: headAsk,
     readPrd,
-    post: ({ goalId, headRoleId, content }) => headCouncil.post(goalId, { kind: "head", id: headRoleId }, content),
+    post: async ({ goalId, headRoleId, content }) => { await headCouncil.post(goalId, { kind: "head", id: headRoleId }, content); },
   });
   const headMeeting = createHeadMeetingRuntime({
     pool,
@@ -342,7 +342,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     pool,
     review: (goalId, input, commandId) => encoreService.review(goalId, input, commandId),
     revise: (input) => headMeeting.revise(input),
-    announce: (goalId, content) => headCouncil.post(goalId, { kind: "role", id: "conversation-lead" }, content),
+    announce: async (goalId, content) => { await headCouncil.post(goalId, { kind: "role", id: "conversation-lead" }, content); },
   });
   // Planning runs in the background: sealed briefs, then (once revealed) the Heads' meeting, then Encore approval.
   const headBriefScheduler = createHeadBriefScheduler({

@@ -35,3 +35,17 @@ export function messageTime(createdAt: string): string {
   const date = new Date(createdAt);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
+
+const handles: Record<string, string> = {
+  "conversation-lead": "lead",
+  "architecture-analyst": "architecture",
+  "security-evaluator": "security",
+  "design-mock-specialist": "design",
+  "task-editor": "prd",
+  "plan-reviewer": "review",
+};
+
+/** The `@handle` that addresses a crew role in chat. */
+export function crewHandle(role: string | undefined): string | undefined {
+  return role === undefined ? undefined : handles[role];
+}

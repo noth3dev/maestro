@@ -116,6 +116,8 @@ export const OvertureMessageSchema = z
       "model reference contains prohibited sensitive material",
     ),
     content: SafeContentSchema,
+    /** The message this one answers (crew members reply to whoever addressed them). */
+    replyToMessageId: UuidSchema.nullable().optional(),
     createdAt: z.string().datetime(),
   })
   .strict();
@@ -234,6 +236,8 @@ export const AppendOvertureMessageInputSchema = z
     modelRef: ModelRefSchema.nullable(),
     content: SafeContentSchema,
     commandId: UuidSchema,
+    /** The message this one answers. */
+    replyToMessageId: UuidSchema.optional(),
   })
   .strict();
 export type AppendOvertureMessageInput = z.infer<typeof AppendOvertureMessageInputSchema>;
@@ -360,7 +364,7 @@ export const CreateOvertureRunBodySchema = z
   .strict();
 export type CreateOvertureRunBody = z.infer<typeof CreateOvertureRunBodySchema>;
 export const AppendOvertureOperatorMessageBodySchema = z
-  .object({ projectId: UuidSchema, conversationId: UuidSchema, turnId: UuidSchema, content: SafeContentSchema })
+  .object({ projectId: UuidSchema, conversationId: UuidSchema, turnId: UuidSchema, content: SafeContentSchema, replyToMessageId: UuidSchema.optional() })
   .strict();
 export type AppendOvertureOperatorMessageBody = z.infer<typeof AppendOvertureOperatorMessageBodySchema>;
 export const OvertureRunQuerySchema = z.object({ projectId: UuidSchema, conversationId: UuidSchema }).strict();

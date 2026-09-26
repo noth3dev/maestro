@@ -742,3 +742,18 @@
 .kb-decision textarea { padding:6px 8px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-1); color:var(--text-primary); font:inherit; resize:vertical; }
 .kb-decision-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .kb-decision-error { color:var(--rust-text); font-size:11.5px; }
+
+/* ── mentions and replies ── */
+.mention { color:var(--accent-text); background:var(--accent-bg); border-radius:var(--radius-sm); padding:0 3px; font-weight:600; }
+.cm-reply-ref { display:flex; align-items:center; gap:5px; min-width:0; margin:1px 0 3px; font-size:11px; color:var(--text-secondary); }
+.cm-reply-ref svg { width:12px; height:12px; flex:0 0 auto; }
+.cm-reply-name { font-weight:600; flex:0 0 auto; }
+.cm-reply-snippet { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cm-reply-btn { display:inline-flex; align-items:center; gap:4px; margin-top:4px; padding:2px 6px; border:0; border-radius:var(--radius-sm); background:transparent; color:var(--text-secondary); font:inherit; font-size:11px; cursor:pointer; opacity:0; }
+.cm-reply-btn svg { width:12px; height:12px; }
+.cm-msg:hover .cm-reply-btn, .cm-reply-btn:focus-visible { opacity:1; }
+.cm-reply-btn:hover { background:var(--surface-2); color:var(--text-primary); }
+.cm-reply-btn:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.cm-replying { flex-basis:100%; display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-secondary); }
+.cm-replying svg { width:12px; height:12px; }
+.cm-composer { flex-wrap:wrap; }

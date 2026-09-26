@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { loadChannel, postChannelMessage as sendChannelMessage } from "./channel-data.js";
+import { channelAuthorName } from "./channel-data.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -29,5 +30,13 @@ describe("channel GUI data helpers", () => {
     const postChannelMessage = vi.fn(async () => message);
     await expect(sendChannelMessage({ postChannelMessage }, goalId, selector, projectId, "hello", message.messageId)).resolves.toEqual(message);
     expect(postChannelMessage).toHaveBeenCalledWith(goalId, selector, { projectId, content: "hello" }, message.messageId);
+  });
+});
+
+describe("channel author names", () => {
+  it("names Heads by department and the Overture lead as chair", () => {
+    expect(channelAuthorName({ kind: "head", id: "head:safety-compliance" })).toBe("Safety Compliance Head");
+    expect(channelAuthorName({ kind: "role", id: "conversation-lead" })).toBe("Overture lead (chair)");
+    expect(channelAuthorName({ kind: "operator", id: "x" })).toBe("You");
   });
 });

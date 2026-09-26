@@ -8,7 +8,8 @@ import { Workers } from "./Workers.js";
 import type { MissionBundle } from "@maestro/contracts";
 import { useGoalDetail } from "../useGoalDetail.js";
 import { useGoals } from "../goals.js";
-import { createChannelMessageAttempt, loadChannel, postChannelMessage, type ChannelMessageAttempt } from "../lib/channel-data.js";
+import { channelAuthorName, createChannelMessageAttempt, loadChannel, postChannelMessage, type ChannelMessageAttempt } from "../lib/channel-data.js";
+import { renderMentions } from "../components/MarkdownView.js";
 import { missionBundleMatchesWorker } from "../lib/worker-data.js";
 import type { ViewName } from "../views.js";
 
@@ -32,6 +33,7 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
   const [content, setContent] = useState("");
   const [sending, setSending] = useState(false);
   const [rosterHidden, setRosterHidden] = useState(false);
+  const [replyTo, setReplyTo] = useState<{ messageId: string; name: string } | undefined>(undefined);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | undefined>(undefined);
   const [missionBundle, setMissionBundle] = useState<MissionBundle | undefined>(undefined);
   const pendingMessageRef = useRef<ChannelMessageAttempt | undefined>(undefined);
@@ -95,7 +97,7 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
     setSending(true);
     setError(undefined);
     try {
-      await postChannelMessage(window.maestro.api, selectedGoalId, selector, config.projectId, attempt.content, attempt.commandId);
+      await postChannelMessage(window.maestro.api, selectedGoalId, selector, config.projectId, attempt.content, attempt.commandId, replyTo?.messageId);
     } catch (cause: unknown) {
       // Keep the draft and command ID so a retry can safely replay the same
       // idempotent request. Editing the draft creates a fresh attempt below.
@@ -108,6 +110,7 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
       return;
     }
     setContent("");
+    setReplyTo(undefined);
     pendingMessageRef.current = undefined;
     try {
       const refreshed = await loadChannel(window.maestro.api, selectedGoalId, selector, config.projectId);
@@ -141,15 +144,29 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
         <div className="channel-messages">
           {(loading || detailLoading || workersLoading) && <p role="status" aria-live="polite" aria-busy="true">{workersLoading && workers !== undefined ? "refreshing Worker roster; showing last durable state…" : "loading…"}</p>}
           {displayError !== undefined && <div className="alert alert-warning" role="alert">{displayError}</div>}
-          {channel?.messages.map((message) => (
-            <div key={message.messageId} className="msg">
-              <div className="avatar avatar-sm av-teal"><Icon name="message-circle" style={{ width: 14, height: 14 }} /></div>
-              <div className="msg-body">
-                <div className="msg-head"><span className="msg-name">{message.author.kind === "operator" ? "You" : message.author.id}</span><span className="msg-time">{new Date(message.createdAt).toLocaleString()}</span></div>
-                <div className="msg-text">{message.content}</div>
+          {channel?.messages.map((message) => {
+            const target = message.replyToMessageId == null ? undefined : channel.messages.find((candidate) => candidate.messageId === message.replyToMessageId);
+            const name = channelAuthorName(message.author);
+            return (
+              <div key={message.messageId} className="msg cm-msg">
+                <div className="avatar avatar-sm av-teal"><Icon name="message-circle" style={{ width: 14, height: 14 }} /></div>
+                <div className="msg-body">
+                  <div className="msg-head"><span className="msg-name">{name}</span><span className="msg-time">{new Date(message.createdAt).toLocaleString()}</span></div>
+                  {target !== undefined && (
+                    <div className="cm-reply-ref">
+                      <Icon name="corner-down-right" aria-hidden="true" />
+                      <span className="cm-reply-name">{channelAuthorName(target.author)}</span>
+                      <span className="cm-reply-snippet">{target.content.replace(/\s+/g, " ").slice(0, 120)}</span>
+                    </div>
+                  )}
+                  <div className="msg-text">{renderMentions(message.content)}</div>
+                  <button type="button" className="cm-reply-btn" aria-label={`Reply to ${name}`} onClick={() => setReplyTo({ messageId: message.messageId, name })}>
+                    <Icon name="reply" aria-hidden="true" /> reply
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {!loading && channel !== undefined && channel.messages.length === 0 && <p role="status">No messages in this channel yet.</p>}
           {detail?.events.slice(-10).map((event) => (
             <div key={event.eventId} className="msg">
@@ -160,6 +177,14 @@ export function Channel({ onNavigate: _onNavigate, eventCursor = "0" }: { onNavi
           {selectedGoalId === undefined && !loading && <EmptyState title="No Goal selected" hint="Select a Goal from the Dashboard to use a Department channel." />}
         </div>
         <div className="channel-input">
+          {replyTo !== undefined && (
+            <div className="cm-replying">
+              <Icon name="reply" aria-hidden="true" /> replying to {replyTo.name}
+              <button type="button" className="btn-icon" aria-label="Cancel reply" onClick={() => setReplyTo(undefined)}>
+                <Icon name="x" aria-hidden="true" />
+              </button>
+            </div>
+          )}
           <div className="chan-composer">
             <textarea
               className="chan-composer-input"

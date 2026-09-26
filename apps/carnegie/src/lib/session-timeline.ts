@@ -12,6 +12,8 @@ export type TimelineItem = {
   createdAt: string;
   /** Optimistic operator text or an in-flight reply placeholder. */
   pending?: boolean;
+  /** The message this one answers. */
+  replyTo?: { author: TimelineAuthor; role?: string; content: string };
 };
 
 /** Crew tool use (Python cells and workspace file helpers) as compact activity lines. */
@@ -77,13 +79,19 @@ export function buildSessionTimeline(
     })),
     ...overture
       .filter((message) => message.actor !== "operator")
-      .map((message): TimelineItem => ({
-        id: message.messageId,
-        author: "overture",
-        role: message.actor,
-        content: message.content,
-        createdAt: message.createdAt,
-      })),
+      .map((message): TimelineItem => {
+        const target = message.replyToMessageId == null ? undefined : overture.find((candidate) => candidate.messageId === message.replyToMessageId);
+        return {
+          id: message.messageId,
+          author: "overture",
+          role: message.actor,
+          content: message.content,
+          createdAt: message.createdAt,
+          ...(target === undefined
+            ? {}
+            : { replyTo: target.actor === "operator" ? { author: "operator" as const, content: target.content } : { author: "overture" as const, role: target.actor, content: target.content } }),
+        };
+      }),
     ...activity,
   ];
   const known = new Set(items.map((item) => `${item.author}\u0000${item.content}`));

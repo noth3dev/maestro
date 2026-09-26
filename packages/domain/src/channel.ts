@@ -35,6 +35,8 @@ export const ChannelMessageSchema = z.object({
   sequence: z.string().regex(/^(0|[1-9][0-9]*)$/),
   author: ChannelAuthorSchema,
   content: z.string().trim().min(1).max(64_000),
+  /** The message this one answers, in the same channel. */
+  replyToMessageId: z.uuid().nullable().optional(),
   createdAt: z.iso.datetime(),
 }).strict();
 export type ChannelMessage = z.infer<typeof ChannelMessageSchema>;

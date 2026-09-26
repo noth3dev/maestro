@@ -4,10 +4,10 @@ import { Icon } from "../icons.js";
 import { useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import { useSessions } from "../sessions.js";
-import { MarkdownView } from "../components/MarkdownView.js";
+import { MarkdownView, renderMentions } from "../components/MarkdownView.js";
 import { FilePanel } from "../components/FilePanel.js";
 import { TaskContractActions } from "../components/TaskContractActions.js";
-import { crewIdentity, messageTime } from "../lib/crew-identity.js";
+import { crewHandle, crewIdentity, messageTime } from "../lib/crew-identity.js";
 import { ConversationTurnError, submitHomeBrief } from "../lib/task-contract-authoring.js";
 import { cancelHomeTurn, loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
 import {
@@ -65,6 +65,8 @@ export function ConcertmasterSession({
   const [error, setError] = useState<string | undefined>(undefined);
   const [lastText, setLastText] = useState<string | undefined>(undefined);
   const [text, setText] = useState("");
+  /** The crew message the operator is answering. */
+  const [replyTarget, setReplyTarget] = useState<{ messageId: string; role?: string } | undefined>(undefined);
   const logEnd = useRef<HTMLDivElement>(null);
   const started = useRef(false);
   const panelAutoOpened = useRef(false);
@@ -155,9 +157,12 @@ export function ConcertmasterSession({
   }, [busy, loadedId, overtureRun, refreshMessages, refreshOverture, refreshWorkspace]);
 
   const send = useCallback(
-    async (input: string, first?: SessionStart) => {
+    async (input: string, first?: SessionStart, replyTo?: { messageId: string; role?: string }) => {
       if (projectId === undefined) return;
-      const content = input.trim();
+      // A reply addresses the crew member it answers, so the crew routes it to them.
+      const handle = crewHandle(replyTo?.role);
+      const typed = input.trim();
+      const content = handle === undefined || typed === "" || typed.includes(`@${handle}`) ? typed : `@${handle} ${typed}`;
       if (content === "") return;
       setError(undefined);
       setLastText(content);
@@ -222,7 +227,7 @@ export function ConcertmasterSession({
         }
         await window.maestro.api.sendOvertureOperatorMessage(
           run.runId,
-          { projectId, conversationId: key, turnId: intake.turnId, content },
+          { projectId, conversationId: key, turnId: intake.turnId, content, ...(replyTo === undefined ? {} : { replyToMessageId: replyTo.messageId }) },
           { idempotencyKey: globalThis.crypto.randomUUID() },
         );
         await refreshOverture(key, run);
@@ -260,8 +265,10 @@ export function ConcertmasterSession({
     event.preventDefault();
     if (busy !== undefined) return;
     const value = text;
+    const target = replyTarget;
     setText("");
-    void send(value);
+    setReplyTarget(undefined);
+    void send(value, undefined, target);
   };
 
   const cancel = async () => {
@@ -322,9 +329,29 @@ export function ConcertmasterSession({
                     {item.author === "overture" && <span className="cm-msg-tag">overture</span>}
                     <span className="msg-time">{messageTime(item.createdAt)}</span>
                   </div>
+                  {item.replyTo !== undefined && (
+                    <div className="cm-reply-ref">
+                      <Icon name="corner-down-right" aria-hidden="true" />
+                      <span className="cm-reply-name">{crewIdentity(item.replyTo.author, item.replyTo.role).name}</span>
+                      <span className="cm-reply-snippet">{item.replyTo.content.replace(/\s+/g, " ").slice(0, 120)}</span>
+                    </div>
+                  )}
                   <div className="cm-msg-body">
-                    {item.author === "operator" ? <p className="cm-plain">{item.content}</p> : <MarkdownView source={item.content} />}
+                    {item.author === "operator" ? <p className="cm-plain">{renderMentions(item.content)}</p> : <MarkdownView source={item.content} />}
                   </div>
+                  {item.author === "overture" && !item.pending && (
+                    <button
+                      type="button"
+                      className="cm-reply-btn"
+                      aria-label={`Reply to ${speaker.name}`}
+                      onClick={() => {
+                        setReplyTarget({ messageId: item.id, ...(item.role === undefined ? {} : { role: item.role }) });
+                        document.getElementById("cm-input")?.focus();
+                      }}
+                    >
+                      <Icon name="reply" aria-hidden="true" /> reply
+                    </button>
+                  )}
                 </div>
               </article>
             );
@@ -357,6 +384,14 @@ export function ConcertmasterSession({
           <div ref={logEnd} />
         </div>
         <form className="cm-composer" onSubmit={submit}>
+          {replyTarget !== undefined && (
+            <div className="cm-replying">
+              <Icon name="reply" aria-hidden="true" /> replying to {crewIdentity("overture", replyTarget.role).name}
+              <button type="button" className="btn-icon" aria-label="Cancel reply" onClick={() => setReplyTarget(undefined)}>
+                <Icon name="x" aria-hidden="true" />
+              </button>
+            </div>
+          )}
           <label className="sr-only" htmlFor="cm-input">Message the Concertmaster</label>
           <textarea
             id="cm-input"

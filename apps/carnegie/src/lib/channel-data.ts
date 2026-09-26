@@ -12,8 +12,20 @@ export async function postChannelMessage(
   projectId: string,
   content: string,
   commandId: string,
+  replyToMessageId?: string,
 ): Promise<ChannelMessage> {
-  return api.postChannelMessage(goalId, selector, { projectId, content }, commandId);
+  return api.postChannelMessage(goalId, selector, { projectId, content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }) }, commandId);
+}
+
+/** Readable author names: Heads by department, the Overture lead as the meeting chair. */
+export function channelAuthorName(author: ChannelMessage["author"]): string {
+  if (author.kind === "operator") return "You";
+  if (author.kind === "head") {
+    const department = author.id.replace(/^head[-:]/, "");
+    return `${department.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ")} Head`;
+  }
+  if (author.id === "conversation-lead") return "Overture lead (chair)";
+  return author.id;
 }
 
 

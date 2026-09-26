@@ -58,6 +58,7 @@ type MessageRow = {
   actor_id: string;
   model_ref: string | null;
   content: string;
+  reply_to_message_id: string | null;
   created_at: Date | string;
 };
 type ArtifactRow = {
@@ -245,6 +246,8 @@ export async function appendOvertureMessage(
     readonly modelRef: string | null;
     readonly content: string;
     readonly commandId: string;
+    /** The message this one answers, in the same run. */
+    readonly replyToMessageId?: string | undefined;
   },
 ): Promise<OvertureMessage> {
   assertSafeContent(args.content);
@@ -274,7 +277,7 @@ export async function appendOvertureMessage(
       if (assignment.rowCount !== 1) throw new OvertureConflictError("Overture message role is not assigned to its Run");
     }
     const prior = await client.query<MessageRow>(
-      "SELECT message_id, run_id, conversation_id, project_id, message_sequence, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, created_at FROM overture_messages WHERE run_id = $1 AND command_id = $2",
+      "SELECT message_id, run_id, conversation_id, project_id, message_sequence, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, reply_to_message_id, created_at FROM overture_messages WHERE run_id = $1 AND command_id = $2",
       [args.runId, args.commandId],
     );
     if (prior.rowCount === 1) {
@@ -296,7 +299,7 @@ export async function appendOvertureMessage(
       [args.runId, args.projectId],
     );
     const inserted = await client.query<MessageRow>(
-      "INSERT INTO overture_messages (message_id, message_cursor, turn_id, run_id, project_id, conversation_id, actor_kind, actor_id, model_ref, content, command_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING message_id, run_id, conversation_id, project_id, message_sequence, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, created_at",
+      "INSERT INTO overture_messages (message_id, message_cursor, turn_id, run_id, project_id, conversation_id, actor_kind, actor_id, model_ref, content, command_id, reply_to_message_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING message_id, run_id, conversation_id, project_id, message_sequence, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, reply_to_message_id, created_at",
       [
         randomUUID(),
         cursor.rows[0]!.cursor,
@@ -309,6 +312,7 @@ export async function appendOvertureMessage(
         args.modelRef,
         args.content,
         args.commandId,
+        args.replyToMessageId ?? null,
       ],
     );
     const row = inserted.rows[0]!;
@@ -959,7 +963,7 @@ export async function readOvertureMessages(
   ]);
   if (boundary.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
   const result = await queryable.query<MessageRow>(
-    "SELECT message_id, run_id, conversation_id, project_id, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, created_at FROM overture_messages WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3 AND message_cursor > $4::bigint ORDER BY message_cursor ASC",
+    "SELECT message_id, run_id, conversation_id, project_id, message_cursor, turn_id, actor_kind, actor_id, model_ref, content, reply_to_message_id, created_at FROM overture_messages WHERE run_id = $1 AND project_id = $2 AND conversation_id = $3 AND message_cursor > $4::bigint ORDER BY message_cursor ASC",
     [runId, projectId, conversationId, afterCursor],
   );
   return result.rows.map((row) =>
@@ -1157,6 +1161,7 @@ function toMessage(row: MessageRow): OvertureMessage {
     actor: row.actor_kind === "role" ? row.actor_id : row.actor_kind,
     modelRef: row.model_ref,
     content: row.content,
+    replyToMessageId: row.reply_to_message_id,
     createdAt: iso(row.created_at),
   });
 }
