@@ -78,6 +78,13 @@ describe("routed native admission binding", () => {
     expect(admission.grant.modelPolicy).toEqual(["test/model-a"]);
   });
 
+  it("runs a host session on the caller's model under Ensemble routing", () => {
+    const config = parseConfig(baseEnv);
+    const input: NativeAdmissionInput = { purpose: "head", goalId: "goal-1", projectId: "project-1", departmentId: "design", actorId: "operator-1", sessionRef: "operator:operator-1", commandId: "command-1", fencingToken: "7" };
+    expect(createPinnedNativeAdmission(config, input, "test/model-b").modelPolicy).toEqual(["test/model-b"]);
+    expect(() => createPinnedNativeAdmission(config, input)).toThrow("MAESTRO_NATIVE_MODEL");
+  });
+
   it("fails closed for non-ensemble, missing-candidate, account, context, and contradictory-policy inputs", () => {
     const config = parseConfig(baseEnv);
     expect(() => createNativeAdmissionFromRouting(config, selection({ mode: "pin" }), base)).toThrow("routing mode");

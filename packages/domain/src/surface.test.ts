@@ -243,6 +243,7 @@ describe("domain surface", () => {
         "deriveDiscordIncidentFingerprint",
         "deriveHeadActivationCommandId",
         "deriveMissionPersonaOverlay",
+        "deriveStableCommandId",
         "deriveWorkerProfile",
         "detectDeviceCommandUnknownOutcomeFindings",
         "detectMissingEvidenceFindings",

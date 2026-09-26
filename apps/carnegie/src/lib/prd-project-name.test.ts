@@ -7,6 +7,7 @@ describe("project naming and selection", () => {
     expect(prdProjectName("# Newsletter sign-up — PRD\n\n## Goal\nx")).toBe("Newsletter sign-up");
     expect(prdProjectName("# PRD: Homepage\n")).toBe("Homepage");
     expect(prdProjectName("## Goal\nno title")).toBe("New project");
+    expect(prdProjectName("# Product Requirements Document\n")).toBe("New project");
   });
 
   it("keeps a selected project that exists and falls back to Home", () => {

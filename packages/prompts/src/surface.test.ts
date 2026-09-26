@@ -14,7 +14,6 @@ describe("prompts surface", () => {
         "OVERTURE_TRIAGE_SYSTEM_PROMPT",
         "OVERTURE_WORKSPACE_GUIDANCE",
         "encoreReviewerPrompt",
-        "headActivationPrompt",
         "headBriefPrompt",
         "headMeetingPrompt",
         "headPlanReviewPrompt",

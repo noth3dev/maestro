@@ -1,4 +1,3 @@
-import { headActivationPrompt } from "@maestro/prompts";
 import { randomUUID } from "node:crypto";
 import type { HeadParticipationInput, HeadParticipation } from "@maestro/contracts";
 import type { ExecutionAdmission, ExecutionKernelPort, GoalHeadParticipation } from "@maestro/domain";
@@ -33,7 +32,7 @@ export interface HeadParticipationServiceDependencies {
   /** Heartbeat period while a provider call is in flight. */
   goalLeaseRenewalIntervalMs?: number;
   /** Host-owned native admission for a new Head root session. */
-  createAdmission?: (input: { goalId: string; projectId: string; departmentId: string; actorId: string; sessionRef: string; commandId: string; fencingToken: string }) => ExecutionAdmission;
+  createAdmission?: (input: { goalId: string; projectId: string; departmentId: string; actorId: string; sessionRef: string; commandId: string; fencingToken: string }) => ExecutionAdmission | Promise<ExecutionAdmission>;
 }
 
 export class HeadGoalNotFoundError extends Error {
@@ -110,7 +109,7 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
           // Keep the successful provider result if the post-call heartbeat
           // fails; the result is needed to bind opaque ownership before any
           // fail-closed cancellation attempt.
-          admission = deps.createAdmission?.({ goalId, projectId: input.projectId, departmentId: reserved.departmentId, actorId: operator.operatorId, sessionRef: `operator:${operator.operatorId}`, commandId: _commandId, fencingToken: proof.fencingToken });
+          admission = await deps.createAdmission?.({ goalId, projectId: input.projectId, departmentId: reserved.departmentId, actorId: operator.operatorId, sessionRef: `operator:${operator.operatorId}`, commandId: _commandId, fencingToken: proof.fencingToken });
            spawned = await runProviderCall(() => deps.kernel.spawn({ name: `head:${reserved.departmentId}:${randomUUID()}`, ...(admission ?? {}) }), false);
         } catch (error) {
           await resetHeadActivationAfterSpawnFailure(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
@@ -152,33 +151,9 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
           else await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
           throw error;
         }
-        // Activation must dispatch the bounded Goal context; an active Head
-        // with no prompt is an idle provider session that cannot participate.
-        // This happens after the durable active transition, so provider work
-        // never holds the persistence transaction.
-        try {
-          await runProviderCall(() => deps.kernel.prompt(spawned.execution, headActivationPrompt({
-            departmentId: reserved.departmentId,
-            goalId,
-            requestedContribution: input.requestedContribution,
-            urgency: input.urgency,
-            contextScope: input.contextScope,
-            budgetEffect: input.budgetEffect,
-            reason: input.reason,
-          })));
-        } catch (error) {
-          // A failed initial dispatch must not leave a live provider session
-          // behind an apparently active durable Head.
-          const cancellation = await runProviderCall(() => deps.kernel.cancel(spawned.invocation)).catch(() => ({ cancelled: false }));
-          if (cancellation.cancelled) {
-            await resetHeadActivationAfterCancellation(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(async () => {
-              await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
-            });
-          } else {
-            await markHeadActivationOrphaned(deps.pool, goalId, reserved.departmentId, _commandId, proof).catch(() => {});
-          }
-          throw error;
-        }
+        // The Head's first model turn is its sealed brief (the brief runtime
+        // prompts this execution with the contract and PRD), so activation
+        // spends no model turn of its own.
         return toWire(active);
       });
     },

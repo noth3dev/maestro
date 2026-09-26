@@ -171,7 +171,9 @@ describeDatabase("start_goal orchestration controller", () => {
     const activations: string[] = [];
     const goalService = {
       getGoal: async () => goal,
-      transitionGoal: async (_goalId: string, transition: { to: typeof goal.state }) => {
+      transitionGoal: async (_goalId: string, transition: { to: typeof goal.state }, commandId: string) => {
+        // Goal command ids are stored as uuid.
+        expect(commandId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
         transitions.push(transition.to);
         goal = { ...goal, state: transition.to, version: goal.version + 1 };
         return goal;

@@ -94,7 +94,7 @@ export interface ControlPlaneOverrides {
   /** Test-only kernel injection; production uses the native Model Gateway kernel. */
   executionKernel?: ExecutionKernelPort;
   /** Test seam for asserting host-owned admissions on root sessions. */
-  nativeAdmission?: (input: NativeAdmissionInput) => ExecutionAdmission;
+  nativeAdmission?: (input: NativeAdmissionInput, modelRef?: string) => ExecutionAdmission;
   /** Test-only Git injection; production always uses the authority-backed local adapter. */
   gitPort?: GitPort;
   /** Test-only IPython kernel injection; production remains fail-closed until the 1B bridge is composed. */

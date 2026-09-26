@@ -6,6 +6,7 @@ import type { MaestroConfig } from "../config.js";
 import type { ControlPlaneOverrides } from "../main.js";
 import type { composeFoundationServices } from "./foundation-services.js";
 import { createPinnedNativeAdmission, type NativeAdmissionInput } from "../native-admission.js";
+import { readGoalLaunchModel } from "../head-brief-runtime.js";
 import { createEnsembleNativeAdmission } from "../ensemble-admission.js";
 import { deriveRoutingCandidates, readRoutingCandidateCatalog, readRoutingModelMap } from "../ensemble-candidate-catalog.js";
 import { readModelMapSource } from "./model-map-source.js";
@@ -45,17 +46,26 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
   const { pool, config, overrides, withGoalLease, executionKernel, authorityExecutor, modelGateway } = deps;
   const nativeAdmission =
     overrides.nativeAdmission ??
-    (modelGateway === undefined ? undefined : (input: NativeAdmissionInput) => createHostNativeAdmission(config, input));
-  function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput): ExecutionAdmission {
-    if (config.modelRoutingMode !== "pin") throw new Error("Native host admission requires pin routing mode");
-    return createPinnedNativeAdmission(config, input);
+    (modelGateway === undefined ? undefined : (input: NativeAdmissionInput, modelRef?: string) => createHostNativeAdmission(config, input, modelRef));
+  function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput, modelRef?: string): ExecutionAdmission {
+    if (config.modelRoutingMode === "pin") return createPinnedNativeAdmission(config, input);
+    if (modelRef === undefined) throw new Error("Native host admission under Ensemble routing needs a model");
+    return createPinnedNativeAdmission(config, input, modelRef);
   }
 
   const headParticipationService = createHeadParticipationService({
     pool,
     kernel: executionKernel,
     withGoalLease,
-    ...(nativeAdmission === undefined ? {} : { createAdmission: (input) => nativeAdmission({ purpose: "head", ...input }) }),
+    // Heads run on the model of the session whose PRD launched the Goal (unless a pin is configured).
+    ...(nativeAdmission === undefined
+      ? {}
+      : {
+          createAdmission: async (input) => {
+            const launch = config.modelRoutingMode === "pin" ? undefined : await readGoalLaunchModel(pool, input.goalId).catch(() => undefined);
+            return nativeAdmission({ purpose: "head", ...input }, launch === undefined ? undefined : `${launch.provider}/${launch.id}`);
+          },
+        }),
   });
   const councilService = createCouncilService({ pool, withGoalLease });
   const departmentPlanService = createDepartmentPlanService({ pool, withGoalLease });

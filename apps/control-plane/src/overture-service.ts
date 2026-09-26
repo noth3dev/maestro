@@ -1,3 +1,4 @@
+import { deriveStableCommandId } from "@maestro/domain";
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { ToolRegistry, type ModelGatewayPort } from "@maestro/agent-runtime";
@@ -328,7 +329,7 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
       draft(input.projectId);
       let targetProjectId = input.projectId;
       if (input.target?.kind === "new") {
-        const project = await createProject(pool, { operatorId: operator.operatorId, name: input.target.name, commandId: derivedCommandId(input.commandId, "project") });
+        const project = await createProject(pool, { operatorId: operator.operatorId, name: input.target.name, commandId: deriveStableCommandId(`maestro:overture:project:${input.commandId}`) });
         targetProjectId = project.projectId;
       } else if (input.target?.kind === "existing") {
         await assertRole(operator, input.target.projectId);
@@ -365,11 +366,3 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
   };
 }
 
-/** A stable UUID derived from a command, for its sub-steps (idempotent on retry). */
-function derivedCommandId(commandId: string, step: string): string {
-  const hex = createHash("sha256").update(`${commandId}:${step}`).digest("hex").slice(0, 32).split("");
-  hex[12] = "5";
-  hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x03) | 0x08).toString(16);
-  const id = hex.join("");
-  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
-}

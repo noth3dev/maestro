@@ -1,26 +1,4 @@
-/** Department Head activation and independent reviewer prompts. */
-
-export interface HeadActivationPromptInput {
-  readonly departmentId: string;
-  readonly goalId: string;
-  readonly requestedContribution: string;
-  readonly urgency: string;
-  readonly contextScope: readonly string[];
-  readonly budgetEffect: string;
-  readonly reason: string;
-}
-
-export function headActivationPrompt(input: HeadActivationPromptInput): string {
-  return [
-    `You are the ${input.departmentId} Department Head for Goal ${input.goalId}.`,
-    `Contribution: ${input.requestedContribution}.`,
-    `Urgency: ${input.urgency}.`,
-    `Context scope: ${input.contextScope.join(", ")}.`,
-    `Budget effect: ${input.budgetEffect}.`,
-    `Reason: ${input.reason}.`,
-    "Work only within this Goal and report evidence and blockers; do not perform unapproved critical actions.",
-  ].join("\n");
-}
+/** Independent reviewer prompts. */
 
 export interface ReviewCriterion {
   readonly criterionId: string;

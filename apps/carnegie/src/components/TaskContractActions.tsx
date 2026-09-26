@@ -8,7 +8,7 @@ import { projectName, useProjects } from "../projects.js";
 /** The PRD's first `# ` heading without a trailing "PRD" label, as a project name. */
 export function prdProjectName(markdown: string): string {
   const heading = /^#\s+(.+)$/m.exec(markdown)?.[1] ?? "";
-  const name = heading.replace(/\s*[—–:-]\s*PRD\s*$/i, "").replace(/^PRD\s*[—–:-]\s*/i, "").replace(/^PRD$/i, "").trim();
+  const name = heading.replace(/\s*[—–:-]\s*PRD\s*$/i, "").replace(/^PRD\s*[—–:-]\s*/i, "").replace(/^(PRD|product requirements( document)?)$/i, "").trim();
   return name.slice(0, 120) || "New project";
 }
 
@@ -28,7 +28,7 @@ export function TaskContractActions({
   onChanged: () => void;
 }) {
   const { selectGoal, refresh: refreshGoals } = useGoals();
-  const { projects, homeProjectId, selectProject } = useProjects();
+  const { projects, homeProjectId, selectProject, refresh: refreshProjects } = useProjects();
   // A PRD approved in Home starts a new project; inside a project it defaults to that project.
   const [target, setTarget] = useState<"new" | "this">(projectId === homeProjectId ? "new" : "this");
   const [newName, setNewName] = useState<string | undefined>(undefined);
@@ -104,6 +104,8 @@ export function TaskContractActions({
           { idempotencyKey: globalThis.crypto.randomUUID() },
         ),
       );
+      // A new project may have been created for this Goal.
+      await refreshProjects();
       onChanged();
     });
 
@@ -122,6 +124,7 @@ export function TaskContractActions({
       setLaunchedGoalId(result.goalId);
       if (result.taskContract.project.projectId !== projectId) {
         // Follow the Goal into its project; that project's Goals load there.
+        await refreshProjects();
         selectProject(result.taskContract.project.projectId);
       } else {
         await selectGoalAfterLaunch({ refreshGoals }, { goalId: result.goalId }, selectGoal);

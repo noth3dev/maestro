@@ -20,7 +20,8 @@ export interface HeadActivationPlan extends HeadActivationPlanInput {
   readonly contentHash: string;
 }
 
-function deriveStableCommandId(input: string): string {
+/** A stable UUID-shaped command identity derived from any text (idempotent sub-steps). */
+export function deriveStableCommandId(input: string): string {
   const hex = sha256Hex(input).slice(0, 32).split("");
   hex[12] = "5";
   hex[16] = ((Number.parseInt(hex[16]!, 16) & 0x03) | 0x08).toString(16);

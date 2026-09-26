@@ -1,5 +1,5 @@
 import type { HeadParticipationInput } from "@maestro/contracts";
-import { deriveCouncilCreationCommandId, deriveHeadActivationCommandId } from "@maestro/domain";
+import { deriveCouncilCreationCommandId, deriveHeadActivationCommandId, deriveStableCommandId } from "@maestro/domain";
 import type { Pool } from "pg";
 import {
   beginStartGoalOrchestration,
@@ -90,7 +90,7 @@ export function createStartGoalOrchestrationController(
           goal = await deps.goalService.transitionGoal(
             command.goalId,
             { projectId: command.projectId, expectedVersion: expected, to: next },
-            `${command.commandId}:goal-${next}`,
+            deriveStableCommandId(`maestro:start_goal:transition:${command.commandId}:${next}`),
             operator,
           );
         }
@@ -139,6 +139,7 @@ export function createStartGoalOrchestrationController(
           eventKey: `${command.commandId}:unknown`,
           state: "unknown",
           reason: "head_activation_outcome_unknown",
+          details: { error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500) },
         });
       }
     },

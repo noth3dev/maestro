@@ -83,9 +83,14 @@ export function createNativeAdmissionFromRouting(
 }
 
 /** Preserve the explicit MAESTRO_NATIVE_MODEL pin path through the same identity boundary. */
-export function createPinnedNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput): ExecutionAdmission {
-  if (config.nativeModelRef === undefined) throw new Error("Native execution requires MAESTRO_NATIVE_MODEL");
-  const model = parseModelRef(config.nativeModelRef);
+/**
+ * One fixed model for a host-owned session: the MAESTRO_NATIVE_MODEL pin, or
+ * (under Ensemble routing) the model the caller names, e.g. the Goal's
+ * launching session model for its Heads.
+ */
+export function createPinnedNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput, modelRef = config.nativeModelRef): ExecutionAdmission {
+  if (modelRef === undefined) throw new Error("Native execution requires MAESTRO_NATIVE_MODEL");
+  const model = parseModelRef(modelRef);
   const accountRef = config.modelAccountRefs[model.provider];
   if (accountRef === undefined) throw new Error(`Native execution has no account binding for provider: ${model.provider}`);
   const suffix = input.purpose === "head" ? input.departmentId : `reviewer-${input.reviewerIndex}`;
@@ -93,12 +98,12 @@ export function createPinnedNativeAdmission(config: MaestroConfig, input: Native
     config,
     {
       goalRef: input.goalId,
-      mode: "pin",
-      selectedCandidateRef: config.nativeModelRef,
-      selectedModelRef: config.nativeModelRef,
+      mode: config.modelRoutingMode,
+      selectedCandidateRef: modelRef,
+      selectedModelRef: modelRef,
       accountBinding: accountRef,
-      candidateRefs: [config.nativeModelRef],
-      candidateBindings: [{ candidateRef: config.nativeModelRef, modelRef: config.nativeModelRef, accountBinding: accountRef }],
+      candidateRefs: [modelRef],
+      candidateBindings: [{ candidateRef: modelRef, modelRef, accountBinding: accountRef }],
     },
     {
       context: {
