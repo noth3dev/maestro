@@ -17,10 +17,19 @@ import type { SessionWorkspace } from "./session-workspace.js";
 /** What a role may do in its conversation's session workspace. */
 export type SessionIpPythonAccess = "read" | "write";
 
+export interface SessionToolActivity {
+  readonly kind: "python" | "read_file" | "list_files" | "write_file";
+  readonly status: "ok" | "error";
+  readonly path?: string;
+  readonly detail?: string;
+}
+
 export interface SessionIpPythonScope {
   readonly projectId: string;
   readonly conversationId: string;
   readonly access: SessionIpPythonAccess;
+  /** Receives each Python cell and host helper call, e.g. to show crew tool use. */
+  readonly onActivity?: (activity: SessionToolActivity) => void;
 }
 
 export interface SessionIpPython {
@@ -63,10 +72,12 @@ export function createSessionHostRequestHandler(options: {
   readonly workspace: SessionWorkspace;
   readonly scope: SessionIpPythonScope;
   readonly onWrite?: (write: { path: string; revision: string | null }) => void;
+  /** Where to report host helper calls; read per call so the current role is used. */
+  readonly activity?: () => ((activity: SessionToolActivity) => void) | undefined;
 }): (request: IpPythonHostRequest) => Promise<IpPythonExecutionResult> {
   const { workspace, scope } = options;
   const ok = (content: string): IpPythonExecutionResult => ({ state: "ok", dataClass: "workspace", content });
-  return async (request) => {
+  const handle = async (request: IpPythonHostRequest): Promise<IpPythonExecutionResult> => {
     if (request.method === "read_file") {
       return ok((await workspace.read(scope.projectId, scope.conversationId, stringField(request.payload, "path"))).content);
     }
@@ -84,6 +95,23 @@ export function createSessionHostRequestHandler(options: {
       return ok(`wrote ${path}${result.revision === null ? "" : ` at ${result.revision.slice(0, 12)}`}`);
     }
     throw new Error(`${request.method} is not available in a session workspace`);
+  };
+  return async (request) => {
+    const kind = request.method === "read_file" || request.method === "list_files" || request.method === "write_file" ? request.method : undefined;
+    const path = request.payload !== null && typeof request.payload === "object" ? (request.payload as { path?: unknown }).path : undefined;
+    const report = (status: "ok" | "error", detail?: string) => {
+      if (kind === undefined) return;
+      options.activity?.()?.({ kind, status, ...(typeof path === "string" && path !== "" ? { path } : {}), ...(detail === undefined ? {} : { detail }) });
+    };
+    try {
+      const result = await handle(request);
+      const content = request.method === "write_file" ? stringField(request.payload, "content") : undefined;
+      report("ok", content === undefined ? undefined : `${Buffer.byteLength(content, "utf8")} bytes`);
+      return result;
+    } catch (error) {
+      report("error", error instanceof Error ? error.message : "failed");
+      throw error;
+    }
   };
 }
 
@@ -109,12 +137,13 @@ export function createSessionIpPython(options: {
   readonly createChannel?: (sessionId: string) => IpPythonLineChannel;
 }): SessionIpPython {
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
-  const managers = new Map<string, { manager: IpPythonSessionManager; timer?: ReturnType<typeof setTimeout> }>();
+  const managers = new Map<string, { manager: IpPythonSessionManager; timer?: ReturnType<typeof setTimeout>; sink?: ((activity: SessionToolActivity) => void) | undefined }>();
 
   const managerFor = (scope: SessionIpPythonScope, sessionId: string) => {
     let entry = managers.get(sessionId);
     if (entry === undefined) {
-      const hostRequest = createSessionHostRequestHandler({ workspace: options.workspace, scope });
+      const created: { manager?: IpPythonSessionManager; sink?: ((activity: SessionToolActivity) => void) | undefined } = {};
+      const hostRequest = createSessionHostRequestHandler({ workspace: options.workspace, scope, activity: () => created.sink });
       const manager = createIpPythonSessionManager({
         createKernel: (id, binding): IpPythonKernel =>
           createIpPythonProcessKernel(
@@ -134,9 +163,11 @@ export function createSessionIpPython(options: {
             binding,
           ),
       });
-      entry = { manager };
+      created.manager = manager;
+      entry = created as { manager: IpPythonSessionManager; sink?: ((activity: SessionToolActivity) => void) | undefined };
       managers.set(sessionId, entry);
     }
+    entry.sink = scope.onActivity;
     if (entry.timer !== undefined) clearTimeout(entry.timer);
     const current = entry;
     current.timer = setTimeout(() => {
@@ -181,6 +212,8 @@ export function createSessionIpPython(options: {
             budgetEffectCents: 0,
           };
           const result = await managerFor(scope, sessionId).execute({ sessionId, code, binding });
+          const firstLine = code.split("\n").map((line) => line.trim()).find((line) => line !== "" && !line.startsWith("#")) ?? "";
+          scope.onActivity?.({ kind: "python", status: result.state === "ok" ? "ok" : "error", detail: firstLine.length > 120 ? `${firstLine.slice(0, 119)}…` : firstLine });
           const content = Buffer.byteLength(result.content, "utf8") > MAX_RESULT_BYTES ? `${result.content.slice(0, MAX_RESULT_BYTES)}\n… (truncated)` : result.content;
           return { status: result.state === "ok" ? "ok" : result.state === "error" ? "error" : "unknown", content };
         },

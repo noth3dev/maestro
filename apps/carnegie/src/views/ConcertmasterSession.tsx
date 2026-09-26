@@ -13,6 +13,7 @@ import {
   buildSessionTimeline,
   overtureRoleLabel,
   projectOpenOvertureClarification,
+  projectToolActivity,
   type OvertureClarificationView,
   type TimelineItem,
 } from "../lib/session-timeline.js";
@@ -54,6 +55,7 @@ export function ConcertmasterSession({
   const [overtureRun, setOvertureRun] = useState<OvertureRun | undefined>(undefined);
   const [overtureMessages, setOvertureMessages] = useState<readonly OvertureMessage[]>([]);
   const [clarification, setClarification] = useState<OvertureClarificationView | undefined>(undefined);
+  const [toolActivity, setToolActivity] = useState<TimelineItem[]>([]);
   const [workspacePaths, setWorkspacePaths] = useState<readonly string[] | undefined>(undefined);
   const [workspaceRevision, setWorkspaceRevision] = useState<string | undefined>(undefined);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -81,6 +83,7 @@ export function ConcertmasterSession({
       setOvertureRun(latestRun);
       setOvertureMessages(overtureList);
       setClarification(projectOpenOvertureClarification(events));
+      setToolActivity(projectToolActivity(events));
     },
     [projectId],
   );
@@ -121,6 +124,7 @@ export function ConcertmasterSession({
     setOvertureRun(undefined);
     setOvertureMessages([]);
     setClarification(undefined);
+    setToolActivity([]);
     setWorkspacePaths(undefined);
     setWorkspaceRevision(undefined);
     setPanelOpen(false);
@@ -245,7 +249,7 @@ export function ConcertmasterSession({
   // Crew turns run in the background; the latest Overture message being the
   // operator's means a reply is still on its way.
   const overtureWorking = overtureMessages.at(-1)?.actor === "operator";
-  const timeline = useMemo(() => buildSessionTimeline(messages, overtureMessages, pending), [messages, overtureMessages, pending]);
+  const timeline = useMemo(() => buildSessionTimeline(messages, overtureMessages, pending, toolActivity), [messages, overtureMessages, pending, toolActivity]);
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: "end" });
@@ -272,7 +276,8 @@ export function ConcertmasterSession({
     async (path: string) => {
       const id = ownId.current;
       if (projectId === undefined || id === undefined) throw new Error("Session is not open");
-      return (await window.maestro.api.readSessionWorkspaceFile(id, { projectId, path })).content;
+      const file = await window.maestro.api.readSessionWorkspaceFile(id, { projectId, path });
+      return { content: file.content, ...(file.encoding === undefined ? {} : { encoding: file.encoding }) };
     },
     [projectId],
   );
@@ -297,7 +302,14 @@ export function ConcertmasterSession({
           </button>
         </header>
         <div className="cm-log" role="log" aria-live="polite" aria-label="Session messages">
-          {timeline.map((item) => (
+          {timeline.map((item) =>
+            item.author === "activity" ? (
+              <div key={item.id} className={`cm-activity${item.content.includes("— failed") ? " is-error" : ""}`}>
+                <Icon name="wrench" aria-hidden="true" />
+                <span className="cm-activity-role">{overtureRoleLabel(item.role)}</span>
+                <span className="cm-activity-text">{item.content}</span>
+              </div>
+            ) : (
             <article key={item.id} className={`cm-msg cm-${item.author}${item.pending ? " is-pending" : ""}`}>
               <div className="cm-msg-author">
                 {item.author === "operator" ? "you" : item.author === "overture" ? `overture · ${overtureRoleLabel(item.role)}` : item.author}
@@ -306,7 +318,8 @@ export function ConcertmasterSession({
                 {item.author === "operator" ? <p className="cm-plain">{item.content}</p> : <MarkdownView source={item.content} />}
               </div>
             </article>
-          ))}
+            ),
+          )}
           {clarification !== undefined && (
             <article className="cm-msg cm-overture cm-question">
               <div className="cm-msg-author">overture · question</div>

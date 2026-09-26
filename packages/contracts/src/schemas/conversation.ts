@@ -41,7 +41,7 @@ export const SessionWorkspaceListingSchema = z
   .strict();
 export type SessionWorkspaceListing = z.infer<typeof SessionWorkspaceListingSchema>;
 export const SessionWorkspaceFileSchema = z
-  .object({ path: z.string().min(1).max(256), content: z.string(), revision: WorkspaceRevisionSchema })
+  .object({ path: z.string().min(1).max(256), content: z.string(), revision: WorkspaceRevisionSchema, encoding: z.literal("base64").optional() })
   .strict();
 export type SessionWorkspaceFile = z.infer<typeof SessionWorkspaceFileSchema>;
 export const SessionWorkspaceFileQuerySchema = z.object({ projectId: UuidSchema, path: z.string().min(1).max(256) }).strict();

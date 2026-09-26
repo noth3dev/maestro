@@ -29,6 +29,7 @@ import {
   runMigrations,
   getChannel,
   postChannelMessage,
+  appendOvertureToolActivity,
 } from "@maestro/persistence";
 import { parseConfig, type MaestroConfig } from "./config.js";
 import { buildServer } from "./server.js";
@@ -136,7 +137,14 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     accountRefs: config.modelAccountRefs,
     dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
     tools,
-    sessionTools: (scope) => sessionIpPython.tools({ ...scope, access: "write" }),
+    sessionTools: (scope) =>
+      sessionIpPython.tools({
+        projectId: scope.projectId,
+        conversationId: scope.conversationId,
+        access: "write",
+        onActivity: (activity) =>
+          void appendOvertureToolActivity(pool, { runId: scope.runId, projectId: scope.projectId, roleId: scope.roleId, ...activity }).catch(() => undefined),
+      }),
     sessionWorkspace,
   });  const executionKernel =
     overrides.executionKernel ??

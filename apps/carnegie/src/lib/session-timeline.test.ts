@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OvertureEvent, OvertureMessage } from "@maestro/contracts";
-import { buildSessionTimeline, overtureRoleLabel, projectOpenOvertureClarification } from "./session-timeline.js";
+import { buildSessionTimeline, overtureRoleLabel, projectOpenOvertureClarification, projectToolActivity } from "./session-timeline.js";
 
 const ids = {
   run: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -68,5 +68,22 @@ describe("session timeline", () => {
       { ...base, eventId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab", cursor: "2", eventType: "clarification_answered", payload: { clarificationId: "c1" } },
     ] as unknown as OvertureEvent[];
     expect(projectOpenOvertureClarification(answered)).toBeUndefined();
+  });
+
+  it("turns crew tool events into activity lines ordered with the chat", () => {
+    const base = { runId: ids.run, projectId: ids.project, cursor: "1", eventType: "tool_activity" };
+    const activity = projectToolActivity([
+      { ...base, eventId: "e1", createdAt: "2026-09-26T00:00:01.500Z", payload: { roleId: "design-mock-specialist", kind: "write_file", status: "ok", path: "design/signup.html", detail: "2048 bytes" } },
+      { ...base, eventId: "e2", createdAt: "2026-09-26T00:00:01.200Z", payload: { roleId: "design-mock-specialist", kind: "python", status: "ok", detail: 'html = """<main>' } },
+      { ...base, eventId: "e3", createdAt: "2026-09-26T00:00:01.700Z", payload: { roleId: "security-evaluator", kind: "read_file", status: "error", path: "x.md", detail: "Workspace file not found" } },
+      { ...base, eventId: "e4", createdAt: "2026-09-26T00:00:01.800Z", eventType: "message_appended", payload: {} },
+    ] as unknown as OvertureEvent[]);
+    expect(activity.map((item) => [item.role, item.content])).toEqual([
+      ["design-mock-specialist", "wrote design/signup.html (2048 bytes)"],
+      ["design-mock-specialist", 'ran Python: html = """<main>'],
+      ["security-evaluator", "read x.md — failed: Workspace file not found"],
+    ]);
+    const timeline = buildSessionTimeline([{ id: "u1", role: "operator", content: "Mock it", createdAt: "2026-09-26T00:00:01.000Z" }], [], [], activity);
+    expect(timeline.map((item) => item.id)).toEqual(["u1", "e2", "e1", "e3"]);
   });
 });

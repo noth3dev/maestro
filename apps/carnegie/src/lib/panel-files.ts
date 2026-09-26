@@ -1,12 +1,23 @@
 export type PanelFileKind = "markdown" | "code" | "canvas" | "text";
 
+/** How a `canvas` file is drawn: a rendered page, vector markup, or a raster image. */
+export type CanvasRender = "html" | "svg" | "image";
+
 export type PanelFile = {
   path: string;
   kind: PanelFileKind;
   /** Highlighting hint for `code` files, e.g. `ts`. */
   language?: string;
+  /** Set for `canvas` files. */
+  render?: CanvasRender;
+  /** MIME type for raster images. */
+  mime?: string;
   content: string;
+  /** Raster images arrive base64-encoded. */
+  encoding?: "base64";
 };
+
+const imageMime: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
 
 const codeLanguages: Record<string, string> = {
   ts: "ts",
@@ -30,19 +41,21 @@ const codeLanguages: Record<string, string> = {
   sh: "shell",
   sql: "sql",
   css: "css",
-  html: "html",
   yml: "yaml",
   yaml: "yaml",
   toml: "toml",
 };
 
 /** Decide how the panel renders a file from its name alone. */
-export function panelFileKind(path: string): Pick<PanelFile, "kind" | "language"> {
+export function panelFileKind(path: string): Pick<PanelFile, "kind" | "language" | "render" | "mime"> {
   const name = path.split("/").pop() ?? path;
   const dot = name.lastIndexOf(".");
   const extension = dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
   if (extension === "md" || extension === "markdown") return { kind: "markdown" };
-  if (extension === "canvas" || extension === "svg") return { kind: "canvas" };
+  if (extension === "html" || extension === "htm") return { kind: "canvas", render: "html" };
+  if (extension === "svg" || extension === "canvas") return { kind: "canvas", render: "svg" };
+  const mime = imageMime[extension];
+  if (mime !== undefined) return { kind: "canvas", render: "image", mime };
   const language = codeLanguages[extension];
   return language === undefined ? { kind: "text" } : { kind: "code", language };
 }

@@ -23,6 +23,14 @@ export interface OvertureRoleTurnInput {
   readonly content: string;
 }
 
+/** Who is about to use tools, so tool activity can be attributed. */
+export interface OvertureToolScope {
+  readonly projectId: string;
+  readonly conversationId: string;
+  readonly runId: string;
+  readonly roleId: OvertureRoleId;
+}
+
 export interface OvertureCrewMember {
   readonly roleId: OvertureRoleId;
   /** Why this role joins, shown to the role so it answers only its part. */
@@ -104,7 +112,7 @@ export function createOvertureRoleTurnRunner(options: {
   readonly accountRefs: Readonly<Record<string, string>>;
   readonly dataPolicyHash: string;
   /** Tools for one turn; a factory receives the turn's conversation scope. */
-  readonly tools: ToolRegistry | ((scope: { projectId: string; conversationId: string }) => ToolRegistry);
+  readonly tools: ToolRegistry | ((scope: OvertureToolScope) => ToolRegistry);
   readonly readModel: (projectId: string, conversationId: string) => Promise<ModelIdentity>;
   readonly readMessages: (runId: string, projectId: string, conversationId: string) => Promise<readonly OvertureMessage[]>;
   readonly bindRoleModel: (input: { runId: string; projectId: string; roleId: OvertureRoleId; modelRef: string }) => Promise<void>;
@@ -162,7 +170,9 @@ export function createOvertureRoleTurnRunner(options: {
       modelRef: admitted.modelRef,
       tools:
         override?.tools ??
-        (typeof options.tools === "function" ? options.tools({ projectId: input.projectId, conversationId: input.conversationId }) : options.tools),
+        (typeof options.tools === "function"
+          ? options.tools({ projectId: input.projectId, conversationId: input.conversationId, runId: input.runId, roleId })
+          : options.tools),
       closeGateway: false,
       initialMessages: await history(input),
     });

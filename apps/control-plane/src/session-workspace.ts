@@ -9,6 +9,8 @@ import { UuidSchema } from "@maestro/contracts";
 const execFileAsync = promisify(execFile);
 const GIT = "/usr/bin/git";
 const MAX_FILE_BYTES = 1_048_576;
+const MAX_IMAGE_BYTES = 8 * 1_048_576;
+const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp)$/i;
 const MAX_FILES = 2_000;
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,127}$/;
 
@@ -22,7 +24,8 @@ export interface SessionWorkspaceFileEntry {
 
 export interface SessionWorkspace {
   list(projectId: string, conversationId: string): Promise<{ files: SessionWorkspaceFileEntry[]; revision: string | null }>;
-  read(projectId: string, conversationId: string, path: string): Promise<{ path: string; content: string; revision: string | null }>;
+  /** Text files come back as UTF-8; images as base64 with `encoding: "base64"`. */
+  read(projectId: string, conversationId: string, path: string): Promise<{ path: string; content: string; revision: string | null; encoding?: "base64" }>;
   /** Write whole files and record them as one commit; returns the new (or unchanged) revision. */
   write(
     projectId: string,
@@ -109,8 +112,10 @@ export function createSessionWorkspace(options: { root: string }): SessionWorksp
         throw new SessionWorkspaceFileNotFoundError("Workspace file not found");
       }
       if (!info.isFile()) throw new SessionWorkspaceFileNotFoundError("Workspace file not found");
-      if (info.size > MAX_FILE_BYTES) throw new SessionWorkspacePathError("Workspace file is too large to display");
+      const image = IMAGE_EXTENSION.test(relative);
+      if (info.size > (image ? MAX_IMAGE_BYTES : MAX_FILE_BYTES)) throw new SessionWorkspacePathError("Workspace file is too large to display");
       const bytes = await readFile(absolute);
+      if (image) return { path: relative, content: bytes.toString("base64"), revision: await revision(root), encoding: "base64" };
       let content: string;
       try {
         content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);

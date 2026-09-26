@@ -1,7 +1,7 @@
 import type { OvertureEvent, OvertureMessage } from "@maestro/contracts";
 import type { ConversationMessage } from "./conversation-data.js";
 
-export type TimelineAuthor = "operator" | "concertmaster" | "overture" | "system";
+export type TimelineAuthor = "operator" | "concertmaster" | "overture" | "activity" | "system";
 
 export type TimelineItem = {
   id: string;
@@ -13,6 +13,33 @@ export type TimelineItem = {
   /** Optimistic operator text or an in-flight reply placeholder. */
   pending?: boolean;
 };
+
+/** Crew tool use (Python cells and workspace file helpers) as compact activity lines. */
+export function projectToolActivity(events: readonly OvertureEvent[]): TimelineItem[] {
+  return events
+    .filter((event) => event.eventType === "tool_activity")
+    .map((event) => {
+      const payload = event.payload as { roleId?: unknown; kind?: unknown; status?: unknown; path?: unknown; detail?: unknown };
+      const path = typeof payload.path === "string" ? payload.path : undefined;
+      const detail = typeof payload.detail === "string" && payload.detail !== "" ? payload.detail : undefined;
+      const failed = payload.status === "error";
+      const action =
+        payload.kind === "write_file"
+          ? `wrote ${path ?? "a file"}${detail !== undefined && !failed ? ` (${detail})` : ""}`
+          : payload.kind === "read_file"
+            ? `read ${path ?? "a file"}`
+            : payload.kind === "list_files"
+              ? "listed workspace files"
+              : `ran Python${detail !== undefined && !failed ? `: ${detail}` : ""}`;
+      return {
+        id: event.eventId,
+        author: "activity" as const,
+        ...(typeof payload.roleId === "string" ? { role: payload.roleId } : {}),
+        content: failed ? `${action} — failed${detail !== undefined ? `: ${detail}` : ""}` : action,
+        createdAt: event.createdAt,
+      };
+    });
+}
 
 export type OvertureClarificationView = { clarificationId: string; question: string };
 
@@ -38,6 +65,7 @@ export function buildSessionTimeline(
   conversation: readonly ConversationMessage[],
   overture: readonly OvertureMessage[],
   pending: readonly TimelineItem[] = [],
+  activity: readonly TimelineItem[] = [],
 ): TimelineItem[] {
   const items: TimelineItem[] = [
     ...conversation.map((message): TimelineItem => ({
@@ -55,6 +83,7 @@ export function buildSessionTimeline(
         content: message.content,
         createdAt: message.createdAt,
       })),
+    ...activity,
   ];
   const known = new Set(items.map((item) => `${item.author}\u0000${item.content}`));
   for (const item of pending) if (!known.has(`${item.author}\u0000${item.content}`)) items.push(item);

@@ -63,6 +63,11 @@ describePython("session IPython tool", () => {
     expect(second.content).toContain("True ['plan00.md']");
     await expect(workspace.read(projectId, conversationId, "plan00.md")).resolves.toMatchObject({ content: "# Plan\n\n- one\n" });
 
+    const activity: string[] = [];
+    const reporting = sessions.tools({ projectId, conversationId, access: "write", onActivity: (item) => activity.push(`${item.kind}:${item.status}:${item.path ?? ""}`) });
+    await reporting.execute(call('write_file("design/signup.html", "<main></main>")\nread_file("missing.md")'), context(4));
+    expect(activity).toEqual(["write_file:ok:design/signup.html", "read_file:error:missing.md", "python:error:"]);
+
     const reader = sessions.tools({ projectId, conversationId, access: "read" });
     const denied = await reader.execute(call('write_file("x.md", "x")'), context(3));
     expect(denied.status).toBe("error");

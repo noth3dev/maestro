@@ -810,6 +810,45 @@ export async function attachOvertureWorkspaceTaskContract(
   }
 }
 
+export interface OvertureToolActivity {
+  readonly runId: string;
+  readonly projectId: string;
+  readonly roleId: OvertureRoleId;
+  /** `python` for an ipython cell, otherwise the host helper that ran. */
+  readonly kind: "python" | "read_file" | "list_files" | "write_file";
+  readonly status: "ok" | "error";
+  readonly path?: string;
+  /** Short, display-safe summary (first code line, file size, or error). */
+  readonly detail?: string;
+}
+
+/** Record one crew tool use so the session chat can show it. */
+export async function appendOvertureToolActivity(pool: Pool, activity: OvertureToolActivity): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await appendEvent(client, {
+      runId: activity.runId,
+      projectId: activity.projectId,
+      commandId: randomUUID(),
+      eventType: "tool_activity",
+      payload: {
+        roleId: activity.roleId,
+        kind: activity.kind,
+        status: activity.status,
+        ...(activity.path === undefined ? {} : { path: activity.path.slice(0, 256) }),
+        ...(activity.detail === undefined ? {} : { detail: activity.detail.slice(0, 200) }),
+      },
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function markOvertureRunLaunchedForTaskContractInTransaction(client: PoolClient, contractId: string, commandId: string = randomUUID(), expectedProjectId?: string): Promise<void> {
   const run = await client.query<{ run_id: string; project_id: string; state: OvertureRun["state"]; attached_manifest_hash: string | null; plan_manifest_hash: string | null; workspace_revision: string | null }>(
     "SELECT run_id, project_id, state, task_contract_ref->>'manifestHash' AS attached_manifest_hash, plan_manifest_hash, task_contract_ref->>'workspaceRevision' AS workspace_revision FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",

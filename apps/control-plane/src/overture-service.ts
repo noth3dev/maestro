@@ -21,7 +21,7 @@ import type {
 import type { OperatorContext } from "@maestro/persistence";
 import type { SessionWorkspace } from "./session-workspace.js";
 import { TaskMarkdownError, taskContractFromMarkdown } from "./task-md.js";
-import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner } from "./overture-role-turn.js";
+import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner, type OvertureToolScope } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
   assertProjectRole,
@@ -89,7 +89,7 @@ export interface OvertureServiceOptions {
   /** The per-conversation Git workspaces Overture writes plan files into. */
   readonly sessionWorkspace?: SessionWorkspace;
   /** When set, Overture roles get the session `ipython` tool for their conversation's workspace. */
-  readonly sessionTools?: (scope: { projectId: string; conversationId: string }) => ToolRegistry;
+  readonly sessionTools?: (scope: OvertureToolScope) => ToolRegistry;
 }
 
 export function createPostgresOvertureService(options: Pool | OvertureServiceOptions): OvertureService {

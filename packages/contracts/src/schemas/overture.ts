@@ -85,6 +85,7 @@ export const OvertureEventTypeSchema = z.enum([
   "launch_ready",
   "run_state_changed",
   "task_contract_attached",
+  "tool_activity",
 ]);
 export const OvertureEventSchema = z
   .object({

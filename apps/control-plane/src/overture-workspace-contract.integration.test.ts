@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { applyAllMigrations, markOvertureRunLaunchedForTaskContract } from "@maestro/persistence";
+import { appendOvertureToolActivity, applyAllMigrations, markOvertureRunLaunchedForTaskContract } from "@maestro/persistence";
 import { createPostgresOvertureService } from "./overture-service.js";
 import { createSessionWorkspace } from "./session-workspace.js";
 
@@ -97,5 +97,18 @@ describeDatabase("Overture workspace Task Contract", () => {
     await workspace.write(projectId, conversationId, [{ path: "plan00.md", content: "# Plan v2\n" }], "Later edit");
     await markOvertureRunLaunchedForTaskContract(pool, contract.contractId);
     await expect(service.getRun(runId, projectId, conversationId, operator)).resolves.toMatchObject({ state: "launched" });
+  });
+
+  it("records crew tool activity as Overture events", async () => {
+    const service = createPostgresOvertureService({ pool, sessionWorkspace: workspace });
+    await appendOvertureToolActivity(pool, { runId, projectId, roleId: "design-mock-specialist", kind: "write_file", status: "ok", path: "design/signup.html", detail: "2048 bytes" });
+    const events = await service.listEvents(runId, projectId, conversationId, "0", operator);
+    expect(events.filter((event) => event.eventType === "tool_activity").map((event) => event.payload)).toContainEqual({
+      roleId: "design-mock-specialist",
+      kind: "write_file",
+      status: "ok",
+      path: "design/signup.html",
+      detail: "2048 bytes",
+    });
   });
 });

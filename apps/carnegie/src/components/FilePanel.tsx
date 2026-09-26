@@ -20,7 +20,7 @@ export function FilePanel({
   title: string;
   /** Workspace-relative file paths; undefined while loading. */
   paths: readonly string[] | undefined;
-  loadFile: (path: string) => Promise<string>;
+  loadFile: (path: string) => Promise<{ content: string; encoding?: "base64" }>;
   /** Changes whenever the workspace may have changed, so open tabs reload. */
   refreshKey?: string;
   emptyHint: string;
@@ -37,7 +37,7 @@ export function FilePanel({
   const load = useCallback(
     (path: string) => {
       void loadFile(path)
-        .then((content) => setFiles((current) => ({ ...current, [path]: { path, content, ...panelFileKind(path) } })))
+        .then((loaded) => setFiles((current) => ({ ...current, [path]: { path, ...loaded, ...panelFileKind(path) } })))
         .catch((cause: unknown) =>
           setFiles((current) => ({ ...current, [path]: { path, error: cause instanceof Error ? cause.message : "File is unavailable" } })),
         );
@@ -160,12 +160,32 @@ function TreeNodes({ nodes, depth, activePath, onOpen }: { nodes: FileTreeNode[]
 }
 
 export function FileView({ file }: { file: PanelFile }) {
+  const [showSource, setShowSource] = useState(false);
   if (file.kind === "markdown") return <MarkdownView source={file.content} />;
-  if (file.kind === "canvas")
+  if (file.kind === "canvas") {
+    if (file.render === "image")
+      return (
+        <div className="file-image">
+          <img src={`data:${file.mime ?? "image/png"};base64,${file.encoding === "base64" ? file.content : ""}`} alt={file.path} />
+        </div>
+      );
     return (
-      // No sandbox permissions: canvas markup can draw but never run scripts or navigate.
-      <iframe className="file-canvas" title={file.path} sandbox="" srcDoc={canvasDocument(file.content)} />
+      <div className="file-canvas-wrap">
+        <div className="file-canvas-toolbar" role="group" aria-label="View">
+          <button type="button" className={`btn btn-sm${showSource ? "" : " on"}`} aria-pressed={!showSource} onClick={() => setShowSource(false)}>preview</button>
+          <button type="button" className={`btn btn-sm${showSource ? " on" : ""}`} aria-pressed={showSource} onClick={() => setShowSource(true)}>source</button>
+        </div>
+        {showSource ? (
+          <pre className="file-code" data-language={file.render}>
+            <code>{file.content}</code>
+          </pre>
+        ) : (
+          // No sandbox permissions: previews draw but never run scripts or navigate.
+          <iframe className="file-canvas" title={file.path} sandbox="" srcDoc={file.render === "html" ? file.content : canvasDocument(file.content)} />
+        )}
+      </div>
     );
+  }
   return (
     <pre className="file-code" data-language={file.language}>
       <code>{file.content}</code>
