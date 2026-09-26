@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import type { OvertureRun, TaskContract } from "@maestro/contracts";
+import type { OvertureReviewGate, OvertureRun, TaskContract } from "@maestro/contracts";
 import { useGoals } from "../goals.js";
 import { confirmTaskContractDraft, launchTaskContractDraft } from "../lib/task-contract-authoring.js";
 import { selectGoalAfterLaunch } from "../lib/goal-operations.js";
@@ -25,7 +25,19 @@ export function TaskContractActions({
   const [launchedGoalId, setLaunchedGoalId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [gate, setGate] = useState<OvertureReviewGate | undefined>(undefined);
   const contractId = run?.taskContractId ?? undefined;
+
+  // Re-evaluate the plan review gate whenever the workspace changes.
+  useEffect(() => {
+    if (run === undefined || contractId !== undefined) return;
+    let current = true;
+    void window.maestro.api
+      .getOvertureReviewGate(run.runId, { projectId, conversationId: run.conversationId })
+      .then((value) => { if (current) setGate(value); })
+      .catch(() => { if (current) setGate(undefined); });
+    return () => { current = false; };
+  }, [contractId, projectId, revision, run?.runId, run?.conversationId]);
 
   useEffect(() => {
     if (contractId === undefined) {
@@ -52,13 +64,13 @@ export function TaskContractActions({
     }
   };
 
-  const create = () =>
+  const create = (acceptReviewBlockers: boolean) =>
     act(async () => {
       if (run === undefined || revision === undefined) throw new Error("The Overture crew has not written this workspace yet");
       setContract(
         await window.maestro.api.createOvertureWorkspaceTaskContract(
           run.runId,
-          { projectId, conversationId: run.conversationId, revision },
+          { projectId, conversationId: run.conversationId, revision, ...(acceptReviewBlockers ? { acceptReviewBlockers: true } : {}) },
           { idempotencyKey: globalThis.crypto.randomUUID() },
         ),
       );
@@ -99,10 +111,37 @@ export function TaskContractActions({
               ? "confirmed · ready to launch"
               : `contract drafted${pinned === undefined ? "" : ` from ${pinned.slice(0, 8)}`}${stale ? " · workspace changed since" : ""}`}
       </span>
-      {!launched && contract === undefined && (
-        <button type="button" className="btn btn-primary btn-sm" disabled={busy || run === undefined || revision === undefined} onClick={() => void create()}>
+      {!launched && contract === undefined && gate !== undefined && (
+        <span className={`task-gate task-gate-${gate.state}`} title={gate.state === "passed" ? undefined : gate.reason}>
+          {gate.state === "passed" ? "plan review passed" : gate.state === "blocked" ? `${gate.blockers.length} review blocker(s)` : gate.state === "stale" ? "review out of date" : gate.state === "self_review" ? "self-reviewed" : "not reviewed yet"}
+        </span>
+      )}
+      {!launched && contract === undefined && gate?.state === "passed" && (
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy || run === undefined || revision === undefined} onClick={() => void create(false)}>
           create contract
         </button>
+      )}
+      {!launched && contract === undefined && gate !== undefined && gate.state !== "passed" && (
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={busy || run === undefined || revision === undefined}
+          title="Creates the contract anyway; your acceptance is recorded as evidence."
+          onClick={() => void create(true)}
+        >
+          accept and create
+        </button>
+      )}
+      {!launched && contract === undefined && gate !== undefined && gate.state !== "passed" && (
+        <p className="task-gate-reason">
+          {gate.reason}
+          {gate.state === "blocked" && (
+            <>
+              {": "}
+              {gate.blockers.join("; ")}
+            </>
+          )}
+        </p>
       )}
       {!launched && contract !== undefined && !confirmed && (
         <button type="button" className="btn btn-sm" disabled={busy} onClick={() => void confirm()}>

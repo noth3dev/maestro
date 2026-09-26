@@ -134,6 +134,7 @@ describe("contracts surface", () => {
         "OverturePlanDocumentSchema",
         "OverturePlanManifestSchema",
         "OverturePlanReferenceSchema",
+        "OvertureReviewGateSchema",
         "OvertureRoleAssignmentSchema",
         "OvertureRoleSelectionResultSchema",
         "OvertureRoleStatusSchema",

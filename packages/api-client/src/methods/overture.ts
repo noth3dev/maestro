@@ -16,6 +16,7 @@ import {
   TaskContractSchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
+  OvertureReviewGateSchema,
   UuidSchema,
 } from "@maestro/contracts";
 import { cryptoRandomUuid, readOvertureEventStream } from "../transport.js";
@@ -29,6 +30,7 @@ export function createOvertureMethods(
   | "createOvertureRun"
   | "getOvertureRun"
   | "listOvertureRuns"
+  | "getOvertureReviewGate"
   | "sendOvertureOperatorMessage"
   | "listOvertureMessages"
   | "listOvertureArtifacts"
@@ -65,6 +67,14 @@ export function createOvertureMethods(
         `v1/overture/runs/${encodeURIComponent(parsedRunId)}?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
         { headers },
         OvertureRunSchema,
+      );
+    },
+    getOvertureReviewGate(runId, query) {
+      const parsedQuery = OvertureRunQuerySchema.parse(query);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(UuidSchema.parse(runId))}/review-gate?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
+        { headers },
+        OvertureReviewGateSchema,
       );
     },
     listOvertureRuns(query) {

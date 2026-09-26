@@ -71,7 +71,17 @@ describeDatabase("Overture workspace Task Contract", () => {
       service.createWorkspaceTaskContract!({ runId, projectId, conversationId, revision: draft.revision!, commandId: randomUUID() }, operator),
     ).rejects.toThrow("Write task.md");
 
-    const reviewed = await workspace.write(projectId, conversationId, [{ path: "task.md", content: taskMarkdown }], "Task");
+    await workspace.write(projectId, conversationId, [{ path: "task.md", content: taskMarkdown }], "Task");
+    await appendOvertureToolActivity(pool, { runId, projectId, roleId: "task-editor", kind: "write_file", status: "ok", path: "task.md" });
+    const unreviewed = (await workspace.list(projectId, conversationId)).revision!;
+    await expect(
+      service.createWorkspaceTaskContract!({ runId, projectId, conversationId, revision: unreviewed, commandId: randomUUID() }, operator),
+    ).rejects.toThrow("Ask @review");
+    await expect(service.reviewGate!(runId, projectId, conversationId, operator)).resolves.toMatchObject({ state: "missing" });
+
+    const reviewed = await workspace.write(projectId, conversationId, [{ path: "reviews/plan.md", content: "## Blockers\nNone\n" }], "Review");
+    await appendOvertureToolActivity(pool, { runId, projectId, roleId: "plan-reviewer", kind: "write_file", status: "ok", path: "reviews/plan.md" });
+    await expect(service.reviewGate!(runId, projectId, conversationId, operator)).resolves.toEqual({ state: "passed", reviewer: "plan-reviewer" });
     await expect(
       service.createWorkspaceTaskContract!({ runId, projectId, conversationId, revision: draft.revision!, commandId: randomUUID() }, operator),
     ).rejects.toThrow("workspace changed");
@@ -81,11 +91,14 @@ describeDatabase("Overture workspace Task Contract", () => {
     expect(contract).toMatchObject({
       desiredOutcome: "Ship a one-page personal homepage.",
       launchState: "awaiting_confirmation",
-      approvedPreviewReferences: ["plan00.md", "task.md"],
+      approvedPreviewReferences: ["plan00.md", "reviews/plan.md", "task.md"],
     });
+    expect(contract.liveEvidence).toContain("review-gate:passed by plan-reviewer");
     expect(contract.evidenceReferences).toEqual([
       expect.stringMatching(new RegExp(`^workspace@${reviewed.revision}:plan00\\.md#[0-9a-f]{64}$`)),
+      expect.stringMatching(new RegExp(`^workspace@${reviewed.revision}:reviews/plan\\.md#[0-9a-f]{64}$`)),
       expect.stringMatching(new RegExp(`^workspace@${reviewed.revision}:task\\.md#[0-9a-f]{64}$`)),
+      "review-gate:passed by plan-reviewer",
     ]);
 
     const run = await service.getRun(runId, projectId, conversationId, operator);
@@ -110,5 +123,22 @@ describeDatabase("Overture workspace Task Contract", () => {
       path: "design/signup.html",
       detail: "2048 bytes",
     });
+  });
+
+  it("lets the operator accept an unmet review gate and records it as evidence", async () => {
+    const service = createPostgresOvertureService({ pool, sessionWorkspace: workspace });
+    const otherConversationId = randomUUID();
+    const otherRunId = randomUUID();
+    await pool.query(
+      "INSERT INTO conversations (conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding) VALUES ($1, $2, $3, NULL, 'openai-codex', 'gpt-5.6-sol', 'active', 1, '{}'::jsonb)",
+      [otherConversationId, operatorId, projectId],
+    );
+    await service.createRun({ runId: otherRunId, projectId, conversationId: otherConversationId, roles: ["conversation-lead"], commandId: randomUUID() }, operator);
+    const written = await workspace.write(projectId, otherConversationId, [{ path: "task.md", content: taskMarkdown }], "Task");
+    const contract = await service.createWorkspaceTaskContract!(
+      { runId: otherRunId, projectId, conversationId: otherConversationId, revision: written.revision!, acceptReviewBlockers: true, commandId: randomUUID() },
+      operator,
+    );
+    expect(contract.liveEvidence.at(-1)).toMatch(/^review-gate:missing accepted by operator \(Ask @review/);
   });
 });

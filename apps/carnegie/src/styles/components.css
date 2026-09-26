@@ -730,3 +730,8 @@
   .cm-session.with-panel { flex-direction:column; }
   .cm-session.with-panel .file-panel { width:100%; height:45%; border-left:none; border-top:1px solid var(--border); }
 }
+
+.task-gate { font-size:11px; border-radius:999px; padding:1px 8px; border:1px solid var(--border-strong); color:var(--text-secondary); }
+.task-gate-passed { border-color:var(--olive); color:var(--olive-text); }
+.task-gate-blocked, .task-gate-self_review { border-color:var(--rust); color:var(--rust-text); }
+.task-gate-reason { flex-basis:100%; margin:0; font-size:11.5px; color:var(--text-secondary); }

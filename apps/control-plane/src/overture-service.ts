@@ -21,6 +21,7 @@ import type {
 import type { OperatorContext } from "@maestro/persistence";
 import type { SessionWorkspace } from "./session-workspace.js";
 import { TaskMarkdownError, taskContractFromMarkdown } from "./task-md.js";
+import { PLAN_REVIEW_PATH, evaluateReviewGate, type ReviewGate } from "./review-gate.js";
 import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner, type OvertureToolScope } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
@@ -46,6 +47,14 @@ import {
 
 const TASK_PATH = "task.md";
 
+/** Contract creation refused because the plan review gate is not met. */
+export class ReviewGateError extends Error {
+  constructor(readonly gate: Exclude<ReviewGate, { state: "passed" }>) {
+    super(gate.state === "blocked" ? `${gate.reason}: ${gate.blockers.join("; ")}` : gate.reason);
+    this.name = "ReviewGateError";
+  }
+}
+
 export interface OvertureService {
   createRun(input: CreateOvertureRunInput, operator: OperatorContext): Promise<OvertureRun>;
   appendOperatorMessage(input: AppendOvertureMessageInput, operator: OperatorContext): Promise<OvertureMessage>;
@@ -55,6 +64,8 @@ export interface OvertureService {
   createTaskContract(input: CreateOvertureTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
   /** Draft the awaiting Task Contract from task.md at the reviewed workspace revision. */
   createWorkspaceTaskContract?(input: CreateOvertureWorkspaceTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
+  /** Whether the plan in the session workspace passed the Plan Reviewer's gate. */
+  reviewGate?(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<ReviewGate>;
   openClarification(input: OpenOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   answerClarification(input: AnswerOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   listMessages(
@@ -119,6 +130,12 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
 
   async function assertRole(operator: OperatorContext, projectId: string): Promise<void> {
     await assertProjectRole(pool, operator.operatorId, projectId, "concertmaster");
+  }
+
+  async function readReviewGate(workspace: SessionWorkspace, runId: string, projectId: string, conversationId: string): Promise<ReviewGate> {
+    const events = await readOvertureEvents(pool, runId, projectId, conversationId, "0");
+    const review = await workspace.read(projectId, conversationId, PLAN_REVIEW_PATH).then((file) => file.content, () => undefined);
+    return evaluateReviewGate({ events, review });
   }
 
   // Role turns can run for minutes (model calls plus workspace tool calls), so
@@ -279,10 +296,17 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
       };
       const listing = await assertRevision();
       if (!listing.files.some((file) => file.path === TASK_PATH)) throw new TaskMarkdownError("Write task.md in the workspace first");
+      const gate = await readReviewGate(workspace, input.runId, input.projectId, input.conversationId);
+      if (gate.state !== "passed" && input.acceptReviewBlockers !== true) throw new ReviewGateError(gate);
       const files = await Promise.all(listing.files.map((file) => workspace.read(input.projectId, input.conversationId, file.path)));
       await assertRevision();
       const hash = (content: string) => createHash("sha256").update(content, "utf8").digest("hex");
-      const evidence = files.map((file) => `workspace@${input.revision}:${file.path}#${hash(file.content)}`);
+      const evidence = [
+        ...files.map((file) => `workspace@${input.revision}:${file.path}#${hash(file.content)}`),
+        gate.state === "passed"
+          ? `review-gate:passed by ${gate.reviewer}`
+          : `review-gate:${gate.state} accepted by operator (${gate.reason}${gate.state === "blocked" ? `: ${gate.blockers.join("; ")}` : ""})`.slice(0, 1000),
+      ];
       const task = files.find((file) => file.path === TASK_PATH)!;
       const substance = taskContractFromMarkdown({
         markdown: task.content,
@@ -302,6 +326,12 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
         commandId: input.commandId,
       });
       return contract;
+    },
+    async reviewGate(runId, projectId, conversationId, operator) {
+      await assertRole(operator, projectId);
+      const workspace = "query" in options ? undefined : options.sessionWorkspace;
+      if (workspace === undefined) throw new OvertureConflictError("The session workspace is unavailable");
+      return readReviewGate(workspace, runId, projectId, conversationId);
     },
     async listRuns(projectId, conversationId, operator) {
       await assertRole(operator, projectId);

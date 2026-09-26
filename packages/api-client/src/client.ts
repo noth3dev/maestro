@@ -198,6 +198,7 @@ export interface ApiClient {
   createOvertureRun(input: CreateOvertureRunBody, options?: { idempotencyKey?: string }): Promise<OvertureRun>;
   getOvertureRun(runId: string, query: OvertureRunQuery): Promise<OvertureRun>;
   listOvertureRuns(query: OvertureRunQuery): Promise<readonly OvertureRun[]>;
+  getOvertureReviewGate(runId: string, query: OvertureRunQuery): Promise<import("@maestro/contracts").OvertureReviewGate>;
   sendOvertureOperatorMessage(
     runId: string,
     input: AppendOvertureOperatorMessageBody,

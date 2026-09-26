@@ -25,6 +25,7 @@ import {
   TaskContractSchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
+  OvertureReviewGateSchema,
   EventCursorSchema,
   UuidSchema,
 } from "@maestro/contracts";
@@ -137,6 +138,14 @@ export function registerOvertureRoutes(app: FastifyInstance, deps: OvertureRoute
     const input = CreateOvertureTaskContractInputSchema.parse({ ...body, runId, commandId });
     const result = await overture.createTaskContract(input, requestOperator(request as { operator?: OperatorContext }));
     return reply.status(201).send(TaskContractSchema.parse(result));
+  });
+
+  app.get("/v1/overture/runs/:runId/review-gate", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const query = parse(OvertureRunQuerySchema, request.query);
+    if (overture.reviewGate === undefined) throw new DurableStoreUnavailableError();
+    const gate = await overture.reviewGate(runId, query.projectId, query.conversationId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(OvertureReviewGateSchema.parse(gate));
   });
 
   app.post("/v1/overture/runs/:runId/workspace-task-contract", async (request, reply) => {

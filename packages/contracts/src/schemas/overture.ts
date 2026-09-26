@@ -291,12 +291,21 @@ export const CreateOvertureWorkspaceTaskContractInputSchema = z
     conversationId: UuidSchema,
     /** The workspace revision the operator reviewed; a newer revision is rejected. */
     revision: z.string().regex(/^[0-9a-f]{40}$/),
+    /** The operator explicitly accepts an unmet plan review gate; recorded as evidence. */
+    acceptReviewBlockers: z.boolean().optional(),
     commandId: UuidSchema,
   })
   .strict();
 export type CreateOvertureWorkspaceTaskContractInput = z.infer<typeof CreateOvertureWorkspaceTaskContractInputSchema>;
 export const CreateOvertureWorkspaceTaskContractBodySchema = CreateOvertureWorkspaceTaskContractInputSchema.omit({ runId: true, commandId: true });
 export type CreateOvertureWorkspaceTaskContractBody = z.infer<typeof CreateOvertureWorkspaceTaskContractBodySchema>;
+
+export const OvertureReviewGateSchema = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("passed"), reviewer: z.string().min(1) }).strict(),
+  z.object({ state: z.enum(["missing", "stale", "self_review"]), reason: z.string().min(1) }).strict(),
+  z.object({ state: z.literal("blocked"), reason: z.string().min(1), blockers: z.array(z.string().min(1)).max(64) }).strict(),
+]);
+export type OvertureReviewGate = z.infer<typeof OvertureReviewGateSchema>;
 
 export const OpenOvertureClarificationInputSchema = z
   .object({ projectId: UuidSchema, runId: UuidSchema, conversationId: UuidSchema, question: SafeContentSchema, commandId: UuidSchema })

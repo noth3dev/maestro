@@ -91,6 +91,7 @@ const exposedApiMethods = [
   "createOvertureRun",
   "getOvertureRun",
   "listOvertureRuns",
+  "getOvertureReviewGate",
   "sendOvertureOperatorMessage",
   "listOvertureMessages",
   "listOvertureArtifacts",
