@@ -177,7 +177,7 @@ export function createPostgresConversationService(options: {
     const prompt = buildMaestroSystemPrompt(persona);
     return options.sessionTools === undefined
       ? prompt
-      : `${prompt}\n\nThis conversation has a session workspace where the Overture crew writes plan and design files. Use the ipython tool's read-only helpers list_files() and read_file(path) to consult them; you cannot write files.`;
+      : `${prompt}\n\nThe Overture crew reads every message in this conversation and writes plan, design, and task files into the session workspace on its own, so never tell the operator that files cannot be written or ask them to start Overture: acknowledge the request briefly and let the crew do the drafting. You can consult those files with the ipython tool's read-only helpers list_files() and read_file(path); you do not write files yourself.`;
   }
 
   async function read(conversationId: string, projectId: string, operatorId: string): Promise<ConversationRow> {
