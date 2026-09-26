@@ -7,7 +7,7 @@ import {
   type ModelMessage,
   ToolRegistry,
 } from "@maestro/agent-runtime";
-import { OVERTURE_ROLE_DEFINITIONS, createOvertureRoleRuntimePolicy, type OvertureRoleId } from "@maestro/domain";
+import { OVERTURE_ROLE_DEFINITIONS, RETIRED_OVERTURE_ROLE_IDS, createOvertureRoleRuntimePolicy, type OvertureRoleId } from "@maestro/domain";
 import type { OvertureMessage } from "@maestro/contracts";
 import { OVERTURE_TRIAGE_SYSTEM_PROMPT, overtureJoinPrompt, overtureTriagePrompt } from "@maestro/prompts";
 
@@ -48,15 +48,15 @@ export interface OvertureRoleTurnRunner {
 }
 
 const LEAD: OvertureRoleId = "conversation-lead";
-const MAX_VOLUNTEERS = 2;
+const MAX_VOLUNTEERS = 3;
 /** Crew replies (lead included) allowed per operator message, bounding crew-to-crew exchanges. */
-export const MAX_CREW_REPLIES = 6;
+export const MAX_CREW_REPLIES = 8;
 
 /** `@name` handles the operator or the crew can use to address a role. */
 export const OVERTURE_ROLE_HANDLES: Readonly<Record<OvertureRoleId, readonly string[]>> = {
   "conversation-lead": ["lead", "conversation-lead", "리드"],
   "architecture-analyst": ["architecture", "architect", "architecture-analyst", "아키텍처", "설계"],
-  "external-research-scout": ["research", "researcher", "scout", "external-research-scout", "리서치", "조사"],
+  "external-research-scout": [],
   "security-evaluator": ["security", "security-evaluator", "보안"],
   "design-mock-specialist": ["design", "designer", "design-mock-specialist", "디자인", "디자이너"],
   "task-editor": ["task", "task-editor", "editor", "태스크"],
@@ -65,10 +65,10 @@ export const OVERTURE_ROLE_HANDLES: Readonly<Record<OvertureRoleId, readonly str
 
 const ROLE_FOCUS: Readonly<Record<OvertureRoleId, string>> = {
   "conversation-lead": "steers the conversation, clarifies goals, and writes the overall plan",
-  "architecture-analyst": "technical architecture, structure, data flow, and implementation risks",
-  "external-research-scout": "prior art, libraries, references, and facts that need checking",
-  "security-evaluator": "security, privacy, data boundaries, and abuse or failure risks",
-  "design-mock-specialist": "UX, visual design, and mockups of screens or assets",
+  "architecture-analyst": "technical architecture, structure, data flow, and feasibility of anything proposed",
+  "external-research-scout": "retired",
+  "security-evaluator": "security, privacy, data boundaries, and abuse or failure risks in anything proposed",
+  "design-mock-specialist": "UI/UX: flows, screens, copy, accessibility, and visual design in anything proposed",
   "task-editor": "turning the agreed plan into task.md and phase plans that can be launched",
   "plan-reviewer": "challenging plans for drift, gaps, unverifiable criteria, and oversized scope before they become a contract",
 };
@@ -233,7 +233,7 @@ export function createOvertureRoleTurnRunner(options: {
       const messages: OvertureMessage[] = [];
       const lead = await reply(input, LEAD, input.content);
       messages.push(lead);
-      const others = input.assignedRoles.filter((roleId) => roleId !== LEAD);
+      const others = input.assignedRoles.filter((roleId) => roleId !== LEAD && !RETIRED_OVERTURE_ROLE_IDS.includes(roleId));
       const addressed = addressedRoles(`${input.content}\n${lead.content}`, others);
       const volunteers = await triage(input, others.filter((roleId) => !addressed.includes(roleId)));
       // Crew members can address each other with @handles; each reply may
@@ -265,7 +265,7 @@ export function createOvertureRoleTurnRunner(options: {
           continue;
         }
         messages.push(message);
-        for (const roleId of addressedRoles(message.content, input.assignedRoles)) {
+        for (const roleId of addressedRoles(message.content, input.assignedRoles.filter((role) => !RETIRED_OVERTURE_ROLE_IDS.includes(role)))) {
           if (roleId === member.roleId || queue.some((queued) => queued.roleId === roleId)) continue;
           queue.push({ roleId, reason: `the ${roleLabel(member.roleId)} addressed you` });
         }

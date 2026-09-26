@@ -21,7 +21,6 @@ import {
 const overtureRoles = [
   "conversation-lead",
   "architecture-analyst",
-  "external-research-scout",
   "security-evaluator",
   "design-mock-specialist",
   "task-editor",

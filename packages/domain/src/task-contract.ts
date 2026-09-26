@@ -18,6 +18,12 @@ export const OVERTURE_ROLE_IDS = [
 ] as const;
 export type OvertureRoleId = (typeof OVERTURE_ROLE_IDS)[number];
 
+/** Roles kept only so stored runs stay readable; they are never selected or addressed. */
+export const RETIRED_OVERTURE_ROLE_IDS: readonly OvertureRoleId[] = ["external-research-scout"];
+
+/** Roles that take part in new crews. Each specialist researches its own area. */
+export const ACTIVE_OVERTURE_ROLE_IDS: readonly OvertureRoleId[] = OVERTURE_ROLE_IDS.filter((role) => !RETIRED_OVERTURE_ROLE_IDS.includes(role));
+
 /** IDs written by the first Task Contract implementation, retained for migration. */
 const LEGACY_OVERTURE_ROLE_ALIASES: Readonly<Record<string, OvertureRoleId>> = Object.freeze({
   "project-context-scout": "architecture-analyst",
@@ -116,7 +122,6 @@ export function selectOvertureRoles(input: OvertureSelectionInput): readonly Ove
   return [
     "conversation-lead",
     "architecture-analyst",
-    ...(input.outsideEvidenceRequested ? (["external-research-scout"] as const) : []),
     "security-evaluator",
     ...(input.previewNeeded ? (["design-mock-specialist"] as const) : []),
     "task-editor",

@@ -161,7 +161,7 @@ describe("Overture crew conversation", () => {
 
     const noisy = crewRunner((speaker) => (speaker === "triage" ? "not json" : speaker === "Security Evaluator" ? "@design again?" : "@security what do you think?"));
     await noisy.runner.runCrew!({ ...ids, operatorId: "operator-1", content: "@design start", assignedRoles: roles });
-    expect(noisy.appended.length).toBe(6);
+    expect(noisy.appended.length).toBe(8);
   });
 });
 

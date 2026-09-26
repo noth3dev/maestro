@@ -5,6 +5,7 @@ describe("domain surface", () => {
     const surface = await import("./index.js");
     expect(Object.keys(surface).sort()).toMatchInlineSnapshot(`
       [
+        "ACTIVE_OVERTURE_ROLE_IDS",
         "CHANNEL_DEPARTMENT_IDS",
         "CHANNEL_SELECTORS",
         "CONCERTMASTER_PERSONA_BASELINE",
@@ -106,6 +107,7 @@ describe("domain surface", () => {
         "PressureBandValidationError",
         "ProviderFactsValidationError",
         "QUALITY_RECOVERY_RESERVE_BPS",
+        "RETIRED_OVERTURE_ROLE_IDS",
         "ROUTING_DECISION_SCHEMA_VERSION",
         "ROUTING_EVIDENCE_BANDS",
         "ROUTING_EVIDENCE_SCHEMA_VERSION",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { amendTaskContract, assertValidTaskContractSubstance, canonicalizeOvertureRoles, createTaskContract, OVERTURE_ROLE_IDS, selectOvertureRoles, taskContractContentHash, type TaskContractSubstance } from "./task-contract.js";
+import { amendTaskContract, assertValidTaskContractSubstance, canonicalizeOvertureRoles, createTaskContract, ACTIVE_OVERTURE_ROLE_IDS, OVERTURE_ROLE_IDS, selectOvertureRoles, taskContractContentHash, type TaskContractSubstance } from "./task-contract.js";
 
 const substance: TaskContractSubstance = {
   desiredOutcome: "A durable contract", userVisibleBehavior: ["CEO can confirm exact content"],
@@ -33,7 +33,9 @@ describe("Task Contract", () => {
     expect(selectOvertureRoles({ outsideEvidenceRequested: false, previewNeeded: false })).toEqual([
       "conversation-lead", "architecture-analyst", "security-evaluator", "task-editor", "plan-reviewer",
     ]);
-    expect(selectOvertureRoles({ outsideEvidenceRequested: true, previewNeeded: true })).toEqual([...OVERTURE_ROLE_IDS]);
+    // The research scout is retired: each specialist researches its own area.
+    expect(selectOvertureRoles({ outsideEvidenceRequested: true, previewNeeded: true })).toEqual([...ACTIVE_OVERTURE_ROLE_IDS]);
+    expect(ACTIVE_OVERTURE_ROLE_IDS).not.toContain("external-research-scout");
   });
 
   it("maps legacy persisted selections to canonical roles without losing optional intent", () => {
