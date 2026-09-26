@@ -353,6 +353,9 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         return briefs;
       },
     },
+    onOutcome: ({ goalId, outcomes }) => {
+      for (const outcome of outcomes.filter((entry) => entry.outcome === "failed")) console.error(`Head brief failed (${goalId} ${outcome.departmentId}): ${outcome.detail}`);
+    },
     onError: (error) => console.error("Head planning stage failed", error),
   });
   headPlanning.scheduler = headBriefScheduler;

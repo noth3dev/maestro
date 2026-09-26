@@ -25,5 +25,6 @@ describe("Head brief decision", () => {
     const ask = headAskWithFallback(async () => { throw new Error("unknown execution"); }, async () => "fallback");
     await expect(ask(input)).resolves.toBe("fallback");
     await expect(headAskWithFallback(async () => "primary", async () => "fallback")(input)).resolves.toBe("primary");
+    await expect(headAskWithFallback(() => new Promise<string>(() => undefined), async () => "fallback", 10)(input)).resolves.toBe("fallback");
   });
 });

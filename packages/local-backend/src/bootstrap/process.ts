@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { EmbeddedDatabaseHandle } from "@maestro/persistence";
 import type { ConnectionEnvironment } from "../connection.js";
@@ -32,11 +33,14 @@ export const defaultStartModelGateway = async (options: LocalModelGatewayLaunchO
 };
 
 export const defaultStartControlPlane = async (options: LocalControlPlaneLaunchOptions): Promise<LocalProcessHandle> => {
+  // Background work (Heads, meetings) reports failures on stderr; keep it.
+  mkdirSync(join(options.dataDir, "logs"), { recursive: true });
+  const log = openSync(join(options.dataDir, "logs", "control-plane.log"), "a");
   const child = spawn(process.execPath, [options.entry], {
     cwd: dirname(options.entry),
     env: buildLocalControlPlaneEnvironment(options),
     detached: true,
-    stdio: "ignore",
+    stdio: ["ignore", log, log],
   });
   return detachProcess(child);
 };

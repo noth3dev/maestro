@@ -153,7 +153,9 @@ export function createHeadBriefRuntime(deps: HeadBriefRuntimeDependencies): Head
             });
             return { departmentId, outcome: "withdrew", detail: decision.reason };
           } catch (error) {
-            return { departmentId, outcome: "failed", detail: error instanceof Error ? error.message : String(error) };
+            const detail = error instanceof Error ? error.message : String(error);
+            await say(goalId, departmentId, participant.headRoleId!, `I could not write my brief yet: ${detail.slice(0, 300)}`);
+            return { departmentId, outcome: "failed", detail };
           }
         }),
       );
@@ -237,13 +239,23 @@ export function createKernelHeadAsk(kernel: Pick<ExecutionKernelPort, "prompt" |
   };
 }
 
-/** Try the Head's own execution; if it is gone (e.g. after a restart), answer with a one-shot call. */
-export function headAskWithFallback(primary: HeadAsk, fallback: HeadAsk): HeadAsk {
+/**
+ * Try the Head's own execution; if it is gone (e.g. after a restart) or does
+ * not answer in time, answer with a one-shot call.
+ */
+export function headAskWithFallback(primary: HeadAsk, fallback: HeadAsk, timeoutMs = 240_000): HeadAsk {
   return async (input) => {
+    let timer: NodeJS.Timeout | undefined;
     try {
-      return await primary(input);
+      // ponytail: the timed-out execution keeps running; cancel it if provider cost matters.
+      return await Promise.race([
+        primary(input),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Head execution did not answer in time")), timeoutMs); }),
+      ]);
     } catch {
       return fallback(input);
+    } finally {
+      clearTimeout(timer);
     }
   };
 }

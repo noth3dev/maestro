@@ -33,3 +33,10 @@ Each slice: TDD, real PostgreSQL integration tests run alone (never two DB suite
 - The project dropdown above the profile selects the project; the choice is remembered. Below `ProjectsProvider`, `config.projectId` is the selected project.
 - A PRD approved in Home starts its Goal in a **new project** (named from the PRD title); inside a project it defaults to that project. The run records the target project.
 
+
+## Slice 6 notes (dispatch)
+
+- An approved plan becomes the Council's decision packet (`recordCouncilDecisionPacket`): ownership and worker plan per department from its slices; the packet hash anchors Department Plans.
+- Each owning department gets a Department Plan whose items are its slices (`itemId` = slice id, `dependsOn` = slice deps); Mission Bundles per item; Workers dispatch when a slice's dependencies are done.
+- Slice status follows the Worker: `in_progress` on spawn, `review` on completion awaiting certification, `done` on certification, `blocked` on failure/escalation.
+- Open question: one active session per Head across Goals (unique index) blocks concurrent projects.

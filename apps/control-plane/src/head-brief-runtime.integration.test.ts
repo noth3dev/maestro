@@ -83,6 +83,7 @@ describeDatabase("Head brief runtime with PostgreSQL", () => {
     expect(posts.sort()).toEqual([
       "design(active): Not needed for this Goal: The PRD reuses the existing blog theme; no design work. Going back to sleep.",
       "engineering(active): Sealed brief submitted. It opens when every Head has settled.",
+      "research(active): I could not write my brief yet: Head reply has no JSON object",
     ]);
 
     const second = await runtime.run({ goalId, councilId });
