@@ -112,7 +112,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
   },
   {
     id: "task-editor",
-    displayName: "Task Editor",
+    displayName: "PRD Editor",
     taskClass: "planning",
     modelCapabilityAxes: ["reasoning", "instruction-fidelity", "verification", "long-context"],
     allowedTools: ["read-conversation", "read-overture-artifacts", "write-plan-revision", "write-task-contract-draft", ...OVERTURE_WORKSPACE_TOOLS],

@@ -20,7 +20,7 @@ import type {
 } from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
 import type { SessionWorkspace } from "./session-workspace.js";
-import { TaskMarkdownError, taskContractFromMarkdown } from "./task-md.js";
+import { PRD_PATH, PrdMarkdownError, taskContractFromPrd } from "./prd-md.js";
 import { PLAN_REVIEW_PATH, evaluateReviewGate, type ReviewGate } from "./review-gate.js";
 import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner, type OvertureToolScope } from "./overture-role-turn.js";
 import {
@@ -45,7 +45,6 @@ import {
   OvertureRunNotFoundError,
 } from "@maestro/persistence";
 
-const TASK_PATH = "task.md";
 
 /** Contract creation refused because the plan review gate is not met. */
 export class ReviewGateError extends Error {
@@ -62,7 +61,7 @@ export interface OvertureService {
   readPlanManifest(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OverturePlanManifest>;
   revisePlan(input: ReviseOverturePlanInput, operator: OperatorContext): Promise<OverturePlanDocument>;
   createTaskContract(input: CreateOvertureTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
-  /** Draft the awaiting Task Contract from task.md at the reviewed workspace revision. */
+  /** Draft the awaiting Task Contract from prd.md at the reviewed workspace revision. */
   createWorkspaceTaskContract?(input: CreateOvertureWorkspaceTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
   /** Whether the plan in the session workspace passed the Plan Reviewer's gate. */
   reviewGate?(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<ReviewGate>;
@@ -295,7 +294,7 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
         return listing;
       };
       const listing = await assertRevision();
-      if (!listing.files.some((file) => file.path === TASK_PATH)) throw new TaskMarkdownError("Write task.md in the workspace first");
+      if (!listing.files.some((file) => file.path === PRD_PATH)) throw new PrdMarkdownError("Write prd.md in the workspace first");
       const gate = await readReviewGate(workspace, input.runId, input.projectId, input.conversationId);
       if (gate.state !== "passed" && input.acceptReviewBlockers !== true) throw new ReviewGateError(gate);
       const files = await Promise.all(listing.files.map((file) => workspace.read(input.projectId, input.conversationId, file.path)));
@@ -307,8 +306,8 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
           ? `review-gate:passed by ${gate.reviewer}`
           : `review-gate:${gate.state} accepted by operator (${gate.reason}${gate.state === "blocked" ? `: ${gate.blockers.join("; ")}` : ""})`.slice(0, 1000),
       ];
-      const task = files.find((file) => file.path === TASK_PATH)!;
-      const substance = taskContractFromMarkdown({
+      const task = files.find((file) => file.path === PRD_PATH)!;
+      const substance = taskContractFromPrd({
         markdown: task.content,
         projectId: input.projectId,
         evidence,
@@ -321,7 +320,7 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
         conversationId: input.conversationId,
         contractId: contract.contractId,
         workspaceRevision: input.revision,
-        taskPath: TASK_PATH,
+        taskPath: PRD_PATH,
         contentHash: hash(task.content),
         commandId: input.commandId,
       });

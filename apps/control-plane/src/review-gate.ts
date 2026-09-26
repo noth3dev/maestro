@@ -38,7 +38,7 @@ export function reviewBlockers(markdown: string): string[] {
 
 /**
  * The plan must be reviewed by the Plan Reviewer, after its latest change,
- * without open blockers, and task.md must not have been written by the
+ * without open blockers, and prd.md must not have been written by the
  * reviewer itself — authors never pass their own work.
  */
 export function evaluateReviewGate(input: { readonly events: readonly OvertureEvent[]; readonly review: string | undefined }): ReviewGate {
@@ -46,12 +46,12 @@ export function evaluateReviewGate(input: { readonly events: readonly OvertureEv
   const latest = (predicate: (write: Write) => boolean) => [...all].reverse().find(predicate);
   const review = latest((write) => write.path === PLAN_REVIEW_PATH);
   if (input.review === undefined || review === undefined)
-    return { state: "missing", reason: `Ask @review to review the plan; ${PLAN_REVIEW_PATH} has not been written by the crew yet` };
+    return { state: "missing", reason: `Ask @review to review prd.md; ${PLAN_REVIEW_PATH} has not been written by the crew yet` };
   if (review.roleId !== REVIEWER)
     return { state: "missing", reason: `${PLAN_REVIEW_PATH} was last written by ${review.roleId}, not the Plan Reviewer` };
-  const task = latest((write) => write.path === "task.md");
-  if (task?.roleId === REVIEWER) return { state: "self_review", reason: "task.md was written by the Plan Reviewer, who may not review its own work" };
-  const planChange = latest((write) => write.path === "task.md" || /^plan\d+(?:-slice\d+)?\.md$/.test(write.path));
+  const prd = latest((write) => write.path === "prd.md");
+  if (prd?.roleId === REVIEWER) return { state: "self_review", reason: "prd.md was written by the Plan Reviewer, who may not review its own work" };
+  const planChange = latest((write) => write.path === "prd.md");
   if (planChange !== undefined && planChange.order > review.order)
     return { state: "stale", reason: `${planChange.path} changed after the last review; ask @review to review it again` };
   const blockers = reviewBlockers(input.review);

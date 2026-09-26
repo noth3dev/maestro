@@ -25,7 +25,7 @@ export function FilePanel({
   refreshKey?: string;
   emptyHint: string;
   onClose: () => void;
-  /** Optional actions shown above a file, e.g. Task Contract controls for task.md. */
+  /** Optional actions shown above a file, e.g. Task Contract controls for prd.md. */
   renderFileActions?: (path: string) => ReactNode;
 }) {
   const [openPaths, setOpenPaths] = useState<string[]>([]);

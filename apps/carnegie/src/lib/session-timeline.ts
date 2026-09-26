@@ -49,7 +49,7 @@ const roleLabels: Record<string, string> = {
   "external-research-scout": "research scout",
   "security-evaluator": "security evaluator",
   "design-mock-specialist": "design specialist",
-  "task-editor": "task editor",
+  "task-editor": "PRD editor",
   "plan-reviewer": "plan reviewer",
 };
 

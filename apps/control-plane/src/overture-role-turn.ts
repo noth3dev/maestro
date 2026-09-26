@@ -59,7 +59,7 @@ export const OVERTURE_ROLE_HANDLES: Readonly<Record<OvertureRoleId, readonly str
   "external-research-scout": [],
   "security-evaluator": ["security", "security-evaluator", "보안"],
   "design-mock-specialist": ["design", "designer", "design-mock-specialist", "디자인", "디자이너"],
-  "task-editor": ["task", "task-editor", "editor", "태스크"],
+  "task-editor": ["task", "prd", "task-editor", "editor", "태스크"],
   "plan-reviewer": ["review", "reviewer", "critic", "plan-reviewer", "리뷰", "비판"],
 };
 
@@ -69,8 +69,8 @@ const ROLE_FOCUS: Readonly<Record<OvertureRoleId, string>> = {
   "external-research-scout": "retired",
   "security-evaluator": "security, privacy, data boundaries, and abuse or failure risks in anything proposed",
   "design-mock-specialist": "UI/UX: flows, screens, copy, accessibility, and visual design in anything proposed",
-  "task-editor": "turning the agreed plan into task.md and phase plans that can be launched",
-  "plan-reviewer": "challenging plans for drift, gaps, unverifiable criteria, and oversized scope before they become a contract",
+  "task-editor": "keeping prd.md complete and current as the product decisions settle",
+  "plan-reviewer": "challenging prd.md for drift, gaps, unmeasurable success metrics, and oversized scope before it becomes a contract",
 };
 
 /** Roles addressed with `@handle` in a message, in roster order. */
@@ -270,8 +270,9 @@ export function createOvertureRoleTurnRunner(options: {
           queue.push({ roleId, reason: `the ${roleLabel(member.roleId)} addressed you` });
         }
       }
-      // A round with specialists closes with the lead's summary and decision log.
-      if (messages.some((message) => message.actor !== LEAD)) {
+      // A round where two or more specialists spoke closes with the lead's
+      // summary and decision log; smaller rounds speak for themselves.
+      if (new Set(messages.filter((message) => message.actor !== LEAD).map((message) => message.actor)).size >= 2) {
         try {
           messages.push(await reply(input, LEAD, overtureRoundSummaryPrompt(input.content)));
         } catch {

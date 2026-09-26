@@ -390,7 +390,7 @@ export function ConcertmasterSession({
           emptyHint="Files the Overture crew writes for this session appear here."
           onClose={() => setPanelOpen(false)}
           renderFileActions={(path) =>
-            path === "task.md" && projectId !== undefined ? (
+            path === "prd.md" && projectId !== undefined ? (
               <TaskContractActions
                 projectId={projectId}
                 run={overtureRun}

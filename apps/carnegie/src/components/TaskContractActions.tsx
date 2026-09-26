@@ -5,7 +5,7 @@ import { confirmTaskContractDraft, launchTaskContractDraft } from "../lib/task-c
 import { selectGoalAfterLaunch } from "../lib/goal-operations.js";
 
 /**
- * Create → confirm → launch for the Task Contract drafted from task.md at the
+ * Create → confirm → launch for the Task Contract drafted from prd.md at the
  * workspace revision the operator is looking at.
  */
 export function TaskContractActions({

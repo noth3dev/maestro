@@ -9,6 +9,7 @@ const HANDLES: Record<string, string> = {
   design: "design-mock-specialist",
   designer: "design-mock-specialist",
   task: "task-editor",
+  prd: "task-editor",
   review: "plan-reviewer",
   reviewer: "plan-reviewer",
   critic: "plan-reviewer",

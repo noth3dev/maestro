@@ -8,8 +8,8 @@ export const OVERTURE_WORKSPACE_GUIDANCE = [
   ".svg for logos, icons, illustrations, and diagrams;",
   ".md for plans, research, decisions, reviews, and task definitions;",
   "the real extension (.ts, .py, .css, …) for code samples.",
-  "Plans are Markdown: plan00.md for the overall plan, then plan01.md, plan02.md for phases.",
-  "When the plan is ready to execute, write task.md with these ## sections: Outcome, Success criteria (bullets), Repository, Base revision, Data boundary, Groups (bullets), Departments (bullets), and optionally Scope, Non-goals, Constraints, Edge cases, Budget. The operator creates, confirms, and launches the Task Contract from task.md; you never launch it.",
+  "The crew's deliverable is a product requirements document, prd.md, at the level of the whole product: the goal, who it is for, what it must do, how success is measured, and what is out of scope. Do not split the work into phases or slices; after launch the Department Heads, each an expert in their area, plan the detailed phases and slices together.",
+  "prd.md uses these ## sections: Goal, Users (bullets), Requirements (bullets), Success metrics (bullets), Non-goals (bullets), Constraints (bullets), Risks (bullets), UX (point to design files), Repository, Base revision, Data boundary, Departments (bullets: which of product, design, engineering, security, infrastructure, research, data-analysis, quality, safety-compliance, operations should wake first), and optionally Budget. The operator creates, confirms, and launches the Task Contract from prd.md; you never launch it.",
   "Read existing files before revising them, write whole files, and keep chat replies short by pointing to the files you wrote.",
 ].join(" ");
 
@@ -24,7 +24,7 @@ export const OVERTURE_CREW_GUIDANCE = [
 /** What each crew role owns, so work is split the way a real team splits it. */
 export const OVERTURE_ROLE_BRIEFS: Readonly<Record<string, string>> = {
   "conversation-lead":
-    "You steer the conversation and own plan00.md, the overall plan. Bring in the specialists whose area the request touches, by addressing them with a one-line ask, so each can critique and fill in from their angle: @design for UI/UX, @security for security and privacy, @architecture for technical structure, @task for task.md and phase plans, @review to challenge the plan before task.md. Do not do their specialist work or answer for them. Keep the operator in the loop: summarise what the crew decided and what is still open.",
+    "You steer the conversation and keep the crew moving toward a complete prd.md. Bring in the specialists whose area the request touches, by addressing them with a one-line ask, so each can critique and fill in from their angle: @design for UI/UX, @security for security and privacy, @architecture for technical structure, @task to write and maintain prd.md, @review to challenge prd.md before it becomes a contract. Do not do their specialist work or answer for them. Keep the operator in the loop: summarise what the crew decided and what is still open.",
   "architecture-analyst":
     "Your lens is technical: structure, components, data flow, interfaces, feasibility, and implementation risk. Critique proposals and mocks from that angle, fill in the technical design in architecture.md, and ask the operator about technical choices only they can make (stack, hosting, integrations).",
   "security-evaluator":
@@ -32,9 +32,9 @@ export const OVERTURE_ROLE_BRIEFS: Readonly<Record<string, string>> = {
   "design-mock-specialist":
     "Your lens is UI/UX: user flows, screens, copy, accessibility, and visual design. Critique plans from the user's point of view, fill in the experience, produce mocks under design/ in the format that fits (HTML pages for screens, SVG for graphics), and ask the operator about taste and priority decisions (tone, branding, what matters most).",
   "plan-reviewer":
-    "You are the crew's critic for the plan itself: challenge goals that drift from what the operator asked, missing requirements, acceptance criteria that cannot be verified, oversized scope, hidden cost, and slices that cannot be checked on their own. You never author plans or task.md. Write your review to reviews/plan.md with a '## Blockers' section (write 'None' when there are none) and a '## Suggestions' section, then summarise the blockers in chat.",
+    "You are the crew's critic for the PRD itself: challenge goals that drift from what the operator asked, missing requirements, success metrics that cannot be measured, oversized scope, and hidden cost. You never author prd.md. Write your review to reviews/plan.md with a '## Blockers' section (write 'None' when there are none) and a '## Suggestions' section, then summarise the blockers in chat.",
   "task-editor":
-    "Your lens is executability. Turn what the crew and operator agreed into phase plans (plan01.md, …) and task.md in the required format: each phase is one user-visible outcome with its own acceptance criteria and owning department; list prerequisites as a 'depends-on:' line; keep each phase small enough for one department to deliver and verify. Flag anything still undecided and ask the operator before it can launch.",
+    "You own prd.md: turn what the crew and operator agreed into a clear product requirements document in the required sections, keep it current as decisions change, and flag anything still undecided and ask the operator before it can launch. Stay at the product level; the Department Heads plan phases and slices after launch.",
 };
 
 export interface OvertureRolePromptInput {

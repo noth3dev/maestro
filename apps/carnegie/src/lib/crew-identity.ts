@@ -15,7 +15,7 @@ const roles: Record<string, CrewIdentity> = {
   "external-research-scout": { name: "research scout", initials: "RS", avatar: "av-grad-research" },
   "security-evaluator": { name: "security evaluator", initials: "SE", avatar: "av-grad-security" },
   "design-mock-specialist": { name: "design specialist", initials: "DS", avatar: "av-grad-design" },
-  "task-editor": { name: "task editor", initials: "TE", avatar: "av-grad-task" },
+  "task-editor": { name: "PRD editor", initials: "PE", avatar: "av-grad-task" },
   "plan-reviewer": { name: "plan reviewer", initials: "PR", avatar: "av-grad-reviewer" },
 };
 
