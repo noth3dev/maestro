@@ -179,6 +179,9 @@ async function assertInternalAuthor(client: Queryable, channel: ChannelRow, auth
         LIMIT 1`,
       [channel.goal_id, author.id, channel.scope_kind, channel.scope_id],
     );
+  } else if (author.kind === "role" && author.id === "conversation-lead") {
+    // The Overture conversation lead (who wrote the PRD) chairs the Heads' planning meeting, and only there.
+    result = { rowCount: channel.scope_kind === "organization" && channel.scope_id === "head-council" ? 1 : 0 };
   } else {
     result = await client.query(
       `SELECT 1

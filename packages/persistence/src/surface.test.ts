@@ -296,6 +296,7 @@ describe("persistence surface", () => {
         "listMetronomeFindings",
         "listMissionBundlesForPlan",
         "listOrganizationalKnowledge",
+        "listOvertureClarifications",
         "listPendingAuthorityApprovals",
         "listPendingCapabilityEffects",
         "listPermanentOrganization",

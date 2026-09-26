@@ -108,6 +108,10 @@ describeDatabase("channel persistence", () => {
     const roleMessage = await postChannelMessage(pool, roleRequest);
     await expect(postChannelMessage(pool, roleRequest)).resolves.toEqual(roleMessage);
     await expect(postChannelMessage(pool, { operatorId, projectId, goalId, selector: { kind: "organization", channelId: "general" }, content: "wrong scope", messageId: randomUUID(), author: { kind: "role", id: "encore-metronome" }, authorProof: { issuer: "channel-runtime", author: { kind: "role", id: "encore-metronome" } } })).rejects.toThrow(/scope/);
+    // The Overture conversation lead chairs #head-council and speaks nowhere else.
+    const lead = { kind: "role" as const, id: "conversation-lead" };
+    await postChannelMessage(pool, { operatorId, projectId, goalId, selector: { kind: "organization", channelId: "head-council" }, content: "Opening the meeting", messageId: randomUUID(), author: lead, authorProof: { issuer: "channel-runtime", author: lead } });
+    await expect(postChannelMessage(pool, { operatorId, projectId, goalId, selector: { kind: "organization", channelId: "general" }, content: "wrong scope", messageId: randomUUID(), author: lead, authorProof: { issuer: "channel-runtime", author: lead } })).rejects.toThrow(/scope/);
     for (const selector of [
       { kind: "organization" as const, channelId: "general" },
       { kind: "organization" as const, channelId: "head-council" },

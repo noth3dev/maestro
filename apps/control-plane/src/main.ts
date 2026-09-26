@@ -52,7 +52,8 @@ import { composeProviderCredentials, composeSettingsService } from "./compositio
 import { composeRouterCatalogService } from "./composition/router-catalog.js";
 import { createPostgresOvertureService } from "./overture-service.js";
 import { createGatewayHeadAsk, createHeadBriefRuntime, createKernelHeadAsk, headAskWithFallback, readGoalLaunchModel } from "./head-brief-runtime.js";
-import { createHeadBriefScheduler, listCouncilsAwaitingBriefs } from "./head-brief-scheduler.js";
+import { createHeadBriefScheduler, listCouncilsAwaitingBriefs, listCouncilsForRun } from "./head-brief-scheduler.js";
+import { createHeadCouncilChannel, createHeadMeetingRuntime, readLaunchRun } from "./head-meeting-runtime.js";
 import { inspectIpPythonProcessOutcome } from "./composition/ipython.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
@@ -135,7 +136,13 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
 
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
+  // Bound below; a clarification answered during the Heads' meeting resumes it.
+  const headPlanning: { scheduler?: ReturnType<typeof createHeadBriefScheduler> } = {};
   const overtureService = createPostgresOvertureService({
+    onClarificationAnswered: (runId) =>
+      void listCouncilsForRun(pool, runId)
+        .then((councils) => councils.forEach((council) => headPlanning.scheduler?.schedule(council)))
+        .catch(() => undefined),
     pool,
     ...(modelGateway === undefined ? {} : { gateway: modelGateway }),
     gatewayOperatorId: config.modelGatewayOperatorId,
@@ -287,14 +294,16 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       ? createMetronomeLoop({ pool, withGoalLease, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
       : undefined;
   const kernelHeadAsk = createKernelHeadAsk(executionKernel);
-  const headBriefScheduler = createHeadBriefScheduler({
-    runtime: createHeadBriefRuntime({
-      pool,
-      withGoalLease,
-      ask:
-        modelGateway === undefined
-          ? kernelHeadAsk
-          : headAskWithFallback(
+  const headCouncil = createHeadCouncilChannel(pool);
+  const readPrd = async (goalId: string) => {
+    const run = await readLaunchRun(pool, goalId).catch(() => undefined);
+    if (run === undefined) return undefined;
+    return (await sessionWorkspace.read(run.projectId, run.conversationId, "prd.md").catch(() => undefined))?.content;
+  };
+  const headAsk =
+    modelGateway === undefined
+      ? kernelHeadAsk
+      : headAskWithFallback(
               kernelHeadAsk,
               createGatewayHeadAsk({
                 gateway: modelGateway,
@@ -303,25 +312,33 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
                 dataPolicyHash: createHash("sha256").update("maestro-head-brief-data-policy:v1").digest("hex"),
                 readGoalModel: (goalId) => readGoalLaunchModel(pool, goalId),
               }),
-            ),
-      post: async ({ goalId, headRoleId, content }) => {
-        const run = await pool.query<{ project_id: string; actor_id: string | null }>("SELECT project_id, actor_id FROM goal_orchestration_runs WHERE goal_id = $1", [goalId]);
-        const owner = run.rows[0];
-        if (owner?.actor_id == null) return;
-        const author = { kind: "head" as const, id: headRoleId };
-        await postChannelMessage(pool, {
-          operatorId: owner.actor_id,
-          projectId: owner.project_id,
-          goalId,
-          selector: { kind: "organization", channelId: "head-council" },
-          content,
-          author,
-          authorProof: { issuer: "channel-runtime", author },
-        });
-      },
-    }),
-    onError: (error) => console.error("Head brief stage failed", error),
+            );
+  const headBriefs = createHeadBriefRuntime({
+    pool,
+    withGoalLease,
+    ask: headAsk,
+    readPrd,
+    post: ({ goalId, headRoleId, content }) => headCouncil.post(goalId, { kind: "head", id: headRoleId }, content),
   });
+  const headMeeting = createHeadMeetingRuntime({
+    pool,
+    askHead: headAsk,
+    askLead: ({ systemPrompt, prompt, ...run }) => overtureService.askLead!({ ...run, systemPrompt, prompt }),
+    channel: headCouncil,
+    readPrd,
+  });
+  // Planning runs in the background: sealed briefs, then (once revealed) the Heads' meeting.
+  const headBriefScheduler = createHeadBriefScheduler({
+    runtime: {
+      async run(input) {
+        const briefs = await headBriefs.run(input);
+        if (briefs.revealed) await headMeeting.run(input);
+        return briefs;
+      },
+    },
+    onError: (error) => console.error("Head planning stage failed", error),
+  });
+  headPlanning.scheduler = headBriefScheduler;
   const startGoalOrchestrationController = createStartGoalOrchestrationController({
     pool,
     goalService,

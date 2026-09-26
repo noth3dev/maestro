@@ -22,7 +22,7 @@ import type { OperatorContext } from "@maestro/persistence";
 import type { SessionWorkspace } from "./session-workspace.js";
 import { PRD_PATH, PrdMarkdownError, taskContractFromPrd } from "./prd-md.js";
 import { PLAN_REVIEW_PATH, evaluateReviewGate, type ReviewGate } from "./review-gate.js";
-import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner, type OvertureToolScope } from "./overture-role-turn.js";
+import { createOvertureRoleTurnRunner, type OvertureLeadAsk, OvertureProviderUnavailableError, type OvertureRoleTurnRunner, type OvertureToolScope } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
   assertProjectRole,
@@ -88,6 +88,8 @@ export interface OvertureService {
     afterCursor: string,
     operator: OperatorContext,
   ): Promise<readonly OvertureEvent[]>;
+  /** The run's conversation lead, with its crew history, answering another brief (internal; no role check). */
+  askLead?(input: OvertureLeadAsk): Promise<string>;
 }
 
 export interface OvertureServiceOptions {
@@ -101,6 +103,8 @@ export interface OvertureServiceOptions {
   readonly sessionWorkspace?: SessionWorkspace;
   /** When set, Overture roles get the session `ipython` tool for their conversation's workspace. */
   readonly sessionTools?: (scope: OvertureToolScope) => ToolRegistry;
+  /** Called after the operator answers a clarification (e.g. to resume a paused Heads' meeting). */
+  readonly onClarificationAnswered?: (runId: string) => void;
 }
 
 export function createPostgresOvertureService(options: Pool | OvertureServiceOptions): OvertureService {
@@ -256,7 +260,12 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
           });
         }
       }
+      if (!("query" in options)) options.onClarificationAnswered?.(input.runId);
       return clarification;
+    },
+    async askLead(input) {
+      if (roleTurnRunner?.askLead === undefined) throw new OvertureProviderUnavailableError("The Overture lead is unavailable");
+      return roleTurnRunner.askLead(input);
     },
     async createTaskContract(input, operator) {
       await assertRole(operator, input.projectId);

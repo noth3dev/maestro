@@ -460,6 +460,15 @@ export async function openOvertureClarification(
   }
 }
 
+/** A run's clarifications, oldest first. */
+export async function listOvertureClarifications(pool: Pick<Pool, "query">, runId: string): Promise<readonly OvertureClarification[]> {
+  const rows = await pool.query<ClarificationRow>(
+    "SELECT clarification_id, run_id, project_id, question, answer, answer_command_id, status, command_id, created_at FROM overture_clarifications WHERE run_id = $1 ORDER BY created_at, clarification_id",
+    [runId],
+  );
+  return rows.rows.map(toClarification);
+}
+
 export async function answerOvertureClarification(
   pool: Pool,
   args: {

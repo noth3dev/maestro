@@ -22,18 +22,21 @@ export class HeadBriefParseError extends Error {
   }
 }
 
-/** Parse the Head's JSON reply (tolerating prose or a code fence around it). */
-export function parseHeadBriefDecision(text: string): HeadBriefDecision {
+/** The JSON object in a model reply, tolerating prose or a code fence around it. */
+export function parseJsonReply(text: string): unknown {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) throw new HeadBriefParseError("Head reply has no JSON object");
-  let value: unknown;
   try {
-    value = JSON.parse(text.slice(start, end + 1));
+    return JSON.parse(text.slice(start, end + 1));
   } catch {
     throw new HeadBriefParseError("Head reply is not valid JSON");
   }
-  const reply = value as { needed?: unknown; reason?: unknown; brief?: unknown };
+}
+
+/** Parse the Head's brief decision. */
+export function parseHeadBriefDecision(text: string): HeadBriefDecision {
+  const reply = parseJsonReply(text) as { needed?: unknown; reason?: unknown; brief?: unknown };
   if (reply.needed === false) {
     if (typeof reply.reason !== "string" || reply.reason.trim() === "") throw new HeadBriefParseError("A Head that is not needed must give a reason");
     return { needed: false, reason: reply.reason.trim() };

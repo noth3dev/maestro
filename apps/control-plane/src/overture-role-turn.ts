@@ -45,6 +45,21 @@ export interface OvertureRoleTurnRunner {
    * crew triage judges useful right now (at most two unaddressed ones).
    */
   runCrew?(input: OvertureRoleTurnInput & { readonly assignedRoles: readonly OvertureRoleId[] }): Promise<readonly OvertureMessage[]>;
+  /**
+   * The lead answers with the run's whole crew history but another brief
+   * (e.g. chairing the Heads' planning meeting). Nothing is posted to the run.
+   */
+  askLead?(input: OvertureLeadAsk): Promise<string>;
+}
+
+export interface OvertureLeadAsk {
+  readonly runId: string;
+  readonly projectId: string;
+  readonly conversationId: string;
+  readonly operatorId: string;
+  readonly systemPrompt: string;
+  readonly prompt: string;
+  readonly outputTokenBudget?: number;
 }
 
 const LEAD: OvertureRoleId = "conversation-lead";
@@ -158,13 +173,13 @@ export function createOvertureRoleTurnRunner(options: {
     input: OvertureRoleTurnInput,
     roleId: OvertureRoleId,
     prompt: string,
-    override?: { systemPrompt: string; tools: ToolRegistry },
+    override?: { systemPrompt: string; tools: ToolRegistry; outputTokenBudget?: number },
   ) => {
     const model = await options.readModel(input.projectId, input.conversationId);
     await options.bindRoleModel({ runId: input.runId, projectId: input.projectId, roleId, modelRef: `${model.provider}/${model.id}` });
     const admitted = await admit(model);
     const basePolicy = createOvertureRoleRuntimePolicy({ roleId, projectId: input.projectId, runId: input.runId, conversationId: input.conversationId });
-    const policy = override === undefined ? basePolicy : { ...basePolicy, systemPrompt: override.systemPrompt, allowedTools: [] as string[], outputTokenBudget: 512 };
+    const policy = override === undefined ? basePolicy : { ...basePolicy, systemPrompt: override.systemPrompt, allowedTools: [] as string[], outputTokenBudget: override.outputTokenBudget ?? 512 };
     const roleRuntime = createOvertureRoleRuntime({
       gateway: options.gateway,
       binding: admitted.binding,
@@ -229,6 +244,11 @@ export function createOvertureRoleTurnRunner(options: {
 
   return {
     run: (input) => reply(input, LEAD, input.content),
+    async askLead(ask) {
+      const input = { runId: ask.runId, projectId: ask.projectId, conversationId: ask.conversationId, operatorId: ask.operatorId, turnId: "", operatorMessageId: "", content: ask.prompt };
+      const result = await answer(input, LEAD, ask.prompt, { systemPrompt: ask.systemPrompt, tools: new ToolRegistry(), outputTokenBudget: ask.outputTokenBudget ?? 4_000 });
+      return result.text;
+    },
     async runCrew(input) {
       const messages: OvertureMessage[] = [];
       const lead = await reply(input, LEAD, input.content);

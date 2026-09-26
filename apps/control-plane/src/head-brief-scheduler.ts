@@ -46,14 +46,28 @@ export function createHeadBriefScheduler(options: {
   };
 }
 
-/** Councils still collecting briefs for a running Goal start (resumed after a restart). */
+/** Councils still planning (collecting briefs, or revealed with no plan yet); resumed after a restart. */
 export async function listCouncilsAwaitingBriefs(pool: Pool): Promise<readonly { goalId: string; councilId: string }[]> {
   const rows = await pool.query<{ goal_id: string; council_id: string }>(
     `SELECT r.goal_id, c.council_id
        FROM goal_orchestration_runs r
        JOIN goals g ON g.goal_id = r.goal_id
        JOIN head_councils c ON c.goal_id = r.goal_id AND c.contract_id = g.task_contract_id
-      WHERE r.stage = 'briefs_pending' AND r.state = 'running' AND c.state = 'collecting'`,
+      WHERE r.stage = 'briefs_pending' AND r.state = 'running'
+        AND (c.state = 'collecting' OR (c.state = 'revealed' AND NOT EXISTS (SELECT 1 FROM goal_plans p WHERE p.council_id = c.council_id)))`,
+  );
+  return rows.rows.map((row) => ({ goalId: row.goal_id, councilId: row.council_id }));
+}
+
+/** The planning Council of the Goal an Overture run launched (to resume its meeting). */
+export async function listCouncilsForRun(pool: Pool, runId: string): Promise<readonly { goalId: string; councilId: string }[]> {
+  const rows = await pool.query<{ goal_id: string; council_id: string }>(
+    `SELECT g.goal_id, c.council_id
+       FROM overture_runs r
+       JOIN goals g ON g.task_contract_id = r.task_contract_id
+       JOIN head_councils c ON c.goal_id = g.goal_id AND c.contract_id = g.task_contract_id
+      WHERE r.run_id = $1 AND c.state = 'revealed'`,
+    [runId],
   );
   return rows.rows.map((row) => ({ goalId: row.goal_id, councilId: row.council_id }));
 }
