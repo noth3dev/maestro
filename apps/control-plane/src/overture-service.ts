@@ -17,6 +17,8 @@ import type {
   ReviseOverturePlanInput,
 } from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
+import type { SessionWorkspace } from "./session-workspace.js";
+import { overtureWorkspaceToolRegistry } from "./overture-workspace-tools.js";
 import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
@@ -74,6 +76,8 @@ export interface OvertureServiceOptions {
   readonly accountRefs?: Readonly<Record<string, string>>;
   readonly dataPolicyHash?: string;
   readonly tools?: ToolRegistry;
+  /** When set, Overture roles read and write this conversation's session workspace. */
+  readonly sessionWorkspace?: SessionWorkspace;
 }
 
 export function createPostgresOvertureService(options: Pool | OvertureServiceOptions): OvertureService {
@@ -86,7 +90,10 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
           gatewayOperatorId: options.gatewayOperatorId ?? "local-operator",
           accountRefs: options.accountRefs ?? {},
           dataPolicyHash: options.dataPolicyHash ?? "maestro-overture-v1",
-          tools: options.tools ?? new ToolRegistry(),
+          tools:
+            options.sessionWorkspace === undefined
+              ? (options.tools ?? new ToolRegistry())
+              : (scope) => overtureWorkspaceToolRegistry({ workspace: options.sessionWorkspace!, ...scope }),
           readModel: async (projectId, conversationId) => {
             const result = await pool.query<{ model_provider: string; model_id: string }>(
               "SELECT model_provider, model_id FROM conversations WHERE conversation_id = $1 AND project_id = $2",

@@ -188,6 +188,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       accountRefs: config.modelAccountRefs,
       dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
       tools,
+      sessionWorkspace,
     }),
     sessionWorkspace,
     settingsService,

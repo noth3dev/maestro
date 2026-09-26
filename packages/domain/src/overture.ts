@@ -63,13 +63,23 @@ export class InvalidOvertureRoleError extends Error {
   }
 }
 
+/** Tools that read and write the conversation's own session workspace (never the project repository). */
+export const OVERTURE_WORKSPACE_TOOLS = ["list-workspace-files", "read-workspace-file", "write-workspace-file"] as const;
+
+const WORKSPACE_GUIDANCE = [
+  "The session workspace is a private Git-backed folder for this conversation, shown to the operator as files in a side panel; it is not the project repository.",
+  "When the operator asks for planning, write the plan as Markdown files with write-workspace-file: plan00.md for the overall plan, then plan01.md, plan02.md for phases, and other .md files for research, decisions, or the task definition.",
+  "Put drawings, diagrams, or UI mocks in .canvas files containing self-contained SVG markup.",
+  "Read existing files before revising them, write whole files, and keep chat replies short by pointing to the files you wrote.",
+].join(" ");
+
 export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Object.freeze([
   {
     id: "conversation-lead",
     displayName: "Conversation Lead",
     taskClass: "conversation",
     modelCapabilityAxes: ["reasoning", "instruction-fidelity", "knowledge"],
-    allowedTools: ["read-conversation", "ask-operator"],
+    allowedTools: ["read-conversation", "ask-operator", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
   {
@@ -115,7 +125,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
 ]);
 
 const ROLE_OUTPUT_BUDGETS: Readonly<Record<OvertureRoleId, number>> = Object.freeze({
-  "conversation-lead": 2_048,
+  "conversation-lead": 8_192,
   "architecture-analyst": 4_096,
   "external-research-scout": 3_072,
   "security-evaluator": 3_072,
@@ -137,6 +147,7 @@ export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeCont
       "Work only from the durable conversation and the explicitly granted project context.",
       `You may use: ${definition.allowedTools.join(", ") || "no tools"}.`,
       `You must never: ${definition.forbiddenActions.join(", ")}.`,
+      ...(definition.allowedTools.includes("write-workspace-file") ? [WORKSPACE_GUIDANCE] : []),
       "Return bounded findings, decisions, or clarification questions; never return private reasoning or raw tool arguments.",
     ].join(" "),
     modelCapabilityAxes: [...definition.modelCapabilityAxes],

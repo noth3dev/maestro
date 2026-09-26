@@ -30,7 +30,8 @@ export function createOvertureRoleTurnRunner(options: {
   readonly gatewayOperatorId: string;
   readonly accountRefs: Readonly<Record<string, string>>;
   readonly dataPolicyHash: string;
-  readonly tools: ToolRegistry;
+  /** Tools for one turn; a factory receives the turn's conversation scope. */
+  readonly tools: ToolRegistry | ((scope: { projectId: string; conversationId: string }) => ToolRegistry);
   readonly readModel: (projectId: string, conversationId: string) => Promise<ModelIdentity>;
   readonly readMessages: (runId: string, projectId: string, conversationId: string) => Promise<readonly OvertureMessage[]>;
   readonly bindRoleModel: (input: { runId: string; projectId: string; roleId: "conversation-lead"; modelRef: string }) => Promise<void>;
@@ -78,7 +79,7 @@ export function createOvertureRoleTurnRunner(options: {
         binding,
         policy,
         modelRef,
-        tools: options.tools,
+        tools: typeof options.tools === "function" ? options.tools({ projectId: input.projectId, conversationId: input.conversationId }) : options.tools,
         closeGateway: false,
         initialMessages,
       });
