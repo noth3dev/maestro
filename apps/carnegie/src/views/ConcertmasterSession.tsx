@@ -7,11 +7,11 @@ import { useSessions } from "../sessions.js";
 import { MarkdownView } from "../components/MarkdownView.js";
 import { FilePanel } from "../components/FilePanel.js";
 import { TaskContractActions } from "../components/TaskContractActions.js";
+import { crewIdentity, messageTime } from "../lib/crew-identity.js";
 import { ConversationTurnError, submitHomeBrief } from "../lib/task-contract-authoring.js";
 import { cancelHomeTurn, loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
 import {
   buildSessionTimeline,
-  overtureRoleLabel,
   projectOpenOvertureClarification,
   projectToolActivity,
   type OvertureClarificationView,
@@ -302,30 +302,41 @@ export function ConcertmasterSession({
           </button>
         </header>
         <div className="cm-log" role="log" aria-live="polite" aria-label="Session messages">
-          {timeline.map((item) =>
-            item.author === "activity" ? (
-              <div key={item.id} className={`cm-activity${item.content.includes("— failed") ? " is-error" : ""}`}>
-                <Icon name="wrench" aria-hidden="true" />
-                <span className="cm-activity-role">{overtureRoleLabel(item.role)}</span>
-                <span className="cm-activity-text">{item.content}</span>
-              </div>
-            ) : (
-            <article key={item.id} className={`cm-msg cm-${item.author}${item.pending ? " is-pending" : ""}`}>
-              <div className="cm-msg-author">
-                {item.author === "operator" ? "you" : item.author === "overture" ? `overture · ${overtureRoleLabel(item.role)}` : item.author}
-              </div>
-              <div className="cm-msg-body">
-                {item.author === "operator" ? <p className="cm-plain">{item.content}</p> : <MarkdownView source={item.content} />}
-              </div>
-            </article>
-            ),
-          )}
+          {timeline.map((item) => {
+            if (item.author === "activity")
+              return (
+                <div key={item.id} className={`cm-activity${item.content.includes("— failed") ? " is-error" : ""}`}>
+                  <Icon name="wrench" aria-hidden="true" />
+                  <span className="cm-activity-role">{crewIdentity("overture", item.role).name}</span>
+                  <span className="cm-activity-text">{item.content}</span>
+                </div>
+              );
+            const speaker = crewIdentity(item.author, item.role);
+            return (
+              <article key={item.id} className={`msg cm-msg cm-${item.author}${item.pending ? " is-pending" : ""}`}>
+                <div className={`avatar cm-avatar ${speaker.avatar}`} aria-hidden="true">{speaker.initials}</div>
+                <div className="msg-body">
+                  <div className="msg-head">
+                    <span className="msg-name">{speaker.name}</span>
+                    {item.author === "overture" && <span className="cm-msg-tag">overture</span>}
+                    <span className="msg-time">{messageTime(item.createdAt)}</span>
+                  </div>
+                  <div className="cm-msg-body">
+                    {item.author === "operator" ? <p className="cm-plain">{item.content}</p> : <MarkdownView source={item.content} />}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
           {clarification !== undefined && (
-            <article className="cm-msg cm-overture cm-question">
-              <div className="cm-msg-author">overture · question</div>
-              <div className="cm-msg-body">
-                <p className="cm-plain">{clarification.question}</p>
-                <p className="form-hint">Your next message answers this question.</p>
+            <article className="msg cm-msg cm-overture cm-question">
+              <div className={`avatar cm-avatar ${crewIdentity("overture", "conversation-lead").avatar}`} aria-hidden="true">?</div>
+              <div className="msg-body">
+                <div className="msg-head"><span className="msg-name">question for you</span></div>
+                <div className="cm-msg-body">
+                  <p className="cm-plain">{clarification.question}</p>
+                  <p className="form-hint">Your next message answers this question.</p>
+                </div>
               </div>
             </article>
           )}
