@@ -12,6 +12,7 @@ import {
   OpenOvertureClarificationBodySchema,
   AnswerOvertureClarificationBodySchema,
   CreateOvertureTaskContractBodySchema,
+  CreateOvertureWorkspaceTaskContractBodySchema,
   TaskContractSchema,
   OvertureRunQuerySchema,
   OvertureRunSchema,
@@ -36,6 +37,7 @@ export function createOvertureMethods(
   | "openOvertureClarification"
   | "answerOvertureClarification"
   | "createOvertureTaskContract"
+  | "createOvertureWorkspaceTaskContract"
   | "listOvertureEvents"
   | "streamOvertureEvents"
 > {
@@ -155,6 +157,22 @@ export function createOvertureMethods(
           body: JSON.stringify(AnswerOvertureClarificationBodySchema.parse(input)),
         },
         OvertureClarificationSchema,
+      );
+    },
+    createOvertureWorkspaceTaskContract(runId, input, options) {
+      const parsedRunId = UuidSchema.parse(runId);
+      return request(
+        `v1/overture/runs/${encodeURIComponent(parsedRunId)}/workspace-task-contract`,
+        {
+          method: "POST",
+          headers: {
+            ...headers,
+            "content-type": "application/json",
+            "idempotency-key": UuidSchema.parse(options?.idempotencyKey ?? cryptoRandomUuid()),
+          },
+          body: JSON.stringify(CreateOvertureWorkspaceTaskContractBodySchema.parse(input)),
+        },
+        TaskContractSchema,
       );
     },
     createOvertureTaskContract(runId, input, options) {

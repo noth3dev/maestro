@@ -6,6 +6,7 @@ import { useGoals } from "../goals.js";
 import { useSessions } from "../sessions.js";
 import { MarkdownView } from "../components/MarkdownView.js";
 import { FilePanel } from "../components/FilePanel.js";
+import { TaskContractActions } from "../components/TaskContractActions.js";
 import { ConversationTurnError, submitHomeBrief } from "../lib/task-contract-authoring.js";
 import { cancelHomeTurn, loadConversation, type ConversationMessage } from "../lib/conversation-data.js";
 import {
@@ -361,6 +362,16 @@ export function ConcertmasterSession({
           {...(workspaceRevision === undefined ? {} : { refreshKey: workspaceRevision })}
           emptyHint="Files the Overture crew writes for this session appear here."
           onClose={() => setPanelOpen(false)}
+          renderFileActions={(path) =>
+            path === "task.md" && projectId !== undefined ? (
+              <TaskContractActions
+                projectId={projectId}
+                run={overtureRun}
+                revision={workspaceRevision}
+                onChanged={() => { if (loadedId !== undefined) void refreshOverture(loadedId).catch(() => undefined); }}
+              />
+            ) : null
+          }
         />
       )}
     </div>

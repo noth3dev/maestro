@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import { ToolRegistry, type ModelGatewayPort } from "@maestro/agent-runtime";
 import type {
@@ -12,16 +13,20 @@ import type {
   OvertureRun,
   TaskContract,
   CreateOvertureTaskContractInput,
+  CreateOvertureWorkspaceTaskContractInput,
   OpenOvertureClarificationInput,
   AnswerOvertureClarificationInput,
   ReviseOverturePlanInput,
 } from "@maestro/contracts";
 import type { OperatorContext } from "@maestro/persistence";
+import type { SessionWorkspace } from "./session-workspace.js";
+import { TaskMarkdownError, taskContractFromMarkdown } from "./task-md.js";
 import { createOvertureRoleTurnRunner, OvertureProviderUnavailableError, type OvertureRoleTurnRunner } from "./overture-role-turn.js";
 import {
   appendOvertureMessage,
   assertProjectRole,
   attachOvertureTaskContract,
+  attachOvertureWorkspaceTaskContract,
   createDurableTaskContract,
   reviseOverturePlan,
   openOvertureClarification,
@@ -35,8 +40,11 @@ import {
   readOvertureMessages,
   readOverturePlanManifest,
   readOvertureRun,
+  OvertureConflictError,
   OvertureRunNotFoundError,
 } from "@maestro/persistence";
+
+const TASK_PATH = "task.md";
 
 export interface OvertureService {
   createRun(input: CreateOvertureRunInput, operator: OperatorContext): Promise<OvertureRun>;
@@ -45,6 +53,8 @@ export interface OvertureService {
   readPlanManifest(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OverturePlanManifest>;
   revisePlan(input: ReviseOverturePlanInput, operator: OperatorContext): Promise<OverturePlanDocument>;
   createTaskContract(input: CreateOvertureTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
+  /** Draft the awaiting Task Contract from task.md at the reviewed workspace revision. */
+  createWorkspaceTaskContract?(input: CreateOvertureWorkspaceTaskContractInput, operator: OperatorContext): Promise<TaskContract>;
   openClarification(input: OpenOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   answerClarification(input: AnswerOvertureClarificationInput, operator: OperatorContext): Promise<OvertureClarification>;
   listMessages(
@@ -74,6 +84,8 @@ export interface OvertureServiceOptions {
   readonly accountRefs?: Readonly<Record<string, string>>;
   readonly dataPolicyHash?: string;
   readonly tools?: ToolRegistry;
+  /** The per-conversation Git workspaces Overture writes plan files into. */
+  readonly sessionWorkspace?: SessionWorkspace;
   /** When set, Overture roles get the session `ipython` tool for their conversation's workspace. */
   readonly sessionTools?: (scope: { projectId: string; conversationId: string }) => ToolRegistry;
 }
@@ -211,6 +223,43 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
       const run = await readOvertureRun(pool, runId, projectId, conversationId);
       if (run === undefined) throw new OvertureRunNotFoundError("Overture run not found");
       return run;
+    },
+    async createWorkspaceTaskContract(input, operator) {
+      await assertRole(operator, input.projectId);
+      const workspace = "query" in options ? undefined : options.sessionWorkspace;
+      if (workspace === undefined) throw new OvertureConflictError("The session workspace is unavailable");
+      const run = await readOvertureRun(pool, input.runId, input.projectId, input.conversationId);
+      if (run === undefined) throw new OvertureRunNotFoundError("Overture run not found");
+      const assertRevision = async () => {
+        const listing = await workspace.list(input.projectId, input.conversationId);
+        if (listing.revision !== input.revision) throw new OvertureConflictError("The workspace changed after review; reload the files and try again");
+        return listing;
+      };
+      const listing = await assertRevision();
+      if (!listing.files.some((file) => file.path === TASK_PATH)) throw new TaskMarkdownError("Write task.md in the workspace first");
+      const files = await Promise.all(listing.files.map((file) => workspace.read(input.projectId, input.conversationId, file.path)));
+      await assertRevision();
+      const hash = (content: string) => createHash("sha256").update(content, "utf8").digest("hex");
+      const evidence = files.map((file) => `workspace@${input.revision}:${file.path}#${hash(file.content)}`);
+      const task = files.find((file) => file.path === TASK_PATH)!;
+      const substance = taskContractFromMarkdown({
+        markdown: task.content,
+        projectId: input.projectId,
+        evidence,
+        documents: files.filter((file) => file.path.endsWith(".md")).map((file) => file.path),
+      });
+      const contract = await createDurableTaskContract(pool, input.commandId, substance);
+      await attachOvertureWorkspaceTaskContract(pool, {
+        runId: input.runId,
+        projectId: input.projectId,
+        conversationId: input.conversationId,
+        contractId: contract.contractId,
+        workspaceRevision: input.revision,
+        taskPath: TASK_PATH,
+        contentHash: hash(task.content),
+        commandId: input.commandId,
+      });
+      return contract;
     },
     async listRuns(projectId, conversationId, operator) {
       await assertRole(operator, projectId);

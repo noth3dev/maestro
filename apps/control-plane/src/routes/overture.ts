@@ -13,6 +13,8 @@ import {
   AnswerOvertureClarificationInputSchema,
   CreateOvertureTaskContractBodySchema,
   CreateOvertureTaskContractInputSchema,
+  CreateOvertureWorkspaceTaskContractBodySchema,
+  CreateOvertureWorkspaceTaskContractInputSchema,
   OvertureEventQuerySchema,
   OvertureArtifactSchema,
   OvertureEventSchema,
@@ -134,6 +136,16 @@ export function registerOvertureRoutes(app: FastifyInstance, deps: OvertureRoute
     const body = parse(CreateOvertureTaskContractBodySchema, request.body);
     const input = CreateOvertureTaskContractInputSchema.parse({ ...body, runId, commandId });
     const result = await overture.createTaskContract(input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(201).send(TaskContractSchema.parse(result));
+  });
+
+  app.post("/v1/overture/runs/:runId/workspace-task-contract", async (request, reply) => {
+    const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
+    const commandId = requiredCommandId(request.headers["idempotency-key"]);
+    const body = parse(CreateOvertureWorkspaceTaskContractBodySchema, request.body);
+    const input = CreateOvertureWorkspaceTaskContractInputSchema.parse({ ...body, runId, commandId });
+    if (overture.createWorkspaceTaskContract === undefined) throw new DurableStoreUnavailableError();
+    const result = await overture.createWorkspaceTaskContract(input, requestOperator(request as { operator?: OperatorContext }));
     return reply.status(201).send(TaskContractSchema.parse(result));
   });
 

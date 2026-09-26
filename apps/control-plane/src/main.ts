@@ -202,6 +202,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
       tools,
       sessionTools: (scope) => sessionIpPython.tools({ ...scope, access: "write" }),
+      sessionWorkspace,
     }),
     sessionWorkspace,
     settingsService,

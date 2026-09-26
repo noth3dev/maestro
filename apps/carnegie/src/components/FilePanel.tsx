@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "../icons.js";
 import { MarkdownView } from "./MarkdownView.js";
 import { buildFileTree, panelFileKind, type FileTreeNode, type PanelFile } from "../lib/panel-files.js";
@@ -15,6 +15,7 @@ export function FilePanel({
   refreshKey,
   emptyHint,
   onClose,
+  renderFileActions,
 }: {
   title: string;
   /** Workspace-relative file paths; undefined while loading. */
@@ -24,6 +25,8 @@ export function FilePanel({
   refreshKey?: string;
   emptyHint: string;
   onClose: () => void;
+  /** Optional actions shown above a file, e.g. Task Contract controls for task.md. */
+  renderFileActions?: (path: string) => ReactNode;
 }) {
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [activePath, setActivePath] = useState<string | undefined>(undefined);
@@ -113,6 +116,7 @@ export function FilePanel({
           })}
         </div>
       )}
+      {activePath !== undefined && renderFileActions?.(activePath)}
       <div className="file-view" role="tabpanel" aria-label={activePath ?? "No file open"}>
         {active === undefined ? (
           activePath === undefined ? null : <p className="file-panel-hint">Loading…</p>

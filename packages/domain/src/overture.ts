@@ -71,6 +71,7 @@ const WORKSPACE_GUIDANCE = [
   "Use the ipython tool with its host helpers list_files(), read_file(path), and write_file(path, content); Python cannot open files or import modules directly.",
   "When the operator asks for planning, write the plan as Markdown files: plan00.md for the overall plan, then plan01.md, plan02.md for phases, and other .md files for research, decisions, or the task definition.",
   "Put drawings, diagrams, or UI mocks in .canvas files containing self-contained SVG markup.",
+  "When the plan is ready to execute, write task.md with these ## sections: Outcome, Success criteria (bullets), Repository, Base revision, Data boundary, Groups (bullets), Departments (bullets), and optionally Scope, Non-goals, Constraints, Edge cases, Budget. The operator creates, confirms, and launches the Task Contract from task.md; you never launch it.",
   "Read existing files before revising them, write whole files, and keep chat replies short by pointing to the files you wrote.",
 ].join(" ");
 

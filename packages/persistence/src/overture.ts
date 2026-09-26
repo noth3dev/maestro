@@ -748,15 +748,79 @@ export async function attachOvertureTaskContract(
   }
 }
 
+/**
+ * Bind an awaiting Task Contract to the exact session workspace commit it was
+ * drafted from. Replays with the same contract are no-ops.
+ */
+export async function attachOvertureWorkspaceTaskContract(
+  pool: Pool,
+  args: {
+    readonly runId: string;
+    readonly projectId: string;
+    readonly conversationId: string;
+    readonly contractId: string;
+    readonly workspaceRevision: string;
+    readonly taskPath: string;
+    readonly contentHash: string;
+    readonly commandId: string;
+  },
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const contract = await client.query<{ project_id: string }>(
+      "SELECT content->'project'->>'projectId' AS project_id FROM task_contracts WHERE contract_id = $1 FOR KEY SHARE",
+      [args.contractId],
+    );
+    if (contract.rowCount !== 1 || contract.rows[0]!.project_id !== args.projectId)
+      throw new OvertureConflictError("Overture Task Contract project does not match its Run");
+    const run = await client.query<{ conversation_id: string; task_contract_id: string | null; state: OvertureRun["state"] }>(
+      "SELECT conversation_id, task_contract_id, state FROM overture_runs WHERE run_id = $1 AND project_id = $2 FOR UPDATE",
+      [args.runId, args.projectId],
+    );
+    if (run.rowCount !== 1) throw new OvertureRunNotFoundError("Overture run not found");
+    const current = run.rows[0]!;
+    if (current.conversation_id !== args.conversationId)
+      throw new OvertureConflictError("Overture Task Contract conversation does not match its Run");
+    if (current.task_contract_id !== null) {
+      if (current.task_contract_id !== args.contractId) throw new OvertureConflictError("Overture Run already has a different Task Contract");
+      await client.query("COMMIT");
+      return;
+    }
+    if (current.state === "launched" || current.state === "cancelled")
+      throw new OvertureConflictError("Overture Run cannot attach a Task Contract in its current state");
+    const ref = { workspaceRevision: args.workspaceRevision, taskPath: args.taskPath, contentHash: args.contentHash };
+    await client.query(
+      "UPDATE overture_runs SET task_contract_id = $2, task_contract_ref = $3::jsonb, state = 'review', version = version + 1, updated_at = transaction_timestamp() WHERE run_id = $1 AND project_id = $4",
+      [args.runId, args.contractId, JSON.stringify(ref), args.projectId],
+    );
+    await appendEvent(client, {
+      runId: args.runId,
+      projectId: args.projectId,
+      commandId: args.commandId,
+      eventType: "task_contract_attached",
+      payload: { contractId: args.contractId, ...ref },
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function markOvertureRunLaunchedForTaskContractInTransaction(client: PoolClient, contractId: string, commandId: string = randomUUID(), expectedProjectId?: string): Promise<void> {
-  const run = await client.query<{ run_id: string; project_id: string; state: OvertureRun["state"]; attached_manifest_hash: string | null; plan_manifest_hash: string | null }>(
-    "SELECT run_id, project_id, state, task_contract_ref->>'manifestHash' AS attached_manifest_hash, plan_manifest_hash FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",
+  const run = await client.query<{ run_id: string; project_id: string; state: OvertureRun["state"]; attached_manifest_hash: string | null; plan_manifest_hash: string | null; workspace_revision: string | null }>(
+    "SELECT run_id, project_id, state, task_contract_ref->>'manifestHash' AS attached_manifest_hash, plan_manifest_hash, task_contract_ref->>'workspaceRevision' AS workspace_revision FROM overture_runs WHERE task_contract_id = $1 FOR UPDATE",
     [contractId],
   );
   if (run.rowCount === 0) return;
   const current = run.rows[0]!;
   if (expectedProjectId !== undefined && current.project_id !== expectedProjectId) throw new OvertureConflictError("Overture Run project does not match the Task Contract");
-  if (current.attached_manifest_hash === null || current.attached_manifest_hash.trim() !== current.plan_manifest_hash?.trim())
+  // A workspace-bound contract pins an immutable Git commit, so later
+  // workspace edits cannot change what was reviewed.
+  if (current.workspace_revision === null && (current.attached_manifest_hash === null || current.attached_manifest_hash.trim() !== current.plan_manifest_hash?.trim()))
     throw new OvertureConflictError("Overture plan manifest changed after Task Contract attachment");
   if (current.state === "launched") return;
   if (current.state !== "review") throw new OvertureConflictError("Only a reviewed Overture Run may be launched");

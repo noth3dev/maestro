@@ -20,9 +20,12 @@ const SafeReferenceSchema = z
 const RoleIdSchema = z.enum(OVERTURE_ROLE_IDS);
 const ActorSchema = z.union([z.literal("operator"), z.literal("concertmaster"), RoleIdSchema]);
 
-export const OvertureTaskContractRefSchema = z
-  .object({ planId: UuidSchema, version: CommandVersionSchema.min(1), manifestHash: HashSchema })
-  .strict();
+export const OvertureTaskContractRefSchema = z.union([
+  z.object({ planId: UuidSchema, version: CommandVersionSchema.min(1), manifestHash: HashSchema }).strict(),
+  z
+    .object({ workspaceRevision: z.string().regex(/^[0-9a-f]{40}$/), taskPath: z.string().min(1).max(256), contentHash: HashSchema })
+    .strict(),
+]);
 export type OvertureTaskContractRef = z.infer<typeof OvertureTaskContractRefSchema>;
 export const OvertureExecutionPhaseSchema = z.literal("overture");
 
@@ -279,6 +282,20 @@ export const CreateOvertureTaskContractInputSchema = z
 export type CreateOvertureTaskContractInput = z.infer<typeof CreateOvertureTaskContractInputSchema>;
 export const CreateOvertureTaskContractBodySchema = CreateOvertureTaskContractInputSchema.omit({ runId: true, commandId: true });
 export type CreateOvertureTaskContractBody = z.infer<typeof CreateOvertureTaskContractBodySchema>;
+
+export const CreateOvertureWorkspaceTaskContractInputSchema = z
+  .object({
+    projectId: UuidSchema,
+    runId: UuidSchema,
+    conversationId: UuidSchema,
+    /** The workspace revision the operator reviewed; a newer revision is rejected. */
+    revision: z.string().regex(/^[0-9a-f]{40}$/),
+    commandId: UuidSchema,
+  })
+  .strict();
+export type CreateOvertureWorkspaceTaskContractInput = z.infer<typeof CreateOvertureWorkspaceTaskContractInputSchema>;
+export const CreateOvertureWorkspaceTaskContractBodySchema = CreateOvertureWorkspaceTaskContractInputSchema.omit({ runId: true, commandId: true });
+export type CreateOvertureWorkspaceTaskContractBody = z.infer<typeof CreateOvertureWorkspaceTaskContractBodySchema>;
 
 export const OpenOvertureClarificationInputSchema = z
   .object({ projectId: UuidSchema, runId: UuidSchema, conversationId: UuidSchema, question: SafeContentSchema, commandId: UuidSchema })

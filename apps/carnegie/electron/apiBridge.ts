@@ -67,6 +67,7 @@ export const exposedApiMethods = [
   "openOvertureClarification",
   "answerOvertureClarification",
   "createOvertureTaskContract",
+  "createOvertureWorkspaceTaskContract",
   "listOvertureEvents",
   "activateHead",
   "createCouncil",
