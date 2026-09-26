@@ -97,7 +97,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
         </div>
         <div className="sb-fixed-menu-group" />
         <div className="sb-menu">
-          {navItem("floor", "chart-pie", t.nav.floor)}
+          {navItem("kanban", "square-kanban", t.nav.kanban)}
           {navItem("evlog", "shield-check", t.nav.evidenceLog)}
           {navItem("billing", "credit-card", t.nav.billing)}
         </div>

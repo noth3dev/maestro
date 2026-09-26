@@ -191,10 +191,10 @@ function HomeLanding({
 
       {!isFlashmob && (
         <div className="home-cards">
-          <button type="button" className="home-card" onClick={() => onNavigate("floor")}>
-            <Icon name="chart-pie" aria-hidden="true" />
-            <span className="home-card-title">open floor view</span>
-            <span className="home-card-sub">see the whole org work</span>
+          <button type="button" className="home-card" onClick={() => onNavigate("kanban")}>
+            <Icon name="square-kanban" aria-hidden="true" />
+            <span className="home-card-title">open board</span>
+            <span className="home-card-sub">every slice, by department and status</span>
           </button>
           <button type="button" className="home-card" onClick={() => onNavigate("inbox")}>
             <Icon name="inbox" aria-hidden="true" />

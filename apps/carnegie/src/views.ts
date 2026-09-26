@@ -1,5 +1,5 @@
 export const viewNames = [
-  "home", "dashboard", "planning", "channel", "git", "floor", "inbox", "evlog", "billing",
+  "home", "dashboard", "planning", "channel", "git", "kanban", "inbox", "evlog", "billing",
   "persona", "luthiery", "arrangements", "flashmob", "flashmobSession",
 ] as const;
 

@@ -8,7 +8,7 @@ const goalsState = vi.hoisted(() => ({ goals: undefined as readonly { goalId: st
 vi.mock("../icons.js", () => ({ Icon: () => null }));
 vi.mock("../i18n/index.js", () => ({
   useT: () => ({
-    nav: { concertmaster: "concertmaster", newSession: "new session", untitledSession: "untitled session", inbox: "inbox", dashboard: "dashboard", planning: "planning", flashmob: "flashmob", floor: "floor view", evidenceLog: "evidence log", billing: "billing", luthiery: "luthiery", arrangements: "arrangements" },
+    nav: { concertmaster: "concertmaster", newSession: "new session", untitledSession: "untitled session", inbox: "inbox", dashboard: "dashboard", planning: "planning", flashmob: "flashmob", kanban: "board", evidenceLog: "evidence log", billing: "billing", luthiery: "luthiery", arrangements: "arrangements" },
   }),
 }));
 vi.mock("../theme.js", () => ({ useTheme: () => ({ theme: "light", setTheme: vi.fn() }) }));

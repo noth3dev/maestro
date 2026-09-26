@@ -11,7 +11,7 @@ import { Dashboard } from "./views/Dashboard.js";
 import { Planning } from "./views/Planning.js";
 import { Channel } from "./views/Channel.js";
 import { Git } from "./views/Git.js";
-import { Floor } from "./views/Floor.js";
+import { Kanban } from "./views/Kanban.js";
 import { Inbox } from "./views/Inbox.js";
 import { EvidenceLog } from "./views/EvidenceLog.js";
 import { Billing } from "./views/Billing.js";
@@ -38,7 +38,7 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
       case "planning": return <Planning onNavigate={setView} />;
       case "channel": return <Channel onNavigate={setView} eventCursor={eventState.cursor} />;
       case "git": return <Git onBack={() => setView("channel")} />;
-      case "floor": return <Floor onBack={() => setView("home")} eventCursor={eventState.cursor} />;
+      case "kanban": return <Kanban eventCursor={eventState.cursor} />;
       case "inbox": return <Inbox onNavigate={setView} />;
       case "evlog": return <EvidenceLog onNavigate={setView} eventCursor={eventState.cursor} />;
       case "billing": return <Billing />;

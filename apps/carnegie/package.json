@@ -8,7 +8,6 @@
     "build": "tsc -b && npm run typecheck:renderer && vite build",
     "typecheck:renderer": "tsc -p tsconfig.renderer.json --noEmit",
     "start": "npm run build && electron .",
-    "test:radial-electron": "node scripts/electron-radial-renderer-smoke.mjs",
     "test:a11y": "playwright test --config=playwright.config.ts"
   },
   "dependencies": {
