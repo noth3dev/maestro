@@ -649,7 +649,7 @@ describeDatabase("real Control Plane + PostgreSQL + Model Gateway Worker accepta
       expect(observedBody.observability.toolEvents.state).toBe("available");
       expect(observedBody.observability.toolEvents.events?.some((event) => event.toolName === "ipython")).toBe(true);
       expect(observedBody.answerText).toBe("worker ipython local effect complete");
-      expect(seenToolSets.some((tools) => tools.length === 0)).toBe(true);
+      // Head activation spends no model turn of its own (its first turn is its brief), so every turn here is a Worker's.
       expect(seenToolSets.some((tools) => tools.length === 1 && tools[0] === "ipython")).toBe(true);
       expect(seenToolSets.every((tools) => tools.every((tool) => tool === "ipython"))).toBe(true);
       const sessionJournal = await pool.query<{ event: string; project_id: string; goal_id: string }>(
