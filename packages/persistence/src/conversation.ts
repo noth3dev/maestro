@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { GatewayBinding } from "@maestro/agent-runtime";
-import type { Conversation, ConversationEvent } from "@maestro/contracts";
+import type { Conversation, ConversationEvent, ConversationSummary } from "@maestro/contracts";
 import { boundedText, cancellationContent, terminalEventType, turnStatus } from "@maestro/contracts";
 
 export interface ConversationRecord {
@@ -30,6 +30,53 @@ export async function readConversationRecord(
     [conversationId, projectId, operatorId],
   );
   return result.rows[0] ?? null;
+}
+
+const CONVERSATION_TITLE_LENGTH = 80;
+
+function conversationTitle(text: string | null): string | null {
+  if (text === null) return null;
+  const line = text.replace(/\s+/g, " ").trim();
+  if (line === "") return null;
+  return line.length <= CONVERSATION_TITLE_LENGTH ? line : `${line.slice(0, CONVERSATION_TITLE_LENGTH - 1)}…`;
+}
+
+/** Operator-scoped Concertmaster sessions for one project, most recently active first. */
+export async function listConversationSummaries(
+  pool: Pick<Pool, "query">,
+  input: { operatorId: string; projectId: string; limit: number },
+): Promise<ConversationSummary[]> {
+  const result = await pool.query<{
+    conversation_id: string;
+    project_id: string;
+    goal_id: string | null;
+    model_provider: string;
+    model_id: string;
+    status: Conversation["status"];
+    first_text: string | null;
+    created_at: Date;
+    updated_at: Date;
+  }>(
+    `SELECT c.conversation_id, c.project_id, c.goal_id, c.model_provider, c.model_id, c.status, c.created_at, c.updated_at,
+       (SELECT t.content FROM conversation_turns t
+         WHERE t.conversation_id = c.conversation_id AND t.project_id = c.project_id AND t.role = 'user'
+         ORDER BY t.created_at, t.turn_id LIMIT 1) AS first_text
+     FROM conversations c
+     WHERE c.operator_id = $1 AND c.project_id = $2
+     ORDER BY c.updated_at DESC, c.conversation_id
+     LIMIT $3`,
+    [input.operatorId, input.projectId, input.limit],
+  );
+  return result.rows.map((row) => ({
+    conversationId: row.conversation_id,
+    projectId: row.project_id,
+    goalId: row.goal_id,
+    model: `${row.model_provider}/${row.model_id}`,
+    status: row.status,
+    title: conversationTitle(row.first_text),
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  }));
 }
 
 export async function appendConversationEvent(

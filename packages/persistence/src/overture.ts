@@ -915,6 +915,24 @@ export async function readOverturePlanManifest(
   return manifest;
 }
 
+/** Overture Runs attached to one Concertmaster conversation, oldest first. */
+export async function readOvertureRunsForConversation(
+  queryable: Queryable,
+  projectId: string,
+  conversationId: string,
+): Promise<OvertureRun[]> {
+  const result = await queryable.query<{ run_id: string }>(
+    "SELECT run_id FROM overture_runs WHERE project_id = $1 AND conversation_id = $2 ORDER BY created_at, run_id",
+    [projectId, conversationId],
+  );
+  const runs: OvertureRun[] = [];
+  for (const row of result.rows) {
+    const run = await readRunWithinTransaction(queryable, row.run_id, projectId, conversationId);
+    if (run !== undefined) runs.push(run);
+  }
+  return runs;
+}
+
 async function readPlanDocuments(queryable: Queryable, runId: string, projectId: string): Promise<OverturePlanDocument[]> {
   const result = await queryable.query<PlanRow>(
     "SELECT DISTINCT ON (d.document_id) d.document_id, d.run_id, d.project_id, d.path, d.kind, r.version, r.content, r.content_hash, r.source_refs, r.dependencies FROM overture_plan_documents d JOIN overture_plan_revisions r ON r.document_id = d.document_id AND r.run_id = d.run_id AND r.project_id = d.project_id WHERE d.run_id = $1 AND d.project_id = $2 ORDER BY d.document_id, r.version DESC",

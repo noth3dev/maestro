@@ -1,6 +1,8 @@
 import {
   GoalQuerySchema,
   ConversationSchema,
+  ConversationListQuerySchema,
+  ConversationSummarySchema,
   CreateConversationInputSchema,
   ConversationTurnInputSchema,
   ConversationTurnResultSchema,
@@ -17,6 +19,7 @@ export function createConversationsMethods(
 ): Pick<
   ApiClient,
   | "createConversation"
+  | "listConversations"
   | "getConversation"
   | "sendConversationTurn"
   | "cancelConversation"
@@ -39,6 +42,14 @@ export function createConversationsMethods(
           body: JSON.stringify(CreateConversationInputSchema.parse(input)),
         },
         ConversationSchema,
+      );
+    },
+    listConversations(query) {
+      const parsed = ConversationListQuerySchema.parse(query);
+      return request(
+        `v1/conversations?${new URLSearchParams({ projectId: parsed.projectId, limit: String(parsed.limit) })}`,
+        { headers },
+        ConversationSummarySchema.array(),
       );
     },
     getConversation(conversationId, query) {

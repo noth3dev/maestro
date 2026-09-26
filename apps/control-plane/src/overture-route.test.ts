@@ -105,6 +105,7 @@ function service(): OvertureService {
     }),
     listMessages: async () => [],
     getRun: async () => run,
+    listRuns: async (projectId, conversationId) => (projectId === ids.projectId && conversationId === ids.conversationId ? [run] : []),
     listEvents: async () => [],
   };
 }
@@ -149,6 +150,17 @@ describe("Overture routes", () => {
     });
     expect(read.statusCode).toBe(200);
     expect(read.json().executionPhase).toBe("overture");
+    await fastify.close();
+  });
+
+  it("lists the Runs attached to one conversation", async () => {
+    const fastify = await app();
+    const response = await fastify.inject({
+      method: "GET",
+      url: `/v1/overture/runs?projectId=${ids.projectId}&conversationId=${ids.conversationId}`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().map((item: { runId: string }) => item.runId)).toEqual([ids.runId]);
     await fastify.close();
   });
 

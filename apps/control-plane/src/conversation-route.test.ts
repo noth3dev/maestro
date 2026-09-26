@@ -31,6 +31,20 @@ describe("conversation routes", () => {
   });
 
 
+  it("lists the operator's Concertmaster sessions for a project", async () => {
+    const summary = { conversationId, projectId, goalId: null, model: "openai/gpt-5", status: "succeeded" as const, title: "Plan the release", createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:01:00.000Z" };
+    const list = vi.fn(async () => [summary]);
+    const service: ConversationService = { listModels: vi.fn(async () => []), create: vi.fn(), get: vi.fn(), turn: vi.fn(), cancel: vi.fn(), listEvents: vi.fn(async () => []), list };
+    const app = buildServer({ goalService, authenticator, conversationService: service });
+    const response = await app.inject({ method: "GET", url: `/v1/conversations?projectId=${projectId}&limit=20`, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([summary]);
+    expect(list).toHaveBeenCalledWith(projectId, 20, operator);
+    const missingProject = await app.inject({ method: "GET", url: "/v1/conversations", headers: { authorization: "Bearer test-secret" } });
+    expect(missingProject.statusCode).toBe(400);
+    await app.close();
+  });
+
   it("requires idempotency keys for conversation writes", async () => {
     const create = vi.fn(async () => conversation);
     const service: ConversationService = { listModels: vi.fn(async () => []), create, get: vi.fn(), turn: vi.fn(), cancel: vi.fn(), listEvents: vi.fn(async () => []) };

@@ -31,6 +31,7 @@ import {
   bindOvertureRoleModel,
   createOvertureRun,
   readOvertureEvents,
+  readOvertureRunsForConversation,
   readOvertureMessages,
   readOverturePlanManifest,
   readOvertureRun,
@@ -54,6 +55,9 @@ export interface OvertureService {
     operator: OperatorContext,
   ): Promise<readonly OvertureMessage[]>;
   getRun(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OvertureRun>;
+  /** Runs attached to one conversation, oldest first. */
+  listRuns?(projectId: string, conversationId: string, operator: OperatorContext): Promise<readonly OvertureRun[]>;
+
   listEvents(
     runId: string,
     projectId: string,
@@ -204,6 +208,10 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
       const run = await readOvertureRun(pool, runId, projectId, conversationId);
       if (run === undefined) throw new OvertureRunNotFoundError("Overture run not found");
       return run;
+    },
+    async listRuns(projectId, conversationId, operator) {
+      await assertRole(operator, projectId);
+      return readOvertureRunsForConversation(pool, projectId, conversationId);
     },
     async listEvents(runId, projectId, conversationId, afterCursor, operator) {
       await assertRole(operator, projectId);

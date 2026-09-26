@@ -15,6 +15,23 @@ export const ConversationSchema = z
   })
   .strict();
 export type Conversation = z.infer<typeof ConversationSchema>;
+export const ConversationSummarySchema = z
+  .object({
+    conversationId: UuidSchema,
+    projectId: UuidSchema,
+    goalId: UuidSchema.nullable(),
+    model: ModelRefSchema,
+    status: ConversationStatusSchema,
+    title: z.string().max(200).nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .strict();
+export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
+export const ConversationListQuerySchema = z
+  .object({ projectId: UuidSchema, limit: z.coerce.number().int().min(1).max(200).default(50) })
+  .strict();
+export type ConversationListQuery = z.input<typeof ConversationListQuerySchema>;
 export const CreateConversationInputSchema = z
   .object({ projectId: UuidSchema, goalId: UuidSchema.nullable().default(null), model: ModelRefSchema, reasoningEffort: z.string().min(1).optional() })
   .strict();

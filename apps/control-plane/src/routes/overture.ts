@@ -47,6 +47,13 @@ export function registerOvertureRoutes(app: FastifyInstance, deps: OvertureRoute
     return reply.status(201).send(OvertureRunSchema.parse(result));
   });
 
+  app.get("/v1/overture/runs", async (request, reply) => {
+    const query = parse(OvertureRunQuerySchema, request.query);
+    if (overture.listRuns === undefined) throw new DurableStoreUnavailableError();
+    const runs = await overture.listRuns(query.projectId, query.conversationId, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(runs.map((run) => OvertureRunSchema.parse(run)));
+  });
+
   app.get("/v1/overture/runs/:runId", async (request, reply) => {
     const runId = parse(UuidSchema, (request.params as { runId?: unknown }).runId);
     const query = parse(OvertureRunQuerySchema, request.query);

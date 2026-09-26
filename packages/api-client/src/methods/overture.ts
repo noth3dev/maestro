@@ -27,6 +27,7 @@ export function createOvertureMethods(
   ApiClient,
   | "createOvertureRun"
   | "getOvertureRun"
+  | "listOvertureRuns"
   | "sendOvertureOperatorMessage"
   | "listOvertureMessages"
   | "listOvertureArtifacts"
@@ -62,6 +63,14 @@ export function createOvertureMethods(
         `v1/overture/runs/${encodeURIComponent(parsedRunId)}?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
         { headers },
         OvertureRunSchema,
+      );
+    },
+    listOvertureRuns(query) {
+      const parsedQuery = OvertureRunQuerySchema.parse(query);
+      return request(
+        `v1/overture/runs?${new URLSearchParams({ projectId: parsedQuery.projectId, conversationId: parsedQuery.conversationId })}`,
+        { headers },
+        OvertureRunSchema.array(),
       );
     },
     sendOvertureOperatorMessage(runId, input, options) {

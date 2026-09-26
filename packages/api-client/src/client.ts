@@ -175,6 +175,7 @@ export interface ApiClient {
   logoutAccount(providerId: "openai-codex" | "anthropic-claude"): Promise<void>;
   createConversation(input: CreateConversationInput, options?: { idempotencyKey?: string }): Promise<Conversation>;
   getConversation(conversationId: string, query: GoalQuery): Promise<Conversation>;
+  listConversations(query: import("@maestro/contracts").ConversationListQuery): Promise<readonly import("@maestro/contracts").ConversationSummary[]>;
   sendConversationTurn(
     conversationId: string,
     input: ConversationTurnInput,
@@ -194,6 +195,7 @@ export interface ApiClient {
   ): AsyncIterable<ConversationActivityEvent>;
   createOvertureRun(input: CreateOvertureRunBody, options?: { idempotencyKey?: string }): Promise<OvertureRun>;
   getOvertureRun(runId: string, query: OvertureRunQuery): Promise<OvertureRun>;
+  listOvertureRuns(query: OvertureRunQuery): Promise<readonly OvertureRun[]>;
   sendOvertureOperatorMessage(
     runId: string,
     input: AppendOvertureOperatorMessageBody,

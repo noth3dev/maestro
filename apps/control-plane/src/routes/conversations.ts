@@ -3,6 +3,8 @@ import type { ConversationRouteDeps } from "./deps.js";
 import {
   UuidSchema,
   ConversationSchema,
+  ConversationListQuerySchema,
+  ConversationSummarySchema,
   CreateConversationInputSchema,
   ConversationTurnInputSchema,
   ConversationTurnResultSchema,
@@ -25,6 +27,13 @@ export function registerConversationRoutes(app: FastifyInstance, deps: Conversat
     const requestId = parse(UuidSchema, header);
     const conversation = await conversations.create(input, requestOperator(request as { operator?: OperatorContext }), requestId);
     return reply.status(201).send(ConversationSchema.parse(conversation));
+  });
+
+  app.get("/v1/conversations", async (request, reply) => {
+    const query = parse(ConversationListQuerySchema, request.query);
+    if (conversations.list === undefined) throw new DurableStoreUnavailableError();
+    const sessions = await conversations.list(query.projectId, query.limit, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(200).send(sessions.map((session) => ConversationSummarySchema.parse(session)));
   });
 
   app.get("/v1/conversations/:conversationId", async (request, reply) => {
