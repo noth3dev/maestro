@@ -1,3 +1,4 @@
+import { overtureRoleSystemPrompt } from "@maestro/prompts";
 import { sha256Hex } from "./hash.js";
 import { canonicalJson } from "./task-contract.js";
 import type { ModelCapabilityAxis } from "./model-profile.js";
@@ -66,24 +67,7 @@ export class InvalidOvertureRoleError extends Error {
 /** The session IPython tool, whose host helpers read and write the conversation's own workspace (never the project repository). */
 export const OVERTURE_WORKSPACE_TOOLS = ["ipython"] as const;
 
-const WORKSPACE_GUIDANCE = [
-  "The session workspace is a private Git-backed folder for this conversation, shown to the operator as files in a side panel; it is not the project repository.",
-  "Use the ipython tool with its host helpers list_files(), read_file(path), and write_file(path, content); Python cannot open files or import modules directly.",
-  "Choose the file format that fits the artifact, never a generic one:",
-  "a self-contained .html page with inline CSS (no scripts, external fonts, or network resources; it is previewed as a static page) for any screen, UI, landing page, or frontend mock;",
-  ".svg for logos, icons, illustrations, and diagrams;",
-  ".md for plans, research, decisions, reviews, and task definitions;",
-  "the real extension (.ts, .py, .css, …) for code samples.",
-  "Plans are Markdown: plan00.md for the overall plan, then plan01.md, plan02.md for phases.",
-  "When the plan is ready to execute, write task.md with these ## sections: Outcome, Success criteria (bullets), Repository, Base revision, Data boundary, Groups (bullets), Departments (bullets), and optionally Scope, Non-goals, Constraints, Edge cases, Budget. The operator creates, confirms, and launches the Task Contract from task.md; you never launch it.",
-  "Read existing files before revising them, write whole files, and keep chat replies short by pointing to the files you wrote.",
-].join(" ");
 
-const CREW_GUIDANCE = [
-  "You are one member of the Overture crew in a shared chat with the operator and the other crew members; crew replies appear as [Role] lines.",
-  "Speak only for your role, build on what others said instead of repeating it, and answer crew members who address you.",
-  "Address a crew member with @lead, @architecture, @research, @security, @design, or @task when you need their input; address the operator plainly.",
-].join(" ");
 
 export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Object.freeze([
   {
@@ -153,16 +137,13 @@ export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeCont
   return Object.freeze({
     roleId: definition.id,
     taskClass: definition.taskClass,
-    systemPrompt: [
-      `You are the ${definition.displayName} in an interactive Overture Crew.`,
-      `Your task class is ${definition.taskClass}.`,
-      "Work only from the durable conversation and the explicitly granted project context.",
-      `You may use: ${definition.allowedTools.join(", ") || "no tools"}.`,
-      `You must never: ${definition.forbiddenActions.join(", ")}.`,
-      CREW_GUIDANCE,
-      ...(definition.allowedTools.includes("ipython") ? [WORKSPACE_GUIDANCE] : []),
-      "Return bounded findings, decisions, or clarification questions; never return private reasoning or raw tool arguments.",
-    ].join(" "),
+    systemPrompt: overtureRoleSystemPrompt({
+      displayName: definition.displayName,
+      taskClass: definition.taskClass,
+      allowedTools: definition.allowedTools,
+      forbiddenActions: definition.forbiddenActions,
+      usesWorkspace: definition.allowedTools.includes("ipython"),
+    }),
     modelCapabilityAxes: [...definition.modelCapabilityAxes],
     allowedTools: [...definition.allowedTools],
     forbiddenActions: [...definition.forbiddenActions],

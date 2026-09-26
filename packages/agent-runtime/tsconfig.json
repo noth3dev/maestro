@@ -10,7 +10,7 @@
     "declaration": true,
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
-  "references": [{ "path": "../domain" }, { "path": "../contracts" }],
+  "references": [{ "path": "../prompts" }, { "path": "../domain" }, { "path": "../contracts" }],
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

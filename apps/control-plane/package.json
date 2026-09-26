@@ -6,6 +6,7 @@
     "@maestro/authority": "*",
     "@maestro/contracts": "*",
     "@maestro/domain": "*",
+    "@maestro/prompts": "*",
     "@maestro/git-adapter": "*",
     "@maestro/persistence": "*",
     "fastify": "^5.0.0",

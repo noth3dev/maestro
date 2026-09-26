@@ -1,3 +1,4 @@
+import { semanticReviewerPrompt } from "@maestro/prompts";
 export type SemanticReviewVerdict = "supported" | "unsupported" | "ambiguous";
 
 export class InvalidSemanticReviewRequestError extends Error {
@@ -37,23 +38,7 @@ export function assertValidSemanticReviewRequest(request: SemanticReviewRequest)
  */
 export function buildSemanticReviewPrompt(request: SemanticReviewRequest): string {
   assertValidSemanticReviewRequest(request);
-  const criteriaText = request.criteria.map((criterion) => `- [${criterion.criterionId}] ${criterion.description}`).join("\n");
-  const evidenceText = request.availableEvidenceIds.length > 0 ? request.availableEvidenceIds.join(", ") : "(none)";
-  return [
-    "You are an isolated semantic reviewer. You have no access to any other reviewer's answer.",
-    "Judge the following claim strictly against the fixed criteria below. Do not invent evidence.",
-    "",
-    "Claim:",
-    request.claimText,
-    "",
-    "Fixed criteria:",
-    criteriaText,
-    "",
-    "Evidence ids you may cite (cite only from this list; citing anything else is invalid):",
-    evidenceText,
-    "",
-    'Reply with exactly one JSON object and nothing else: {"verdict": "supported"|"unsupported"|"ambiguous", "citedEvidenceIds": string[], "reasoning": string}',
-  ].join("\n");
+  return semanticReviewerPrompt({ claimText: request.claimText, criteria: request.criteria, evidenceIds: request.availableEvidenceIds });
 }
 
 export interface RawSemanticReviewOutput {

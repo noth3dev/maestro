@@ -1,3 +1,4 @@
+import { encoreReviewerPrompt } from "@maestro/prompts";
 import { randomUUID } from "node:crypto";
 import {
   assertValidEncoreJudgmentSubstance,
@@ -268,13 +269,7 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     assertRequestedEncoreEvidence(request, durableIds);
 
     const triggerReasons = await evaluateEncoreCouncilTriggerWithClient(client, request.goalId);
-    const prompt = [
-      "You are one of several fully independent Encore Council reviewers. You cannot see any other reviewer's answer.",
-      `Question: ${request.question}`,
-      `Criteria: ${request.criteria.map((criterion) => `[${criterion.criterionId}] ${criterion.description}`).join("; ")}`,
-      `Evidence ids you may cite: ${request.evidenceIds.join(", ") || "(none)"}`,
-      'Reply with exactly one JSON object: {"verdict":"proceed"|"do_not_proceed"|"escalate","confidence":"low"|"medium"|"high","reasoning":string,"conditions":string[],"dissentNote":string|null,"citedEvidenceIds":string[]}',
-    ].join("\n");
+    const prompt = encoreReviewerPrompt({ question: request.question, criteria: request.criteria, evidenceIds: request.evidenceIds });
 
     // This short transaction freezes the request and validates its evidence.
     // Provider fan-out starts only after withGoalAuthority commits.

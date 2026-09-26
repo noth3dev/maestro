@@ -18,6 +18,9 @@
   ],
   "references": [
     {
+      "path": "../prompts"
+    },
+    {
       "path": "../authority"
     }
   ]

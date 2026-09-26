@@ -17,6 +17,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/prompts"
+    },
+    {
       "path": "../../packages/authority"
     },
     {

@@ -9,6 +9,7 @@ import {
 } from "@maestro/agent-runtime";
 import { OVERTURE_ROLE_DEFINITIONS, createOvertureRoleRuntimePolicy, type OvertureRoleId } from "@maestro/domain";
 import type { OvertureMessage } from "@maestro/contracts";
+import { OVERTURE_TRIAGE_SYSTEM_PROMPT, overtureJoinPrompt, overtureTriagePrompt } from "@maestro/prompts";
 
 export class OvertureProviderUnavailableError extends Error {}
 
@@ -204,15 +205,9 @@ export function createOvertureRoleTurnRunner(options: {
 
   const triage = async (input: OvertureRoleTurnInput, candidates: readonly OvertureRoleId[]): Promise<OvertureCrewMember[]> => {
     if (candidates.length === 0) return [];
-    const roster = candidates.map((roleId) => `- ${roleId}: ${ROLE_FOCUS[roleId]}`).join("\n");
-    const systemPrompt = [
-      "You coordinate an Overture planning crew that chats with an operator.",
-      "Given the conversation so far, decide which crew members (besides those who already replied) would add real value by speaking now.",
-      "Pick nobody when the exchange is small talk, a simple acknowledgement, or already fully handled. Never pick more than two.",
-      'Answer with JSON only: {"roles":[{"role":"<role id>","reason":"<one short clause>"}]}.',
-    ].join(" ");
     try {
-      const result = await answer(input, LEAD, `Operator message:\n${input.content}\n\nCandidates:\n${roster}`, { systemPrompt, tools: new ToolRegistry() });
+      const prompt = overtureTriagePrompt(input.content, candidates.map((roleId) => ({ roleId, focus: ROLE_FOCUS[roleId] })));
+      const result = await answer(input, LEAD, prompt, { systemPrompt: OVERTURE_TRIAGE_SYSTEM_PROMPT, tools: new ToolRegistry() });
       return parseTriage(result.text, candidates);
     } catch {
       // Triage is advisory: without it only the lead and addressed roles speak.
@@ -237,7 +232,7 @@ export function createOvertureRoleTurnRunner(options: {
       ];
       while (queue.length > 0 && messages.length < MAX_CREW_REPLIES) {
         const member = queue.shift()!;
-        const prompt = `${input.content}\n\n(You are speaking as the ${roleLabel(member.roleId)} because ${member.reason}. Add only what your role contributes, answer crew members who addressed you, and do not repeat earlier replies.)`;
+        const prompt = overtureJoinPrompt(input.content, roleLabel(member.roleId), member.reason);
         let message: OvertureMessage;
         try {
           message = await reply(input, member.roleId, prompt);

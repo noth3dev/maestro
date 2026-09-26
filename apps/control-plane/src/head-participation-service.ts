@@ -1,3 +1,4 @@
+import { headActivationPrompt } from "@maestro/prompts";
 import { randomUUID } from "node:crypto";
 import type { HeadParticipationInput, HeadParticipation } from "@maestro/contracts";
 import type { ExecutionAdmission, ExecutionKernelPort, GoalHeadParticipation } from "@maestro/domain";
@@ -156,15 +157,15 @@ export function createHeadParticipationService(deps: HeadParticipationServiceDep
         // This happens after the durable active transition, so provider work
         // never holds the persistence transaction.
         try {
-          await runProviderCall(() => deps.kernel.prompt(spawned.execution, [
-            `You are the ${reserved.departmentId} Department Head for Goal ${goalId}.`,
-            `Contribution: ${input.requestedContribution}.`,
-            `Urgency: ${input.urgency}.`,
-            `Context scope: ${input.contextScope.join(", ")}.`,
-            `Budget effect: ${input.budgetEffect}.`,
-            `Reason: ${input.reason}.`,
-            "Work only within this Goal and report evidence and blockers; do not perform unapproved critical actions.",
-          ].join("\n")));
+          await runProviderCall(() => deps.kernel.prompt(spawned.execution, headActivationPrompt({
+            departmentId: reserved.departmentId,
+            goalId,
+            requestedContribution: input.requestedContribution,
+            urgency: input.urgency,
+            contextScope: input.contextScope,
+            budgetEffect: input.budgetEffect,
+            reason: input.reason,
+          })));
         } catch (error) {
           // A failed initial dispatch must not leave a live provider session
           // behind an apparently active durable Head.
