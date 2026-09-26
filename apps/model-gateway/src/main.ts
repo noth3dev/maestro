@@ -3,7 +3,7 @@ import { createAnthropicPlugin, ClaudeOAuthClient, createClaudeSubscriptionPlugi
 import { ProviderRegistry } from "@maestro/agent-runtime";
 import { createCodexAccessTokenResolver } from "./codex-token-resolver.js";
 import { createClaudeAccessTokenResolver } from "./claude-token-resolver.js";
-import { adoptExistingCodexLogin } from "./codex-login-adoption.js";
+import { adoptExistingCodexLogin, retireSecretlessCodexBinding } from "./codex-login-adoption.js";
 import { KeychainCredentialStore } from "./credential-store.js";
 import { createModelGateway } from "./gateway.js";
 import { buildModelGatewayServer } from "./rpc.js";
@@ -61,6 +61,7 @@ export function createGatewayFromEnv(env: NodeJS.ProcessEnv): ModelGatewayRuntim
     } else {
       const oauth = new CodexOAuthClient();
       codex = oauth;
+      codexLoginAdoption = retireSecretlessCodexBinding({ credentials, operatorId, accountRef: codexAccountRef }).catch(() => false);
       accountRefs["openai-codex"] = codexAccountRef;
       registry.register(createCodexResponsesPlugin({
         resolveAccessToken: createCodexAccessTokenResolver({ credentials, operatorId, refresh: (refreshToken) => oauth.refresh(refreshToken) }),

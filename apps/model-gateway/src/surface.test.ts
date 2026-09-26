@@ -7,6 +7,7 @@ describe("model-gateway surface", () => {
       [
         "InMemoryCredentialStore",
         "KeychainCredentialStore",
+        "ManagedCredentialWithoutSecretError",
         "ModelGateway",
         "buildModelGatewayServer",
         "createGatewayFromEnv",

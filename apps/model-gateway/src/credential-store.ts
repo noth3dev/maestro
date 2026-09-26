@@ -35,6 +35,14 @@ function publicBinding(stored: StoredCredential): CredentialBinding {
   return binding;
 }
 
+/** A managed-subscription binding whose token lives outside Maestro (e.g. in a Codex app-server). */
+export class ManagedCredentialWithoutSecretError extends Error {
+  constructor() {
+    super("managed credential has no gateway secret");
+    this.name = "ManagedCredentialWithoutSecretError";
+  }
+}
+
 function createBinding(input: { operatorId: string; providerId: string; authMode: ProviderAuthMode; accountRef?: string }, secret: string): StoredCredential {
   if (secret.trim() === "") throw new Error("credential secret is required");
   return {
@@ -79,7 +87,7 @@ export class InMemoryCredentialStore implements CredentialStore {
   async resolve(accountRef: string, operatorId: string, providerId: string): Promise<string> {
     const stored = this.credentials.get(accountRef);
     if (stored === undefined || stored.operatorId !== operatorId || stored.providerId !== providerId) throw new Error("credential binding is not owned by operator");
-    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
+    if (stored.secret === undefined) throw new ManagedCredentialWithoutSecretError();
     return stored.secret;
   }
 
@@ -91,7 +99,7 @@ export class InMemoryCredentialStore implements CredentialStore {
   async resolveForGateway(accountRef: string): Promise<string> {
     const stored = this.credentials.get(accountRef);
     if (stored === undefined) throw new Error("credential binding is unavailable");
-    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
+    if (stored.secret === undefined) throw new ManagedCredentialWithoutSecretError();
     return stored.secret;
   }
 
@@ -164,14 +172,14 @@ export class KeychainCredentialStore implements CredentialStore {
   async resolve(accountRef: string, operatorId: string, providerId: string): Promise<string> {
     const stored = await this.get(accountRef);
     if (stored === undefined || stored.operatorId !== operatorId || stored.providerId !== providerId) throw new Error("credential binding is not owned by operator");
-    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
+    if (stored.secret === undefined) throw new ManagedCredentialWithoutSecretError();
     return stored.secret;
   }
 
   async resolveForGateway(accountRef: string): Promise<string> {
     const stored = await this.get(accountRef);
     if (stored === undefined) throw new Error("credential binding is unavailable");
-    if (stored.secret === undefined) throw new Error("managed credential has no gateway secret");
+    if (stored.secret === undefined) throw new ManagedCredentialWithoutSecretError();
     return stored.secret;
   }
 

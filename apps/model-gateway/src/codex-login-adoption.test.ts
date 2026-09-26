@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { adoptExistingCodexLogin } from "./codex-login-adoption.js";
+import { adoptExistingCodexLogin, retireSecretlessCodexBinding } from "./codex-login-adoption.js";
+import { ManagedCredentialWithoutSecretError } from "./credential-store.js";
 
 const binding = { accountRef: "openai-codex-op", operatorId: "op", providerId: "openai-codex", authMode: "managed-subscription" } as const;
 
@@ -41,5 +42,29 @@ describe("adoptExistingCodexLogin", () => {
     const options = deps({ authMode: "chatgpt", readFails: true });
     await expect(adoptExistingCodexLogin(options)).resolves.toBe(false);
     expect(options.credentials.bindManaged).not.toHaveBeenCalled();
+  });
+});
+
+describe("retireSecretlessCodexBinding", () => {
+  function store(resolve: () => Promise<string>) {
+    return { ensure: vi.fn(async () => binding), resolveForGateway: vi.fn(resolve), revoke: vi.fn(async () => undefined) };
+  }
+
+  it("revokes a token-less binding left by the app-server bridge", async () => {
+    const credentials = store(async () => { throw new ManagedCredentialWithoutSecretError(); });
+    await expect(retireSecretlessCodexBinding({ credentials, operatorId: "op", accountRef: "openai-codex-op" })).resolves.toBe(true);
+    expect(credentials.revoke).toHaveBeenCalledWith("openai-codex-op", "op");
+  });
+
+  it("keeps a binding that holds a native OAuth token", async () => {
+    const credentials = store(async () => "{\"accessToken\":\"a\"}");
+    await expect(retireSecretlessCodexBinding({ credentials, operatorId: "op", accountRef: "openai-codex-op" })).resolves.toBe(false);
+    expect(credentials.revoke).not.toHaveBeenCalled();
+  });
+
+  it("does not revoke when the credential store itself is unavailable", async () => {
+    const credentials = store(async () => { throw new Error("gateway credential store is unavailable"); });
+    await expect(retireSecretlessCodexBinding({ credentials, operatorId: "op", accountRef: "openai-codex-op" })).resolves.toBe(false);
+    expect(credentials.revoke).not.toHaveBeenCalled();
   });
 });

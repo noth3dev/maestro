@@ -1,5 +1,5 @@
 import type { CodexAppServerClient } from "@maestro/model-provider-openai";
-import type { CredentialStore } from "./credential-store.js";
+import { ManagedCredentialWithoutSecretError, type CredentialStore } from "./credential-store.js";
 
 /**
  * The Codex app-server keeps its own ChatGPT login (shared with the Codex
@@ -24,5 +24,26 @@ export async function adoptExistingCodexLogin(options: {
   } catch {
     // Adoption is a convenience; the explicit in-app sign-in remains available.
     return false;
+  }
+}
+
+/**
+ * On the native Codex path a token-less binding (left by the app-server
+ * bridge) would list models that can never run. Remove it so the operator is
+ * asked to sign in instead.
+ */
+export async function retireSecretlessCodexBinding(options: {
+  readonly credentials: Pick<CredentialStore, "ensure" | "resolveForGateway" | "revoke">;
+  readonly operatorId: string;
+  readonly accountRef: string;
+}): Promise<boolean> {
+  try {
+    if ((await options.credentials.ensure(options.accountRef)) === undefined) return false;
+    await options.credentials.resolveForGateway(options.accountRef);
+    return false;
+  } catch (error) {
+    if (!(error instanceof ManagedCredentialWithoutSecretError)) return false;
+    await options.credentials.revoke(options.accountRef, options.operatorId);
+    return true;
   }
 }
