@@ -44,9 +44,10 @@ export function ConcertmasterSession({
   onStarted: (conversationId: string) => void;
 }) {
   const { config } = useConnection();
-  const projectId = config?.projectId;
   const { selectedGoalId } = useGoals();
   const { sessions, refresh: refreshSessions } = useSessions();
+  // An open session keeps its own project; a new one starts in the selected project.
+  const projectId = sessions?.find((session) => session.conversationId === conversationId)?.projectId ?? config?.projectId;
   const ownId = useRef<string | undefined>(conversationId);
   const [loadedId, setLoadedId] = useState<string | undefined>(conversationId);
   const [conversation, setConversation] = useState<Conversation | undefined>(undefined);

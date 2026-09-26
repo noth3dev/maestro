@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BootstrapStatus, MaestroBridge, PublicConnectionConfig } from "./global.js";
 import { redactSensitiveText } from "./lib/command-id.js";
 
@@ -220,4 +220,18 @@ export function useConnection(): ConnectionContextValue {
   const value = useContext(ConnectionContext);
   if (value === undefined) throw new Error("useConnection must be used within a ConnectionProvider");
   return value;
+}
+
+/**
+ * Re-provides the connection with another active project, so every
+ * project-scoped view (`config.projectId`) follows the project the operator
+ * selected. The underlying connection (and its Home project) is unchanged.
+ */
+export function ProjectScopedConnection({ projectId, children }: { projectId: string; children: ReactNode }) {
+  const value = useConnection();
+  const scoped = useMemo<ConnectionContextValue>(
+    () => (value.config === undefined || value.config.projectId === projectId ? value : { ...value, config: { ...value.config, projectId } }),
+    [value, projectId],
+  );
+  return <ConnectionContext.Provider value={scoped}>{children}</ConnectionContext.Provider>;
 }

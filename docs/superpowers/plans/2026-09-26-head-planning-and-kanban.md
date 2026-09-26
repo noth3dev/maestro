@@ -26,3 +26,10 @@ Operator approvals stay at: contract launch, and critical actions. The Heads' me
 | 7 | New department types: request → Encore decision → department definition → Head wake | |
 
 Each slice: TDD, real PostgreSQL integration tests run alone (never two DB suites at once), build/lint/boundaries, commit.
+
+## Multi-project workspace (done, before slice 4)
+
+- Projects are named; each operator has a **Home** project (the global workspace). Global: Concertmaster (sessions from every project), inbox (approvals from every project), billing (all projects, per-project breakdown). Project-scoped: dashboard, board, planning, channel, flashmob, evidence, persona, luthiery, arrangements, Goals.
+- The project dropdown above the profile selects the project; the choice is remembered. Below `ProjectsProvider`, `config.projectId` is the selected project.
+- A PRD approved in Home starts its Goal in a **new project** (named from the PRD title); inside a project it defaults to that project. The run records the target project.
+

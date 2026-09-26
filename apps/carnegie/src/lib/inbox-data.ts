@@ -6,6 +6,13 @@ export function loadInbox(api: Pick<ApiClient, "listInbox">, projectId: string):
   return api.listInbox(projectId);
 }
 
+/** The inbox is global: pending approvals from every project, as one list. */
+export async function loadGlobalInbox(api: Pick<ApiClient, "listInbox">, projectIds: readonly string[]): Promise<InboxRead> {
+  if (projectIds.length === 0) throw new Error("No project is available");
+  const reads = await Promise.all(projectIds.map((projectId) => api.listInbox(projectId)));
+  return { projectId: projectIds[0]!, items: reads.flatMap((read) => read.items) };
+}
+
 function assertFutureExpiry(expiresAt: string, now = Date.now): string {
   const timestamp = Date.parse(expiresAt);
   if (!Number.isFinite(timestamp) || timestamp <= now()) throw new Error("Approval expiry must be in the future");

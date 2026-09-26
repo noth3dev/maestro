@@ -18,8 +18,8 @@ describe("Task 13 Carnegie accessibility and scale contract", () => {
     expect(sidebar).toContain('aria-current={view === name ? "page" : undefined}');
     expect(home).not.toContain('<div className="home-card" onClick=');
     expect(home).toContain('<button type="button" className="home-card"');
-    expect(home).toContain('aria-pressed={mode === "maestro"}');
-    expect(home).toContain('aria-pressed={isFlashmob}');
+    // Flashmob is project-scoped, so the global Home has no mode toggle.
+    expect(home).not.toContain('aria-label="Home mode"');
   });
 
   it("exposes a keyboard-operable switch with an accessible name", () => {

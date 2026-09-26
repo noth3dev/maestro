@@ -17,8 +17,9 @@ interface SessionsContextValue {
 const SessionsContext = createContext<SessionsContextValue | undefined>(undefined);
 
 export function SessionsProvider({ children }: { children: ReactNode }) {
+  // Concertmaster is global: sessions from every project, newest first.
   const { config } = useConnection();
-  const projectId = config?.projectId;
+  const connected = config !== undefined;
   const [sessions, setSessions] = useState<readonly ConversationSummary[] | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [activeConversationId, setActiveConversationId] = useState<string | undefined>(undefined);
@@ -29,18 +30,16 @@ export function SessionsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (projectId === undefined) return;
+    if (!connected) return;
     try {
-      setSessions(await window.maestro.api.listConversations({ projectId }));
+      setSessions(await window.maestro.api.listConversations({}));
       setError(undefined);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Sessions are unavailable");
     }
-  }, [projectId]);
+  }, [connected]);
 
   useEffect(() => {
-    setSessions(undefined);
-    setActiveConversationId(undefined);
     void refresh();
   }, [refresh]);
 

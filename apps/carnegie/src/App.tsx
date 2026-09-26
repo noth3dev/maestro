@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ConnectionProvider, SessionRecoveryNotice, useConnection } from "./connection.js";
 import { GoalsProvider } from "./goals.js";
 import { SessionsProvider } from "./sessions.js";
+import { ProjectsProvider, useProjects } from "./projects.js";
 import { ThemeProvider } from "./theme.js";
 import { I18nProvider, localeFromPreferences, useT, type Locale } from "./i18n/index.js";
 import { Sidebar } from "./components/Sidebar.js";
@@ -74,7 +75,17 @@ function Shell({ eventState }: { eventState: UseDurableEventsResult }) {
   );
 }
 
-function ConnectedWorkspace({ projectId }: { projectId: string }) {
+function ConnectedWorkspace() {
+  return (
+    <ProjectsProvider>
+      <ProjectWorkspace />
+    </ProjectsProvider>
+  );
+}
+
+/** Live events and Goals follow the selected project. */
+function ProjectWorkspace() {
+  const { projectId } = useProjects();
   const durableEventsApi = useMemo(() => ({
     listEvents: (query: EventQuery) => window.maestro.api.listEvents(query),
     streamEvents: (query: EventQuery, options?: { signal?: AbortSignal; onConnected?: () => void }) =>
@@ -140,7 +151,7 @@ function Connected() {
     return <SessionRecoveryNotice recovery={recovery} onAction={() => { if (clearSavedSession) void disconnect(); else retryConnection(); }} />;
   }
   if (config === undefined) return <Setup />;
-  return <ConnectedWorkspace projectId={config.projectId} />;
+  return <ConnectedWorkspace />;
 }
 
 function LocalizedApp() {

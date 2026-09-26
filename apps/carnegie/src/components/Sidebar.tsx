@@ -5,6 +5,8 @@ import { useTheme } from "../theme.js";
 import { useGoals } from "../goals.js";
 import { useConnection } from "../connection.js";
 import { useSessions } from "../sessions.js";
+import { projectName, useProjects } from "../projects.js";
+import { ProjectSwitcher } from "./ProjectSwitcher.js";
 import { loadPendingApprovalCount } from "../lib/inbox-data.js";
 import type { ViewName } from "../views.js";
 
@@ -13,6 +15,7 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   const { theme, setTheme } = useTheme();
   const { goals, orchestrationByGoalId = {}, selectedGoalId, selectGoal } = useGoals();
   const { config } = useConnection();
+  const { projects, projectId, homeProjectId } = useProjects();
   const { sessions, activeConversationId, openSession } = useSessions();
   const [collapsed, setCollapsed] = useState(false);
   const [pendingApprovalCount, setPendingApprovalCount] = useState<number | undefined>(undefined);
@@ -20,11 +23,13 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
   const refreshInboxCount = useCallback(() => {
     if (config === undefined) { setPendingApprovalCount(undefined); return; }
     let cancelled = false;
-    void loadPendingApprovalCount(window.maestro.api, config.projectId)
-      .then((count) => { if (!cancelled) setPendingApprovalCount(count); })
+    // The inbox is global: approvals from every project.
+    const projectIds = projects?.map((project) => project.projectId) ?? [config.projectId];
+    void Promise.all(projectIds.map((id) => loadPendingApprovalCount(window.maestro.api, id).catch(() => 0)))
+      .then((counts) => { if (!cancelled) setPendingApprovalCount(counts.reduce((sum, count) => sum + count, 0)); })
       .catch(() => { if (!cancelled) setPendingApprovalCount(undefined); });
     return () => { cancelled = true; };
-  }, [config]);
+  }, [config, projects]);
 
   useEffect(() => {
     let cancel = refreshInboxCount();
@@ -84,46 +89,52 @@ export function Sidebar({ view, onNavigate }: { view: ViewName; onNavigate: (vie
                     onClick={() => { openSession(session.conversationId); onNavigate("home"); }}
                   >
                     <span className="lbl">{session.title ?? t.nav.untitledSession}</span>
+                    {session.projectId !== homeProjectId && <span className="sb-session-project">{projectName(projects, session.projectId)}</span>}
                   </button>
                 );
               })}
             </div>
           )}
           {navItem("inbox", "inbox", t.nav.inbox, pendingApprovalCount)}
-          {navItem("dashboard", "layout-dashboard", t.nav.dashboard)}
-          {navItem("planning", "clipboard-list", t.nav.planning)}
-          {navItem("channel", "message-circle", "channel")}
-          {navItem("flashmob", "zap", t.nav.flashmob)}
-        </div>
-        <div className="sb-fixed-menu-group" />
-        <div className="sb-menu">
-          {navItem("kanban", "square-kanban", t.nav.kanban)}
-          {navItem("evlog", "shield-check", t.nav.evidenceLog)}
           {navItem("billing", "credit-card", t.nav.billing)}
         </div>
-        <div className="sb-fixed-menu-group" />
-        <div className="sb-menu">
-          {navItem("persona", "user-round", "persona")}
-          {navItem("luthiery", "hammer", t.nav.luthiery)}
-          {navItem("arrangements", "git-merge", t.nav.arrangements)}
-        </div>
-        <div className="sb-divider" />
 
-        <div className="sb-goalswitch" role="heading" aria-level={2}>
-          <span className="lbl">{selectedGoal !== undefined ? selectedGoal.state : "No Goal selected"}</span>
-        </div>
-        {goals !== undefined && goals.length > 0 && (
-          <div className="sb-channels">
-            {goals.map((goal) => (
-              <button key={goal.goalId} type="button" className={`sb-chan${goal.goalId === selectedGoalId ? " on" : ""}`} onClick={() => selectGoal(goal.goalId)} aria-label={`Goal ${goal.goalId.slice(0, 8)}`}>
-                <Icon name="crown" /> <span className="lbl">{goal.goalId.slice(0, 8)}</span>
-                {orchestrationByGoalId[goal.goalId] !== undefined && <span className="sb-goal-status" data-orchestration-stage={orchestrationByGoalId[goal.goalId]!.stage}>{orchestrationByGoalId[goal.goalId]!.stage}</span>}
-              </button>
-            ))}
+        <div className="sb-project" role="group" aria-label={`Project ${projectName(projects, projectId)}`}>
+          <div className="sb-project-head" aria-hidden="true">
+            <span className="lbl">{projectName(projects, projectId)}</span>
           </div>
-        )}
+          <div className="sb-menu">
+            {navItem("dashboard", "layout-dashboard", t.nav.dashboard)}
+            {navItem("kanban", "square-kanban", t.nav.kanban)}
+            {navItem("planning", "clipboard-list", t.nav.planning)}
+            {navItem("channel", "message-circle", "channel")}
+            {navItem("flashmob", "zap", t.nav.flashmob)}
+          </div>
+          <div className="sb-fixed-menu-group" />
+          <div className="sb-menu">
+            {navItem("evlog", "shield-check", t.nav.evidenceLog)}
+            {navItem("persona", "user-round", "persona")}
+            {navItem("luthiery", "hammer", t.nav.luthiery)}
+            {navItem("arrangements", "git-merge", t.nav.arrangements)}
+          </div>
+
+          <div className="sb-goalswitch" role="heading" aria-level={2}>
+            <span className="lbl">goals{selectedGoal !== undefined ? ` · ${selectedGoal.state}` : ""}</span>
+          </div>
+          {goals !== undefined && goals.length > 0 && (
+            <div className="sb-channels">
+              {goals.map((goal) => (
+                <button key={goal.goalId} type="button" className={`sb-chan${goal.goalId === selectedGoalId ? " on" : ""}`} onClick={() => selectGoal(goal.goalId)} aria-label={`Goal ${goal.goalId.slice(0, 8)}`}>
+                  <Icon name="crown" /> <span className="lbl">{goal.goalId.slice(0, 8)}</span>
+                  {orchestrationByGoalId[goal.goalId] !== undefined && <span className="sb-goal-status" data-orchestration-stage={orchestrationByGoalId[goal.goalId]!.stage}>{orchestrationByGoalId[goal.goalId]!.stage}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
+      <ProjectSwitcher />
       <div className="sb-bottom">
         <div className="avatar avatar-sm av-slate">U</div>
         <span>operator</span>

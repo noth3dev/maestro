@@ -18,8 +18,7 @@ describe("Home Concertmaster conversation", () => {
     expect(html).toContain("Brief the Concertmaster");
     expect(html).toContain("Concertmaster model");
     expect(html).toContain('id="home-concertmaster-model"');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain('aria-pressed="false"');
+    expect(html).not.toContain('aria-label="Home mode"');
     expect(html).not.toContain("continue conversation");
     expect(html).not.toContain("retry turn");
     expect(html).not.toContain("cancel turn");

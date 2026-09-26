@@ -7,13 +7,17 @@ import type { InboxRead } from "@maestro/api-client";
 import type { CapabilitySession, ModelCatalogEntry } from "@maestro/contracts";
 import type { ViewName } from "../views.js";
 import { Approvals, type WorkerDecisionProjection } from "./Approvals.js";
-import { loadInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
+import { useProjects } from "../projects.js";
+import { loadGlobalInbox, approveInboxItem, denyInboxItem, discussWithConcertmaster } from "../lib/inbox-data.js";
 import { groupInboxItems, requestCriticalAction, selectFullAccessMode, type ApprovalDiscussionProjection } from "../lib/approval-data.js";
 import { ReasoningDial, defaultReasoningEffort } from "../components/ReasoningDial.js";
 import { modelRef, readSavedConcertmasterModelRef, resolveDefaultModelRef, saveConcertmasterModelRef, sortLiveModels } from "../lib/concertmaster-model.js";
 
 export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) {
   const { config } = useConnection();
+  const { projects, homeProjectId } = useProjects();
+  const projectIds = projects?.map((project) => project.projectId) ?? (config === undefined ? [] : [config.projectId]);
+  const projectKey = projectIds.join(",");
   const { selectedGoalId } = useGoals();
   const { detail, loading: detailLoading, error: detailError } = useGoalDetail();
   const [inbox, setInbox] = useState<InboxRead | undefined>(undefined);
@@ -36,7 +40,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
       if (!current) return;
       const sorted = sortLiveModels(models);
       setConcertmasterModels(sorted);
-      const selected = resolveDefaultModelRef(sorted, readSavedConcertmasterModelRef(config.projectId));
+      const selected = resolveDefaultModelRef(sorted, readSavedConcertmasterModelRef(homeProjectId));
       setConcertmasterModelRef(selected);
       if (selected === undefined) setConcertmasterModelsError("No live Concertmaster models are available.");
     }).catch((cause) => {
@@ -53,13 +57,13 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
     if (config === undefined) return;
     setLoading(true);
     setError(undefined);
-    void loadInbox(window.maestro.api, config.projectId)
+    void loadGlobalInbox(window.maestro.api, projectIds)
       .then(setInbox)
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load inbox"))
       .finally(() => setLoading(false));
   };
 
-  useEffect(refresh, [config]);
+  useEffect(refresh, [config, projectKey]);
 
   const approve = async (item: InboxRead["items"][number], expiresAt: string) => {
     if (config === undefined) return;
@@ -81,7 +85,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
     setError(undefined);
     const previous = discussion.find((entry) => entry.decisionId === item.decisionId);
     const response = await discussWithConcertmaster(window.maestro.api, {
-      projectId: config.projectId,
+      projectId: item.projectId,
       goalId: item.goalId,
       text,
       ...(previous === undefined && concertmasterModelRef !== undefined ? { modelRef: concertmasterModelRef } : {}),
@@ -114,7 +118,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
       <header className="workspace-view-head">
         <div className="dash-kicker">operations</div>
         <h1 className="dash-title">inbox</h1>
-        <p className="dash-sub">Pending approvals across visible Goals; certifications for the selected Goal. Approvals, worker decisions, and scoped Concertmaster discussions come from durable project state.</p>
+        <p className="dash-sub">Pending approvals across every project; certifications for the selected Goal. Approvals, worker decisions, and scoped Concertmaster discussions come from durable project state.</p>
         <div className="inbox-concertmaster-controls" aria-label="Concertmaster controls">
           <div className="home-model-picker">
             <label htmlFor="inbox-concertmaster-model">Concertmaster model</label>
@@ -125,7 +129,7 @@ export function Inbox({ onNavigate }: { onNavigate: (view: ViewName) => void }) 
               onChange={(event) => {
                 const next = event.target.value;
                 setConcertmasterModelRef(next === "" ? undefined : next);
-                if (next !== "" && config !== undefined) saveConcertmasterModelRef(config.projectId, next);
+                if (next !== "" && config !== undefined) saveConcertmasterModelRef(homeProjectId, next);
                 setConcertmasterReasoningEffort(defaultReasoningEffort(concertmasterModels.find((model) => modelRef(model) === next)));
               }}
             >

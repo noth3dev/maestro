@@ -4,6 +4,8 @@ import { EmptyState } from "../components/EmptyState.js";
 import { isSessionFailure, useConnection } from "../connection.js";
 import { useGoals } from "../goals.js";
 import { formatCents, safeErrorMessage } from "../lib/settings-data.js";
+import { combineBilling, type GlobalBilling } from "../lib/billing-rollup.js";
+import { projectName, useProjects } from "../projects.js";
 
 export function BillingStateNotice({
   goalSelected,
@@ -21,7 +23,7 @@ export function BillingStateNotice({
   budgetError: string | undefined;
   budgetStale: boolean;
   budget: GoalBudgetSummary | undefined;
-  billing: BillingReadModel | undefined;
+  billing: GlobalBilling | BillingReadModel | undefined;
   billingLoading: boolean;
   billingError: string | undefined;
   billingStale: boolean;
@@ -43,17 +45,18 @@ export function BillingStateNotice({
 export function Billing() {
   const { config, reportSessionFailure } = useConnection();
   const { selectedGoalId } = useGoals();
+  const { projects } = useProjects();
   const [budget, setBudget] = useState<GoalBudgetSummary | undefined>(undefined);
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [budgetError, setBudgetError] = useState<string | undefined>(undefined);
   const [budgetStale, setBudgetStale] = useState(false);
   const budgetRef = useRef<GoalBudgetSummary | undefined>(undefined);
   const budgetScopeRef = useRef<{ projectId: string; goalId: string } | undefined>(undefined);
-  const [billing, setBilling] = useState<BillingReadModel | undefined>(undefined);
+  const [billing, setBilling] = useState<GlobalBilling | undefined>(undefined);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingError, setBillingError] = useState<string | undefined>(undefined);
   const [billingStale, setBillingStale] = useState(false);
-  const billingRef = useRef<BillingReadModel | undefined>(undefined);
+  const billingRef = useRef<GlobalBilling | undefined>(undefined);
 
   useEffect(() => {
     if (config === undefined || selectedGoalId === undefined) {
@@ -88,7 +91,7 @@ export function Billing() {
   }, [config, selectedGoalId, reportSessionFailure]);
 
   useEffect(() => {
-    if (config === undefined) {
+    if (config === undefined || projects === undefined) {
       billingRef.current = undefined;
       setBilling(undefined);
       setBillingLoading(false);
@@ -100,7 +103,9 @@ export function Billing() {
     setBillingLoading(true);
     setBillingError(undefined);
     setBillingStale(false);
-    void window.maestro.api.getBillingSummary(config.projectId)
+    // Billing is global: every project's rollup, combined.
+    void Promise.all(projects.map(async (project) => ({ project, billing: await window.maestro.api.getBillingSummary(project.projectId) })))
+      .then(combineBilling)
       .then((loaded) => { if (!cancelled) { billingRef.current = loaded; setBilling(loaded); setBillingStale(false); } })
       .catch((cause: unknown) => {
         if (!cancelled) {
@@ -111,7 +116,7 @@ export function Billing() {
       })
       .finally(() => { if (!cancelled) setBillingLoading(false); });
     return () => { cancelled = true; };
-  }, [config, reportSessionFailure]);
+  }, [config, projects, reportSessionFailure]);
 
   if (config === undefined) return <EmptyState />;
 
@@ -121,7 +126,7 @@ export function Billing() {
   return (
     <div className="dash-main">
       <div className="dash-head"><div className="dash-title">billing</div></div>
-      <div className="dash-sub">budget for the selected Goal · durable project billing rollup</div>
+      <div className="dash-sub">all projects · budget for the selected Goal in {projectName(projects, config.projectId)}</div>
 
       <BillingStateNotice
         goalSelected={selectedGoalId !== undefined}
@@ -170,18 +175,36 @@ export function Billing() {
           </div>
 
           <div className="dash-panel" style={{ marginTop: 16 }}>
-            <div className="dash-panel-head"><span>cross-Goal totals</span><strong>{billing.goals.length} Goals</strong></div>
+            <div className="dash-panel-head"><span>all projects</span><strong>{billing.goalCount} Goals</strong></div>
             <div className="dash-stats">
               <div className="stat-card stat-terracotta"><p className="stat-label">actual spend</p><p className="stat-value">{formatCents(billing.totals.costCents)}</p></div>
               <div className="stat-card stat-ochre"><p className="stat-label">ceiling</p><p className="stat-value">{formatCents(billing.totals.budgetCents)}</p></div>
               <div className="stat-card stat-olive"><p className="stat-label">reserved</p><p className="stat-value">{formatCents(billing.totals.reservedCents)}</p></div>
             </div>
           </div>
+
+          <div className="dash-panel" style={{ marginTop: 16 }}>
+            <div className="dash-panel-head"><span>by project</span><strong>{billing.projects.length} projects</strong></div>
+            <table className="billing-projects">
+              <thead><tr><th scope="col">project</th><th scope="col">Goals</th><th scope="col">spend</th><th scope="col">reserved</th><th scope="col">ceiling</th></tr></thead>
+              <tbody>
+                {billing.projects.map((project) => (
+                  <tr key={project.projectId}>
+                    <th scope="row">{project.name}</th>
+                    <td>{project.goalCount}</td>
+                    <td>{formatCents(project.totals.costCents)}</td>
+                    <td>{formatCents(project.totals.reservedCents)}</td>
+                    <td>{formatCents(project.totals.budgetCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
       <div className="dash-panel" style={{ marginTop: 16 }}>
         <div className="dash-panel-head"><span>per-department cost</span><strong>unavailable</strong></div>
-        <p className="muted">{billing?.departmentBreakdown.reason ?? "No durable department breakdown is available."}</p>
+        <p className="muted">Actual costs are tracked at Goal scope only.</p>
       </div>
     </div>
   );

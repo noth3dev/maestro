@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { approveInboxItem, denyInboxItem, discussWithConcertmaster, loadPendingApprovalCount } from "./inbox-data.js";
+import { loadGlobalInbox } from "./inbox-data.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
 const goalId = "22222222-2222-4222-8222-222222222222";
@@ -64,5 +65,15 @@ describe("Inbox durable actions", () => {
     await discussWithConcertmaster(api, { projectId, goalId, conversationId, text: "What is the safer alternative?" });
     expect(api.createConversation).toHaveBeenCalledOnce();
     expect(sendConversationTurn).toHaveBeenLastCalledWith(conversationId, { projectId, text: "What is the safer alternative?" }, { idempotencyKey: expect.any(String) });
+  });
+});
+
+describe("global inbox", () => {
+  it("merges pending approvals from every project", async () => {
+    const item = (projectId: string) => ({ projectId }) as never;
+    const api = { listInbox: async (projectId: string) => ({ projectId, items: projectId === "b" ? [item("b"), item("b")] : [item("a")] }) };
+    const inbox = await loadGlobalInbox(api as never, ["a", "b"]);
+    expect(inbox.items).toHaveLength(3);
+    await expect(loadGlobalInbox(api as never, [])).rejects.toThrow("No project");
   });
 });

@@ -4,6 +4,7 @@ import { Icon } from "../icons.js";
 import { ReasoningDial, defaultReasoningEffort } from "../components/ReasoningDial.js";
 import { ProviderSignIn } from "../components/ProviderSignIn.js";
 import { useConnection } from "../connection.js";
+import { useProjects } from "../projects.js";
 import { useSessions } from "../sessions.js";
 import type { ViewName } from "../views.js";
 import type { HomeMode } from "../homeMode.js";
@@ -62,7 +63,7 @@ export function Home({
 function HomeLanding({
   onNavigate,
   mode,
-  onModeChange,
+  onModeChange: _onModeChange,
   onStart,
 }: {
   onNavigate: (view: ViewName) => void;
@@ -71,7 +72,9 @@ function HomeLanding({
   onStart: (start: SessionStart) => void;
 }) {
   const { config } = useConnection();
-  const projectId = config?.projectId;
+  // Concertmaster is global: its model choice is remembered once, under Home.
+  const { homeProjectId } = useProjects();
+  const projectId = config === undefined ? undefined : homeProjectId;
   const [title] = useState(() => homeTitles[Math.floor(Math.random() * homeTitles.length)]);
   const [text, setText] = useState("");
   const [models, setModels] = useState<readonly ModelCatalogEntry[]>([]);
@@ -171,14 +174,6 @@ function HomeLanding({
             </span>
           </div>
           <ReasoningDial model={selectedModel} value={reasoningEffort} onChange={setReasoningEffort} disabled={isFlashmob} id="home-reasoning-effort" />
-          <div className="pill-toggle" role="group" aria-label="Home mode">
-            <button type="button" className={mode === "maestro" ? "on" : ""} aria-pressed={mode === "maestro"} onClick={() => onModeChange("maestro")}>
-              maestro
-            </button>
-            <button type="button" className={isFlashmob ? "on flashmob" : ""} aria-pressed={isFlashmob} onClick={() => onModeChange("flashmob")}>
-              flashmob
-            </button>
-          </div>
           <button
             className={`btn btn-primary btn-sm home-send-btn${isFlashmob ? " mode-flashmob" : ""}`}
             disabled={isFlashmob || text.trim() === "" || selectedRef === undefined}
@@ -199,7 +194,7 @@ function HomeLanding({
           <button type="button" className="home-card" onClick={() => onNavigate("inbox")}>
             <Icon name="inbox" aria-hidden="true" />
             <span className="home-card-title">inbox</span>
-            <span className="home-card-sub">certifications for the selected Goal</span>
+            <span className="home-card-sub">approvals from every project</span>
           </button>
         </div>
       )}
