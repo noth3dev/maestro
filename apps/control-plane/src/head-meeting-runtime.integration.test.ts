@@ -118,5 +118,10 @@ describeDatabase("Heads' planning meeting with PostgreSQL", () => {
     expect(stored.slices.map((entry) => [entry.sliceId, entry.departmentId])).toEqual([["p1s1", "engineering"], ["p1s2", "security"]]);
 
     await expect(meeting.run({ goalId, councilId })).resolves.toBe("planned");
+
+    // The Encore Council (or the operator) can send it back: the lead writes v2.
+    await expect(meeting.revise({ goalId, councilId, objections: "Encore Council:\n- split p1s2" })).resolves.toBe(2);
+    expect(leadPrompts.at(-1)).toContain("split p1s2");
+    expect(posts.at(-1)).toBe("chair: Revised plan v2: 1 phases, 2 slices. Back to the Encore Council.");
   });
 });

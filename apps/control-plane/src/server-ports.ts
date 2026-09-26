@@ -39,6 +39,11 @@ export interface EventService {
   listEvents(projectId: string, after: EventCursor): Promise<import("@maestro/contracts").GoalEvent[]>;
 }
 
+export interface PlanDecisionService {
+  /** Approve a plan awaiting the operator, or send it back to the Heads with a note. */
+  decide(goalId: string, input: import("@maestro/contracts").GoalPlanDecisionInput, operator: OperatorContext): Promise<void>;
+}
+
 export interface ProjectDiscoveryService {
   /** Lists only active projects visible to this authenticated operator. */
   listProjects(operatorId: string): Promise<readonly string[]>;
@@ -185,6 +190,7 @@ export interface RouteDeps {
   authenticator: OperatorAuthenticator;
   projectAccess?: ProjectAccessProvisioner;
   projectDiscovery?: ProjectDiscoveryService;
+  planDecisions?: PlanDecisionService;
   providerCredentials?: ProviderCredentialService;
   accountLoginStore?: AccountLoginStore;
   settingsService?: SettingsService;

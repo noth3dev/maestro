@@ -477,6 +477,7 @@ describe("persistence surface", () => {
         "sendWorkerMessageUnderOwnerClaim",
         "setCapabilitySession",
         "setGoalPlanSliceStatus",
+        "setGoalPlanStatus",
         "setLocalDevicePolicy",
         "sleepHeadParticipation",
         "snapshotOperationalOverlayForGoalDurably",

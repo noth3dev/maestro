@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import type { GoalPlan } from "@maestro/contracts";
 import "../styles/theme.css";
 import "../styles/components.css";
-import { KanbanBoardView } from "./Kanban.js";
+import { KanbanBoardView, PlanDecision } from "./Kanban.js";
 
 const slice = (sliceId: string, departmentId: string, status: GoalPlan["slices"][number]["status"], dependsOn: string[] = [], statusReason: string | null = null) => ({
   sliceId, phaseNo: Number(sliceId.slice(1, sliceId.indexOf("s"))), departmentId, title: `Slice ${sliceId}`, objective: `Objective for ${sliceId}`,
@@ -27,6 +27,7 @@ const plan: GoalPlan = {
 createRoot(document.getElementById("root")!).render(
   <main aria-labelledby="kanban-page-title">
     <h1 id="kanban-page-title" className="sr-only">Slice board</h1>
+    <PlanDecision plan={{ ...plan, status: "awaiting_approval", decisionNote: "The Encore Council escalated the plan:\n- p1s3 needs a secrets policy owner" }} onDecided={() => undefined} />
     <KanbanBoardView plan={plan} />
   </main>,
 );

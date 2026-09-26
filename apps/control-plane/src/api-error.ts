@@ -1,4 +1,5 @@
 import { GitOperationError } from "@maestro/domain";
+import { PlanDecisionConflictError } from "./plan-approval-runtime.js";
 import {
   CapabilityApprovalConflictError,
   EvidenceMetadataConflictError,
@@ -34,6 +35,7 @@ import {
   ChannelError,
   ChannelNotFoundError,
   ProjectNotFoundError,
+  GoalPlanNotFoundError,
   InvalidProjectNameError,
   ChannelConflictError,
   ChannelClosedError,
@@ -232,6 +234,8 @@ export function mapError(error: unknown): { status: number; body: StableApiError
     return apiError(403, "project_access_forbidden", error.message);
   if (error instanceof ChannelNotFoundError) return apiError(404, "channel_not_found", error.message);
   if (error instanceof ProjectNotFoundError) return apiError(404, "project_not_found", error.message);
+  if (error instanceof GoalPlanNotFoundError) return apiError(404, "goal_not_found", error.message);
+  if (error instanceof PlanDecisionConflictError) return apiError(409, "version_conflict", error.message);
   if (error instanceof InvalidProjectNameError) return apiError(400, "invalid_project_name", error.message);
   if (error instanceof ChannelClosedError) return apiError(409, "channel_closed", error.message);
   if (error instanceof ChannelConflictError) return apiError(409, "channel_conflict", error.message);

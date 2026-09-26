@@ -85,6 +85,6 @@ export function buildKanbanBoard(plan: GoalPlan): KanbanBoard {
 /** Short Korean-free status line for the board header, e.g. "draft · v2 · 3/12 done". */
 export function planSummary(plan: GoalPlan): string {
   const done = plan.slices.filter((slice) => slice.status === "done").length;
-  const status = plan.status === "awaiting_approval" ? "awaiting Encore approval" : plan.status;
+  const status = plan.status === "draft" ? "awaiting Encore approval" : plan.status === "awaiting_approval" ? "needs your decision" : plan.status;
   return `${status} · v${plan.version} · ${done}/${plan.slices.length} done`;
 }

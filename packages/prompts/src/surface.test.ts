@@ -13,6 +13,7 @@ describe("prompts surface", () => {
         "OVERTURE_ROLE_BRIEFS",
         "OVERTURE_TRIAGE_SYSTEM_PROMPT",
         "OVERTURE_WORKSPACE_GUIDANCE",
+        "PLAN_REVIEW_CRITERIA",
         "encoreReviewerPrompt",
         "headBriefPrompt",
         "headMeetingPrompt",
@@ -24,6 +25,7 @@ describe("prompts surface", () => {
         "overtureRoleSystemPrompt",
         "overtureRoundSummaryPrompt",
         "overtureTriagePrompt",
+        "planReviewQuestion",
         "semanticReviewerPrompt",
       ]
     `);

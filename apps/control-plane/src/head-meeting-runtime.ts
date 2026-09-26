@@ -88,10 +88,9 @@ function planFrom(text: string, departments: readonly string[]): GoalPlanSubstan
  */
 export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
   const maxChairTurns = deps.maxChairTurns ?? 12;
-  return {
-    async run({ goalId, councilId }: { readonly goalId: string; readonly councilId: string }): Promise<HeadMeetingOutcome> {
-      const existing = await deps.pool.query("SELECT 1 FROM goal_plans WHERE council_id = $1 LIMIT 1", [councilId]);
-      if (existing.rowCount === 1) return "planned";
+
+  /** Everything a meeting turn needs: the room, its record, and the lead's and Heads' voices. */
+  async function session(goalId: string, councilId: string) {
       const council = await readHeadCouncil(deps.pool, councilId);
       const briefs = await readRevealedCouncilBriefs(deps.pool, councilId);
       const departments = briefs.map((entry) => entry.departmentId);
@@ -102,7 +101,6 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
       );
       const run = await readLaunchRun(deps.pool, goalId);
       const questions = (await listOvertureClarifications(deps.pool, run.runId)).filter((entry) => entry.question.startsWith(QUESTION_PREFIX));
-      if (questions.some((entry) => entry.status === "open")) return "waiting_for_operator";
 
       const prd = await deps.readPrd?.(goalId);
       const briefsJson = JSON.stringify(Object.fromEntries(briefs.map((entry) => [entry.departmentId, entry.brief])), null, 1);
@@ -122,6 +120,31 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
       const lead = (systemPrompt: string, prompt: string) => deps.askLead({ ...run, systemPrompt, prompt });
       const head = (departmentId: string, system: string, prompt: string) =>
         deps.askHead({ goalId, departmentId, sessionRef: heads.get(departmentId)!.sessionRef, system, prompt });
+      const draft = async (objections?: string): Promise<GoalPlanSubstance> => {
+        let previousError: string | undefined;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const text = await lead(MEETING_CHAIR_SYSTEM_PROMPT, meetingPlanPrompt({ ...context(), ...(objections === undefined ? {} : { objections }), ...(previousError === undefined ? {} : { previousError }) }));
+          try {
+            return planFrom(text, departments);
+          } catch (error) {
+            previousError = error instanceof Error ? error.message : String(error);
+          }
+        }
+        throw new Error(`The lead could not write a valid plan: ${previousError}`);
+      };
+      const store = async (plan: GoalPlanSubstance) => {
+        const goal = await deps.pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
+        return createGoalPlanVersion(deps.pool, { goalId, projectId: goal.rows[0]!.project_id, councilId, plan, commandId: randomUUID() });
+      };
+      return { run, questions, departments, heads, transcript, context, say, lead, head, draft, store };
+  }
+
+  return {
+    async run({ goalId, councilId }: { readonly goalId: string; readonly councilId: string }): Promise<HeadMeetingOutcome> {
+      const existing = await deps.pool.query("SELECT 1 FROM goal_plans WHERE council_id = $1 LIMIT 1", [councilId]);
+      if (existing.rowCount === 1) return "planned";
+      const { run, questions, departments, heads, transcript, context, say, lead, head, draft, store } = await session(goalId, councilId);
+      if (questions.some((entry) => entry.status === "open")) return "waiting_for_operator";
 
       // Free discussion, chaired by the lead.
       for (;;) {
@@ -142,18 +165,6 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
       }
 
       // The lead drafts what was agreed; each Head reviews; one revision.
-      const draft = async (objections?: string): Promise<GoalPlanSubstance> => {
-        let previousError: string | undefined;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          const text = await lead(MEETING_CHAIR_SYSTEM_PROMPT, meetingPlanPrompt({ ...context(), ...(objections === undefined ? {} : { objections }), ...(previousError === undefined ? {} : { previousError }) }));
-          try {
-            return planFrom(text, departments);
-          } catch (error) {
-            previousError = error instanceof Error ? error.message : String(error);
-          }
-        }
-        throw new Error(`The lead could not write a valid plan: ${previousError}`);
-      };
       let plan = await draft();
       const planJson = JSON.stringify(plan);
       await say("chair", CHAIR, `Draft plan: ${plan.phases.length} phases, ${plan.slices.length} slices. Each Head, review your slices.`);
@@ -175,10 +186,18 @@ export function createHeadMeetingRuntime(deps: HeadMeetingDependencies) {
       const objections = reviews.flatMap((review) => review.objections.map((line) => `${review.departmentId}: ${line}`));
       if (objections.length > 0) plan = await draft(objections.join("\n"));
 
-      const goal = await deps.pool.query<{ project_id: string }>("SELECT project_id FROM goals WHERE goal_id = $1", [goalId]);
-      const stored = await createGoalPlanVersion(deps.pool, { goalId, projectId: goal.rows[0]!.project_id, councilId, plan, commandId: randomUUID() });
+      const stored = await store(plan);
       await say("chair", CHAIR, `Plan v${stored.version} is drafted: ${plan.phases.length} phases, ${plan.slices.length} slices${objections.length > 0 ? `, revised for ${objections.length} objection(s)` : ""}. It goes to the Encore Council for approval.`);
       return "planned";
+    },
+
+    /** The lead writes a new plan version that resolves outside objections (e.g. the Encore Council's). */
+    async revise({ goalId, councilId, objections }: { readonly goalId: string; readonly councilId: string; readonly objections: string }): Promise<number> {
+      const { say, draft, store } = await session(goalId, councilId);
+      const plan = await draft(objections);
+      const stored = await store(plan);
+      await say("chair", CHAIR, `Revised plan v${stored.version}: ${plan.phases.length} phases, ${plan.slices.length} slices. Back to the Encore Council.`);
+      return stored.version;
     },
   };
 }

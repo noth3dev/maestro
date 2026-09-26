@@ -736,3 +736,9 @@
 .sb-session-delete:hover { color:var(--rust-text); background:var(--rust-bg); }
 .sb-session-delete:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 .sidebar.collapsed .sb-session-delete { display:none; }
+
+.kb-decision { margin:14px 16px 0; padding:12px 14px; border:1px solid var(--ochre); border-radius:var(--radius-lg); background:var(--ochre-bg); display:grid; gap:8px; font-size:12.5px; color:var(--text-primary); }
+.kb-decision-note { margin:0; white-space:pre-wrap; color:var(--text-secondary); max-height:30vh; overflow:auto; }
+.kb-decision textarea { padding:6px 8px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface-1); color:var(--text-primary); font:inherit; resize:vertical; }
+.kb-decision-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.kb-decision-error { color:var(--rust-text); font-size:11.5px; }

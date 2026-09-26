@@ -10,6 +10,7 @@ import {
   ImprovementDigestListSchema,
   ArrangementsReadSchema,
   GoalPlanReadSchema,
+  GoalPlanDecisionInputSchema,
   PersonaInspectionSchema,
   PersonaReadQuerySchema,
   PersonaProposalInputSchema,
@@ -33,6 +34,7 @@ export type ReportingMethods = Pick<
   | "listImprovementDigestsForGoal"
   | "getArrangements"
   | "getGoalPlan"
+  | "decideGoalPlan"
   | "getPersona"
   | "proposePersona"
   | "editPersonaCandidate"
@@ -130,6 +132,13 @@ export function createReportingMethods(ctx: MethodContext): ReportingMethods {
         `v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/arrangements?${new URLSearchParams({ projectId: parsed.projectId })}`,
         { headers },
         ArrangementsReadSchema,
+      );
+    },
+    decideGoalPlan(goalId, input) {
+      return request(
+        `v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/plan/decision`,
+        { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(GoalPlanDecisionInputSchema.parse(input)) },
+        { parse: () => undefined },
       );
     },
     getGoalPlan(goalId, query) {

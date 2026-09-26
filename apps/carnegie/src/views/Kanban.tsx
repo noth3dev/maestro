@@ -50,6 +50,38 @@ function SliceCard({ card }: { card: KanbanCard }) {
   );
 }
 
+/** Shown when the Encore Council escalated the plan (or rejected it after a revision): the operator decides. */
+export function PlanDecision({ plan, onDecided }: { plan: GoalPlan; onDecided: () => void }) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const decide = async (decision: "approve" | "revise") => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.maestro.api.decideGoalPlan(plan.goalId, { projectId: plan.projectId, version: plan.version, decision, ...(note.trim() === "" ? {} : { note: note.trim() }) });
+      setNote("");
+      onDecided();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="kb-decision" aria-label="Plan decision">
+      <strong>Plan v{plan.version} needs your decision</strong>
+      {plan.decisionNote !== null && plan.decisionNote !== undefined && <p className="kb-decision-note">{plan.decisionNote}</p>}
+      <textarea aria-label="Note for the Heads" rows={2} placeholder="What should change? (needed to send it back)" value={note} onChange={(event) => setNote(event.target.value)} />
+      <div className="kb-decision-actions">
+        <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void decide("approve")}>approve plan</button>
+        <button type="button" className="btn btn-sm" disabled={busy || note.trim() === ""} onClick={() => void decide("revise")}>send back to the Heads</button>
+        {error !== undefined && <span className="kb-decision-error" role="alert">{error}</span>}
+      </div>
+    </section>
+  );
+}
+
 /** The Department Heads' plan for one Goal as a board: department swimlanes × slice status. */
 export function KanbanBoardView({ plan }: { plan: GoalPlan }) {
   const board = buildKanbanBoard(plan);
@@ -91,7 +123,8 @@ export function Kanban({ eventCursor = "0" }: { eventCursor?: string }) {
   const { config } = useConnection();
   const { goals, selectedGoalId, selectGoal } = useGoals();
   const goalId = selectedGoalId ?? goals?.[0]?.goalId;
-  const { loading, plan, error } = useGoalPlan(config === undefined ? undefined : window.maestro.api, config?.projectId, goalId, eventCursor);
+  const [decisions, setDecisions] = useState(0);
+  const { loading, plan, error } = useGoalPlan(config === undefined ? undefined : window.maestro.api, config?.projectId, goalId, `${eventCursor}:${decisions}`);
 
   let body: ReactNode;
   if (config === undefined) body = <div className="kb-empty" role="status">Connect to load the board.</div>;
@@ -99,7 +132,13 @@ export function Kanban({ eventCursor = "0" }: { eventCursor?: string }) {
   else if (plan === undefined && loading) body = <div className="kb-empty" role="status" aria-busy="true">Loading the plan…</div>;
   else if (plan === undefined && error !== undefined) body = <div className="kb-empty alert alert-warning" role="alert">Could not load the plan: {error}</div>;
   else if (plan === null || plan === undefined) body = <div className="kb-empty" role="status">The Department Heads have not planned this Goal yet. Slices appear here once they meet.</div>;
-  else body = <KanbanBoardView plan={plan} />;
+  else
+    body = (
+      <>
+        {plan.status === "awaiting_approval" && <PlanDecision plan={plan} onDecided={() => setDecisions((count) => count + 1)} />}
+        <KanbanBoardView plan={plan} />
+      </>
+    );
 
   return (
     <div className="kb-wrap">

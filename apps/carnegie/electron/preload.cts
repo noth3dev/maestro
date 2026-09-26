@@ -63,6 +63,7 @@ const exposedApiMethods = [
   "getBillingSummary",
   "getArrangements",
   "getGoalPlan",
+  "decideGoalPlan",
   "getChannel",
   "postChannelMessage",
   "getProjection",

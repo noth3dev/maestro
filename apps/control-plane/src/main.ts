@@ -30,6 +30,7 @@ import {
   getChannel,
   postChannelMessage,
   listProjectCatalog,
+  assertProjectRole,
   createProject,
   renameProject,
   appendOvertureToolActivity,
@@ -54,6 +55,7 @@ import { createPostgresOvertureService } from "./overture-service.js";
 import { createGatewayHeadAsk, createHeadBriefRuntime, createKernelHeadAsk, headAskWithFallback, readGoalLaunchModel } from "./head-brief-runtime.js";
 import { createHeadBriefScheduler, listCouncilsAwaitingBriefs, listCouncilsForRun } from "./head-brief-scheduler.js";
 import { createHeadCouncilChannel, createHeadMeetingRuntime, readLaunchRun } from "./head-meeting-runtime.js";
+import { createPlanApprovalRuntime, createPlanDecisionService } from "./plan-approval-runtime.js";
 import { inspectIpPythonProcessOutcome } from "./composition/ipython.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
@@ -260,6 +262,15 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       create: (operatorId, name, commandId) => createProject(pool, { operatorId, name, commandId }),
       rename: (operatorId, projectId, name) => renameProject(pool, { operatorId, projectId, name }),
     },
+    planDecisions: createPlanDecisionService({
+      pool,
+      assertOperator: (operatorId, projectId) => assertProjectRole(pool, operatorId, projectId, "concertmaster"),
+      reviseLater: (input) =>
+        void headMeeting
+          .revise(input)
+          .then(() => headBriefScheduler.schedule(input))
+          .catch((error: unknown) => console.error("Plan revision failed", error)),
+    }),
     organizationService: { listOrganization: () => listPermanentOrganization(pool) },
     channelService: {
       get: (input) => getChannel(pool, input),
@@ -327,12 +338,18 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     channel: headCouncil,
     readPrd,
   });
-  // Planning runs in the background: sealed briefs, then (once revealed) the Heads' meeting.
+  const planApproval = createPlanApprovalRuntime({
+    pool,
+    review: (goalId, input, commandId) => encoreService.review(goalId, input, commandId),
+    revise: (input) => headMeeting.revise(input),
+    announce: (goalId, content) => headCouncil.post(goalId, { kind: "role", id: "conversation-lead" }, content),
+  });
+  // Planning runs in the background: sealed briefs, then (once revealed) the Heads' meeting, then Encore approval.
   const headBriefScheduler = createHeadBriefScheduler({
     runtime: {
       async run(input) {
         const briefs = await headBriefs.run(input);
-        if (briefs.revealed) await headMeeting.run(input);
+        if (briefs.revealed && (await headMeeting.run(input)) === "planned") await planApproval.run(input);
         return briefs;
       },
     },

@@ -22,6 +22,7 @@ export interface GoalPlanRecord {
   readonly councilId: string | null;
   readonly contentHash: string;
   readonly approvalRef: string | null;
+  readonly decisionNote: string | null;
   readonly phases: GoalPlanSubstance["phases"];
   readonly slices: ReadonlyArray<GoalPlanSubstance["slices"][number] & { readonly status: GoalPlanSliceStatus; readonly statusReason: string | null }>;
   readonly createdAt: string;
@@ -97,9 +98,10 @@ export async function readGoalPlanVersion(pool: Pick<Pool, "query">, goalId: str
     council_id: string | null;
     content_hash: string;
     approval_ref: string | null;
+    decision_note: string | null;
     created_at: Date;
     updated_at: Date;
-  }>("SELECT goal_id, project_id, version, status, council_id, content_hash, approval_ref, created_at, updated_at FROM goal_plans WHERE goal_id = $1 AND project_id = $2 AND version = $3", [
+  }>("SELECT goal_id, project_id, version, status, council_id, content_hash, approval_ref, decision_note, created_at, updated_at FROM goal_plans WHERE goal_id = $1 AND project_id = $2 AND version = $3", [
     goalId,
     projectId,
     version,
@@ -132,6 +134,7 @@ export async function readGoalPlanVersion(pool: Pick<Pool, "query">, goalId: str
     councilId: row.council_id,
     contentHash: row.content_hash.trim(),
     approvalRef: row.approval_ref,
+    decisionNote: row.decision_note,
     phases: phases.rows.map((phase) => ({ phaseNo: Number(phase.phase_no), title: phase.title, outcome: phase.outcome })),
     slices: slices.rows.map((slice) => ({
       sliceId: slice.slice_id,
@@ -169,4 +172,33 @@ export async function setGoalPlanSliceStatus(
     [input.goalId, input.version, input.sliceId, input.status, input.reason ?? null],
   );
   if (result.rowCount !== 1) throw new GoalPlanNotFoundError();
+}
+
+/**
+ * Move a plan version through approval. Approving it approves its planned
+ * slices and supersedes any earlier approved version.
+ */
+export async function setGoalPlanStatus(
+  pool: Pool,
+  input: { readonly goalId: string; readonly version: number; readonly status: Exclude<GoalPlanStatus, "draft" | "superseded">; readonly approvalRef?: string; readonly note?: string },
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const updated = await client.query(
+      "UPDATE goal_plans SET status = $3, approval_ref = COALESCE($4, approval_ref), decision_note = $5, updated_at = transaction_timestamp() WHERE goal_id = $1 AND version = $2 AND status IN ('draft', 'awaiting_approval')",
+      [input.goalId, input.version, input.status, input.approvalRef ?? null, input.note ?? null],
+    );
+    if (updated.rowCount !== 1) throw new GoalPlanNotFoundError();
+    if (input.status === "approved") {
+      await client.query("UPDATE goal_plans SET status = 'superseded', updated_at = transaction_timestamp() WHERE goal_id = $1 AND version <> $2 AND status = 'approved'", [input.goalId, input.version]);
+      await client.query("UPDATE goal_plan_slices SET status = 'approved', updated_at = transaction_timestamp() WHERE goal_id = $1 AND version = $2 AND status = 'planned'", [input.goalId, input.version]);
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }

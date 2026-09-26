@@ -101,7 +101,7 @@ export function meetingPlanPrompt(input: MeetingContext & { readonly objections?
   return [
     ...meetingContext(input),
     "",
-    input.objections === undefined ? "The meeting agreed. Write the execution plan the Heads agreed on." : "The Heads reviewed your draft. Revise it to resolve their objections:\n" + input.objections,
+    input.objections === undefined ? "The meeting agreed. Write the execution plan the Heads agreed on." : "Your draft got objections. Revise it to resolve them:\n" + input.objections,
     ...(input.previousError === undefined ? [] : [`Your last plan was invalid: ${input.previousError}. Fix it.`]),
     `Reply with exactly one JSON object: ${PLAN_SHAPE}`,
     "Rules: phases are cross-department milestones, each with a user-visible outcome, numbered from 1. Slices are numbered per phase (p1s1, p1s2, … p2s1); each is owned by exactly one department from the meeting, is small enough for one Worker, and has concrete acceptance criteria. dependsOn lists slice ids and must not form a cycle. Every PRD requirement and success metric must be covered by some slice.",
@@ -117,5 +117,27 @@ export function headPlanReviewPrompt(input: MeetingContext & { readonly departme
     "",
     `You are the ${input.departmentId} Head. Review the slices your department owns and the ones it depends on or that touch your field.`,
     'Reply with exactly one JSON object: {"approve": boolean, "objections": string[]} — objections name slice ids and say what must change.',
+  ].join("\n");
+}
+
+/* ── Encore Council approval of the Heads' plan ── */
+
+export const PLAN_REVIEW_CRITERIA = [
+  { criterionId: "coverage", description: "Every PRD requirement and success metric is covered by at least one slice" },
+  { criterionId: "ownership", description: "Each slice has the right owning department, a clear objective, and checkable acceptance criteria" },
+  { criterionId: "order", description: "Phases deliver user-visible outcomes and slice dependencies are in a workable order" },
+  { criterionId: "scope", description: "The plan stays within the Task Contract's scope, non-goals, constraints, and budget" },
+] as const;
+
+export function planReviewQuestion(input: { readonly contractJson: string; readonly planJson: string; readonly version: number }): string {
+  return [
+    `Should the Department Heads' execution plan (version ${input.version}) be approved for execution? Workers start only after approval.`,
+    "Approve (proceed) only if it meets every criterion. Otherwise say do_not_proceed and put what must change, by slice id, in conditions.",
+    "",
+    "Task Contract:",
+    input.contractJson,
+    "",
+    "Plan:",
+    input.planJson,
   ].join("\n");
 }

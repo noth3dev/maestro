@@ -47,6 +47,12 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
   const nativeAdmission =
     overrides.nativeAdmission ??
     (modelGateway === undefined ? undefined : (input: NativeAdmissionInput, modelRef?: string) => createHostNativeAdmission(config, input, modelRef));
+  /** Under Ensemble routing, host sessions (Heads, Encore reviewers) run on the Goal's launching session model. */
+  async function launchModelRef(goalId: string): Promise<string | undefined> {
+    if (config.modelRoutingMode === "pin") return undefined;
+    const launch = await readGoalLaunchModel(pool, goalId).catch(() => undefined);
+    return launch === undefined ? undefined : `${launch.provider}/${launch.id}`;
+  }
   function createHostNativeAdmission(config: MaestroConfig, input: NativeAdmissionInput, modelRef?: string): ExecutionAdmission {
     if (config.modelRoutingMode === "pin") return createPinnedNativeAdmission(config, input);
     if (modelRef === undefined) throw new Error("Native host admission under Ensemble routing needs a model");
@@ -61,10 +67,7 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
     ...(nativeAdmission === undefined
       ? {}
       : {
-          createAdmission: async (input) => {
-            const launch = config.modelRoutingMode === "pin" ? undefined : await readGoalLaunchModel(pool, input.goalId).catch(() => undefined);
-            return nativeAdmission({ purpose: "head", ...input }, launch === undefined ? undefined : `${launch.provider}/${launch.id}`);
-          },
+          createAdmission: async (input) => nativeAdmission({ purpose: "head", ...input }, await launchModelRef(input.goalId)),
         }),
   });
   const councilService = createCouncilService({ pool, withGoalLease });
@@ -166,7 +169,7 @@ export function composeExecutionServices(deps: ExecutionServicesDeps) {
     pool,
     kernel: executionKernel,
     withGoalLease,
-    ...(nativeAdmission === undefined ? {} : { createAdmission: (input) => nativeAdmission({ purpose: "encore", ...input }) }),
+    ...(nativeAdmission === undefined ? {} : { createAdmission: async (input) => nativeAdmission({ purpose: "encore", ...input }, await launchModelRef(input.goalId)) }),
   });
   return {
     headParticipationService,

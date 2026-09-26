@@ -36,6 +36,7 @@ describe("kanban board", () => {
 
   it("labels departments and summarizes the plan", () => {
     expect(departmentLabel("quality-assurance")).toBe("Quality Assurance");
-    expect(planSummary(plan("awaiting_approval", [slice("p1s1", "design", "done"), slice("p1s2", "design", "planned")]))).toBe("awaiting Encore approval · v2 · 1/2 done");
+    expect(planSummary(plan("draft", [slice("p1s1", "design", "done"), slice("p1s2", "design", "planned")]))).toBe("awaiting Encore approval · v2 · 1/2 done");
+    expect(planSummary(plan("awaiting_approval", []))).toBe("needs your decision · v2 · 0/0 done");
   });
 });

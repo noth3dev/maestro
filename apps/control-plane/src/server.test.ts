@@ -280,6 +280,17 @@ describe("read state routes", () => {
     await app.close();
   });
 
+  it("takes the operator's decision on an escalated plan", async () => {
+    const decide = vi.fn(async () => undefined);
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state, planDecisions: { decide } });
+    const url = `/v1/goals/${goal.goalId}/plan/decision`;
+    const headers = { authorization: "Bearer test-secret", "content-type": "application/json" };
+    expect((await app.inject({ method: "POST", url, headers, payload: { projectId: goal.projectId, version: 2, decision: "approve" } })).statusCode).toBe(204);
+    expect(decide).toHaveBeenCalledWith(goal.goalId, { projectId: goal.projectId, version: 2, decision: "approve" }, operator);
+    expect((await app.inject({ method: "POST", url, headers, payload: { projectId: goal.projectId, version: 2, decision: "revise" } })).statusCode).toBe(400);
+    await app.close();
+  });
+
   it("returns the Goal plan, or null before the Heads have planned", async () => {
     const plan = {
       goalId: goal.goalId, projectId: goal.projectId, version: 1, status: "draft" as const, councilId: null, contentHash: "a".repeat(64), approvalRef: null,

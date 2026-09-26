@@ -32,7 +32,7 @@ export interface EncoreCouncilRoundRequest {
   readonly evidenceIds: readonly string[];
   readonly reviewerCount: number;
   /** Host-owned native admission; a factory receives the reviewer index so every root has a unique idempotency key. */
-  readonly admission?: ExecutionAdmission | ((reviewerIndex: number) => ExecutionAdmission);
+  readonly admission?: ExecutionAdmission | ((reviewerIndex: number) => ExecutionAdmission | Promise<ExecutionAdmission>);
 }
 
 export interface EncoreCouncilRound {
@@ -294,7 +294,7 @@ export async function runEncoreCouncilReview(pool: Pool, kernel: ExecutionKernel
     // Admit every reviewer before prompting any reviewer. Each root is a
     // fresh, parentless execution and no database transaction is open here.
     for (let index = 0; index < request.reviewerCount; index += 1) {
-      const admission = typeof request.admission === "function" ? request.admission(index) : request.admission;
+      const admission = typeof request.admission === "function" ? await request.admission(index) : request.admission;
       const spawned = await kernel.spawn({ name: `encore-review:${randomUUID()}:${index}`, cwd: process.cwd(), ...(admission ?? {}) });
       spawnedReviewers.push(spawned);
       const bindingRecorded = await recordNativeExecutionBindingIfSupported(pool, kernel, {

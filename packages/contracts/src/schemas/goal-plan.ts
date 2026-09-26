@@ -32,6 +32,8 @@ export const GoalPlanSchema = z
     councilId: UuidSchema.nullable(),
     contentHash: z.string(),
     approvalRef: z.string().nullable(),
+    /** Why the plan awaits the operator (Encore escalated or rejected it), or how it was approved. */
+    decisionNote: z.string().nullable().optional(),
     phases: z.array(GoalPlanPhaseSchema),
     slices: z.array(GoalPlanSliceSchema),
     createdAt: z.string(),
@@ -43,3 +45,15 @@ export type GoalPlan = z.infer<typeof GoalPlanSchema>;
 /** `plan` is null until the Heads have proposed one. */
 export const GoalPlanReadSchema = z.object({ plan: GoalPlanSchema.nullable() }).strict();
 export type GoalPlanRead = z.infer<typeof GoalPlanReadSchema>;
+
+/** The operator's decision on a plan the Encore Council escalated (or rejected after revision). */
+export const GoalPlanDecisionInputSchema = z
+  .object({
+    projectId: UuidSchema,
+    version: z.number().int().positive(),
+    decision: z.enum(["approve", "revise"]),
+    note: z.string().trim().min(1).max(4_000).optional(),
+  })
+  .strict()
+  .refine((input) => input.decision === "approve" || input.note !== undefined, { message: "A revision needs a note for the Heads", path: ["note"] });
+export type GoalPlanDecisionInput = z.infer<typeof GoalPlanDecisionInputSchema>;

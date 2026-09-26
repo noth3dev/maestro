@@ -27,7 +27,7 @@ export type ProviderRouteDeps = Pick<
   RouteDeps,
   "providerCredentials" | "accountLoginStore" | "loginOwnerId" | "loginOperationStaleAfterMs"
 >;
-export type ReadRouteDeps = Pick<RouteDeps, "concertmasterReports" | "readState" | "projections">;
+export type ReadRouteDeps = Pick<RouteDeps, "concertmasterReports" | "readState" | "projections" | "planDecisions">;
 export type SettingsRouteDeps = Pick<RouteDeps, "settingsService">;
 export type RouterRouteDeps = Pick<RouteDeps, "routerCatalogService">;
 export type TaskContractRouteDeps = Pick<RouteDeps, "taskContracts">;

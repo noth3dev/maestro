@@ -12,6 +12,7 @@ import {
   GoalQuerySchema,
   GoalListSchema,
   GoalPlanReadSchema,
+  GoalPlanDecisionInputSchema,
   MetronomeChallengeListSchema,
   ProjectionReadModelSchema,
   ProjectionQuerySchema,
@@ -20,11 +21,11 @@ import {
   WorkerListSchema,
 } from "@maestro/contracts";
 import { parse, requestOperator, RequestValidationError } from "../server-input.js";
-import { GoalNotFoundError } from "../goal-service.js";
+import { DurableStoreUnavailableError, GoalNotFoundError } from "../goal-service.js";
 import type { OperatorContext } from "@maestro/persistence";
 
 export function registerReadRoutes(app: FastifyInstance, deps: ReadRouteDeps): void {
-  const { concertmasterReports, readState, projections } = deps;
+  const { concertmasterReports, readState, projections, planDecisions } = deps;
   app.get("/v1/goals", async (request, reply) => {
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(GoalListSchema.parse({ goals: await readState.listGoals(query.projectId) }));
@@ -115,5 +116,12 @@ export function registerReadRoutes(app: FastifyInstance, deps: ReadRouteDeps): v
     const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
     const query = parse(GoalQuerySchema, request.query);
     return reply.send(GoalPlanReadSchema.parse({ plan: await readState.getGoalPlan(goalId, query.projectId) }));
+  });
+  app.post("/v1/goals/:goalId/plan/decision", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const input = parse(GoalPlanDecisionInputSchema, request.body);
+    if (planDecisions === undefined) throw new DurableStoreUnavailableError();
+    await planDecisions.decide(goalId, input, requestOperator(request as { operator?: OperatorContext }));
+    return reply.status(204).send();
   });
 }

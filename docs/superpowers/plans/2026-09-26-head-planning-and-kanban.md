@@ -21,8 +21,8 @@ Operator approvals stay at: contract launch, and critical actions. The Heads' me
 | 2 | Kanban view replacing Floor view (reads the Goal plan; empty state until Heads plan) | done |
 | 3 | Head brief runtime wired into orchestration: sealed briefs with a `needed` flag; unneeded Heads withdraw (Council protocol) and return to sleep; every permanent Head wakes, the PRD frames each ask; `#head-council` shows each Head's outcome | done |
 | 4 | Head meeting: the Overture conversation lead (with its PRD history) chairs a free discussion in `#head-council`, can pause to ask the operator (Overture clarification), drafts the plan; Heads review their slices; one revision; stored as the draft plan | done |
-| 5 | Encore plan approval gate: plan-approval round; approved plan unlocks dispatch; re-approval on phase/scope change | next |
-| 6 | Dispatch: approved slices → Department Plan items → Mission Bundles; slice status follows Workers/certification | |
+| 5 | Encore plan approval: the draft goes to an Encore review (3 reviewers on the launch model); proceed approves it and its slices; a unanimous rejection gets one lead revision; an escalation (or a second rejection) waits for the operator, who approves or sends it back with a note on the board | done |
+| 6 | Dispatch: approved slices → Department Plan items → Mission Bundles; slice status follows Workers/certification | next |
 | 7 | New department types: request → Encore decision → department definition → Head wake | |
 
 Each slice: TDD, real PostgreSQL integration tests run alone (never two DB suites at once), build/lint/boundaries, commit.

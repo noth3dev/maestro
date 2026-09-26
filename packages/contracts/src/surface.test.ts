@@ -84,6 +84,7 @@ describe("contracts surface", () => {
         "GoalIntegrationBranchSchema",
         "GoalIntegrationRevisionSchema",
         "GoalListSchema",
+        "GoalPlanDecisionInputSchema",
         "GoalPlanPhaseSchema",
         "GoalPlanReadSchema",
         "GoalPlanSchema",

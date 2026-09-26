@@ -76,6 +76,7 @@ import type {
   PollingScheduler,
   ProjectAccessProvisioner,
   ProjectDiscoveryService,
+  PlanDecisionService,
   ProjectMembershipChecker,
   ProviderCredentialService,
   RouteDeps,
@@ -115,6 +116,7 @@ export function buildServer({
   projectMembership,
   projectAccess,
   projectDiscovery,
+  planDecisions,
   organizationService,
   channelService,
   providerCredentials,
@@ -166,6 +168,8 @@ export function buildServer({
   projectMembership?: ProjectMembershipChecker;
   /** Authenticated project discovery used for first-run workspace attachment. */
   projectDiscovery?: ProjectDiscoveryService;
+  /** The operator's decision on a plan the Encore Council escalated. */
+  planDecisions?: PlanDecisionService;
   /** Authenticated standing organization taxonomy used for first-run orientation. */
   organizationService?: OrganizationService;
   /** Goal-bound Department/organization/Encore channel persistence. */
@@ -330,6 +334,7 @@ export function buildServer({
     authenticator,
     ...(projectAccess === undefined ? {} : { projectAccess }),
     ...(projectDiscovery === undefined ? {} : { projectDiscovery }),
+    ...(planDecisions === undefined ? {} : { planDecisions }),
     ...(providerCredentials === undefined ? {} : { providerCredentials }),
     ...(accountLoginStore === undefined ? {} : { accountLoginStore }),
     ...(settingsService === undefined ? {} : { settingsService }),
