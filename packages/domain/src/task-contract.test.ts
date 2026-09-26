@@ -25,13 +25,13 @@ describe("Task Contract", () => {
     expect(() => assertValidTaskContractSubstance({ ...substance, project: { ...substance.project, immutableBaseRevision: "" } })).toThrow("project boundary");
     expect(() => assertValidTaskContractSubstance({ ...substance, budget: { ...substance.budget, stoppingConditions: [1] } })).toThrow("budget");
   });
-  it("selects only the necessary named Overture roles from the canonical six-role pool", () => {
+  it("selects only the necessary named Overture roles from the canonical seven-role pool", () => {
     expect(OVERTURE_ROLE_IDS).toEqual([
       "conversation-lead", "architecture-analyst", "external-research-scout",
-      "security-evaluator", "design-mock-specialist", "task-editor",
+      "security-evaluator", "design-mock-specialist", "task-editor", "plan-reviewer",
     ]);
     expect(selectOvertureRoles({ outsideEvidenceRequested: false, previewNeeded: false })).toEqual([
-      "conversation-lead", "architecture-analyst", "security-evaluator", "task-editor",
+      "conversation-lead", "architecture-analyst", "security-evaluator", "task-editor", "plan-reviewer",
     ]);
     expect(selectOvertureRoles({ outsideEvidenceRequested: true, previewNeeded: true })).toEqual([...OVERTURE_ROLE_IDS]);
   });
@@ -42,7 +42,9 @@ describe("Task Contract", () => {
     ]);
     expect(canonicalizeOvertureRoles([
       "project-context-scout", "external-research-scout", "requirements-analyst", "design-mock-specialist", "task-editor",
-    ])).toEqual([...OVERTURE_ROLE_IDS]);
+    ])).toEqual([
+      "conversation-lead", "architecture-analyst", "external-research-scout", "security-evaluator", "design-mock-specialist", "task-editor",
+    ]);
   });
 
   it("rejects unknown persisted Overture role identifiers", () => {

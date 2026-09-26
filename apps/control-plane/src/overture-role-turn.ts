@@ -60,6 +60,7 @@ export const OVERTURE_ROLE_HANDLES: Readonly<Record<OvertureRoleId, readonly str
   "security-evaluator": ["security", "security-evaluator", "보안"],
   "design-mock-specialist": ["design", "designer", "design-mock-specialist", "디자인", "디자이너"],
   "task-editor": ["task", "task-editor", "editor", "태스크"],
+  "plan-reviewer": ["review", "reviewer", "critic", "plan-reviewer", "리뷰", "비판"],
 };
 
 const ROLE_FOCUS: Readonly<Record<OvertureRoleId, string>> = {
@@ -69,6 +70,7 @@ const ROLE_FOCUS: Readonly<Record<OvertureRoleId, string>> = {
   "security-evaluator": "security, privacy, data boundaries, and abuse or failure risks",
   "design-mock-specialist": "UX, visual design, and mockups of screens or assets",
   "task-editor": "turning the agreed plan into task.md and phase plans that can be launched",
+  "plan-reviewer": "challenging plans for drift, gaps, unverifiable criteria, and oversized scope before they become a contract",
 };
 
 /** Roles addressed with `@handle` in a message, in roster order. */

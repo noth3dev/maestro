@@ -29,7 +29,7 @@ function document(path: string, kind: OverturePlanDocument["kind"], content = `#
 }
 
 describe("Overture domain foundation", () => {
-  it("defines the complete deterministic six-role Crew taxonomy", () => {
+  it("defines the complete deterministic seven-role Crew taxonomy", () => {
     expect(OVERTURE_ROLE_IDS).toEqual([
       "conversation-lead",
       "architecture-analyst",
@@ -37,6 +37,7 @@ describe("Overture domain foundation", () => {
       "security-evaluator",
       "design-mock-specialist",
       "task-editor",
+      "plan-reviewer",
     ]);
     expect(OVERTURE_ROLE_DEFINITIONS.map((role) => role.id)).toEqual(OVERTURE_ROLE_IDS);
     expect(OVERTURE_ROLE_DEFINITIONS.every((role) => role.modelCapabilityAxes.length > 0)).toBe(true);

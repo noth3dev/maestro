@@ -50,6 +50,7 @@ const roleLabels: Record<string, string> = {
   "security-evaluator": "security evaluator",
   "design-mock-specialist": "design specialist",
   "task-editor": "task editor",
+  "plan-reviewer": "plan reviewer",
 };
 
 export function overtureRoleLabel(role: string | undefined): string {

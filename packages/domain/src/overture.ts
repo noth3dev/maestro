@@ -23,7 +23,7 @@ export interface OvertureTaskContractRef {
 export interface OvertureRoleDefinition {
   readonly id: OvertureRoleId;
   readonly displayName: string;
-  readonly taskClass: "conversation" | "architecture" | "research" | "security" | "design" | "planning";
+  readonly taskClass: "conversation" | "architecture" | "research" | "security" | "design" | "planning" | "review";
   readonly modelCapabilityAxes: readonly ModelCapabilityAxis[];
   readonly allowedTools: readonly string[];
   readonly forbiddenActions: readonly string[];
@@ -118,6 +118,14 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     allowedTools: ["read-conversation", "read-overture-artifacts", "write-plan-revision", "write-task-contract-draft", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
+  {
+    id: "plan-reviewer",
+    displayName: "Plan Reviewer",
+    taskClass: "review",
+    modelCapabilityAxes: ["reasoning", "verification", "instruction-fidelity"],
+    allowedTools: ["read-conversation", ...OVERTURE_WORKSPACE_TOOLS],
+    forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
+  },
 ]);
 
 const ROLE_OUTPUT_BUDGETS: Readonly<Record<OvertureRoleId, number>> = Object.freeze({
@@ -127,6 +135,7 @@ const ROLE_OUTPUT_BUDGETS: Readonly<Record<OvertureRoleId, number>> = Object.fre
   "security-evaluator": 3_072,
   "design-mock-specialist": 12_288,
   "task-editor": 8_192,
+  "plan-reviewer": 6_144,
 });
 
 export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeContext): OvertureRoleRuntimePolicy {

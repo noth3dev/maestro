@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isSafeOvertureText, OVERTURE_ROLE_IDS, OVERTURE_ROLE_TAXONOMY_VERSION } from "@maestro/domain";
+import { isSafeOvertureText, OVERTURE_ROLE_IDS, OVERTURE_ROLE_TAXONOMY_VERSIONS } from "@maestro/domain";
 import { CommandVersionSchema, ModelRefSchema, UuidSchema } from "./common.js";
 import { TaskContractSubstanceSchema } from "./task-contract.js";
 
@@ -57,7 +57,7 @@ export const OvertureRunSchema = z
     taskContractRef: OvertureTaskContractRefSchema.nullable(),
     state: OvertureRunStateSchema,
     version: CommandVersionSchema.min(1),
-    roleTaxonomyVersion: z.literal(OVERTURE_ROLE_TAXONOMY_VERSION),
+    roleTaxonomyVersion: z.union(OVERTURE_ROLE_TAXONOMY_VERSIONS.map((version) => z.literal(version)) as [z.ZodLiteral<2>, z.ZodLiteral<3>]),
     planManifestHash: HashSchema.nullable(),
     taskContractId: UuidSchema.nullable(),
     roles: z.array(OvertureRoleAssignmentSchema).min(1).readonly(),

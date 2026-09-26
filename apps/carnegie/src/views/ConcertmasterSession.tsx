@@ -25,6 +25,7 @@ const overtureRoles = [
   "security-evaluator",
   "design-mock-specialist",
   "task-editor",
+  "plan-reviewer",
 ] as const;
 
 const POLL_MS = 2000;

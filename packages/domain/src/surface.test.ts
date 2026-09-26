@@ -85,6 +85,7 @@ describe("domain surface", () => {
         "OVERTURE_ROLE_DEFINITIONS",
         "OVERTURE_ROLE_IDS",
         "OVERTURE_ROLE_TAXONOMY_VERSION",
+        "OVERTURE_ROLE_TAXONOMY_VERSIONS",
         "OVERTURE_RUN_SCHEMA_VERSION",
         "OVERTURE_WORKSPACE_TOOLS",
         "OperationalOverlayValidationError",

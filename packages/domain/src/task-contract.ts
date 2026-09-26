@@ -2,7 +2,9 @@ import { sha256Hex } from "./hash.js";
 import { assertValidHeadActivationPlan, type HeadActivationPlan } from "./head-activation-plan.js";
 
 export const TASK_CONTRACT_SCHEMA_VERSION = 1;
-export const OVERTURE_ROLE_TAXONOMY_VERSION = 2;
+export const OVERTURE_ROLE_TAXONOMY_VERSION = 3;
+/** Taxonomy versions stored runs may carry; v2 predates the Plan Reviewer. */
+export const OVERTURE_ROLE_TAXONOMY_VERSIONS = [2, 3] as const;
 
 /** Canonical selectively activated Overture candidate pool from phase2.md. */
 export const OVERTURE_ROLE_IDS = [
@@ -12,6 +14,7 @@ export const OVERTURE_ROLE_IDS = [
   "security-evaluator",
   "design-mock-specialist",
   "task-editor",
+  "plan-reviewer",
 ] as const;
 export type OvertureRoleId = (typeof OVERTURE_ROLE_IDS)[number];
 
@@ -117,6 +120,7 @@ export function selectOvertureRoles(input: OvertureSelectionInput): readonly Ove
     "security-evaluator",
     ...(input.previewNeeded ? (["design-mock-specialist"] as const) : []),
     "task-editor",
+    "plan-reviewer",
   ];
 }
 

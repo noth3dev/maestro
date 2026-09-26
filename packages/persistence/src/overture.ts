@@ -1057,7 +1057,7 @@ async function readRunWithinTransaction(
   if (result.rowCount !== 1) return undefined;
   const row = result.rows[0]!;
   const roles = await queryable.query<RoleRow>(
-    "SELECT role_id, status, model_ref FROM overture_role_assignments WHERE run_id = $1 AND project_id = $2 ORDER BY array_position(ARRAY['conversation-lead', 'architecture-analyst', 'external-research-scout', 'security-evaluator', 'design-mock-specialist', 'task-editor'], role_id)",
+    "SELECT role_id, status, model_ref FROM overture_role_assignments WHERE run_id = $1 AND project_id = $2 ORDER BY array_position(ARRAY['conversation-lead', 'architecture-analyst', 'external-research-scout', 'security-evaluator', 'design-mock-specialist', 'task-editor', 'plan-reviewer'], role_id)",
     [runId, projectId],
   );
   return OvertureRunSchema.parse({
