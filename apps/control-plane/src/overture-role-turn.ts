@@ -100,8 +100,11 @@ export function createOvertureRoleTurnRunner(options: {
         await roleRuntime.runtime.prompt(spawned.execution, input.content);
         const observation = (await roleRuntime.runtime.observe(spawned.execution)).find((item) => item.invocation === spawned.invocation);
         const answer = observation?.answer;
-        if (answer?.state !== "available" || answer.text.trim() === "")
-          throw new OvertureProviderUnavailableError("Provider returned no bounded role answer");
+        if (answer?.state !== "available" || answer.text.trim() === "") {
+          const tools = observation?.toolEvents.state === "available" ? observation.toolEvents.events.length : 0;
+          const detail = observation?.error === undefined ? "" : `: ${String((observation.error as { message?: unknown }).message ?? observation.error).slice(0, 300)}`;
+          throw new OvertureProviderUnavailableError(`Provider returned no bounded role answer (${observation?.status ?? "no observation"}, ${tools} tool events${detail})`);
+        }
         return await options.appendRoleMessage({
           runId: input.runId,
           projectId: input.projectId,

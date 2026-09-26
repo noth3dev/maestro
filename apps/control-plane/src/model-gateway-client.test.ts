@@ -233,6 +233,49 @@ describe("Control Plane model gateway client", () => {
     expect(events).toEqual(["thinking-delta", "text-delta"]);
   });
 
+  it("bounds stream silence, not total turn time", async () => {
+    const result: ModelTurnResult = { requestId: "request-1", model: model.identity, text: "ok", toolCalls: [], stopReason: "end_turn", usage: { state: "unknown" } };
+    const streamed = (frames: string[], gapMs: number) => async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream({
+          async start(controller) {
+            for (const frame of frames) {
+              await new Promise((resolve) => setTimeout(resolve, gapMs));
+              if (init?.signal?.aborted) return controller.error(init.signal.reason);
+              controller.enqueue(encoder.encode(frame));
+            }
+            controller.close();
+          },
+        }),
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    };
+    const request = () => ({
+      binding: {
+        bindingId: "binding-1",
+        gatewayInstanceId: "gateway-1",
+        provider: model.identity,
+        account: { providerId: "openai", accountRef: "account-1", authMode: "api-key" as const },
+        dataPolicyHash: "policy-1",
+      },
+      requestId: "request-1",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      messages: [],
+      tools: [],
+      limits: { maxModelTurns: 1, maxToolCalls: 0, maxChildCalls: 0, maxOutputTokens: 8, maxInputBytes: 1024, maxResultBytes: 1024, providerTimeoutMs: 1000, wallTimeMs: 1000 },
+      signal: new AbortController().signal,
+      emit: () => undefined,
+    });
+    const keepalives = [...Array.from({ length: 6 }, () => ": keepalive\n\n"), `event: result\ndata: ${JSON.stringify(result)}\n\n`];
+    const lively = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch: streamed(keepalives, 30), timeoutMs: 100 });
+    await expect(lively.turn(request())).resolves.toMatchObject({ text: "ok" });
+
+    const silent = createModelGatewayClient({ baseUrl: "http://127.0.0.1:4321", token: "gateway-secret", fetch: streamed([`event: result\ndata: ${JSON.stringify(result)}\n\n`], 250), timeoutMs: 100 });
+    await expect(silent.turn(request())).rejects.toThrow();
+  });
+
   it("fails closed for malformed typed stream events", async () => {
     const result: ModelTurnResult = {
       requestId: "request-1",

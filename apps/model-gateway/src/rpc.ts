@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z } from "zod";
+
+const STREAM_HEARTBEAT_MS = 15_000;
 import type { GatewayAccountLoginStartRequest, GatewayAccountLoginStatusRequest, GatewayAdmissionRequest, GatewayBinding, GatewayCredentialBindRequest, GatewayCredentialRevokeRequest, GatewayTurnRequest, ModelGatewayPort, ModelMessage, ModelStreamEvent, ModelToolDefinition, TurnLimits } from "@maestro/agent-runtime";
 
 const IdentitySchema = z.object({ provider: z.string().min(1).max(64), id: z.string().min(1).max(256) }).strict();
@@ -217,6 +219,12 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       if (eventCount > eventLimit) { onClosed(); throw new Error("gateway event limit exceeded"); }
       writeFrame(`event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`);
     };
+    // Providers can stay silent for a long time (e.g. while a model writes a
+    // large tool argument); a comment frame keeps the client's idle timer alive.
+    const heartbeat = setInterval(() => {
+      if (!closed && !reply.raw.writableEnded) reply.raw.write(": keepalive\n\n");
+    }, STREAM_HEARTBEAT_MS);
+    heartbeat.unref?.();
     const turn: GatewayTurnRequest = {
       binding: body.binding as GatewayBinding, requestId: body.requestId, sessionId: body.sessionId, turnId: body.turnId,
       messages: body.messages as ModelMessage[], tools: body.tools as ModelToolDefinition[], limits: body.limits as TurnLimits, signal: controller.signal,
@@ -234,6 +242,7 @@ export function buildModelGatewayServer(options: { gateway: ModelGatewayPort; to
       }
       return reply;
     } finally {
+      clearInterval(heartbeat);
       request.raw.removeListener("aborted", onClosed);
       request.raw.socket?.removeListener("close", onClosed);
       if (!closed) onClosed();

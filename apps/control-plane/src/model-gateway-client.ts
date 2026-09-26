@@ -251,7 +251,13 @@ async function streamGatewayTurn(
   timeoutMs: number,
 ): Promise<ModelTurnResult> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // timeoutMs bounds silence, not the whole turn: long turns keep streaming
+  // (the gateway sends keepalive frames) and the caller's signal bounds total time.
+  let timer = setTimeout(() => controller.abort(), timeoutMs);
+  const touch = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  };
   const body = {
     binding: input.binding,
     requestId: input.requestId,
@@ -315,6 +321,7 @@ async function streamGatewayTurn(
     try {
       while (true) {
         const chunk = await reader.read();
+        touch();
         buffer += decoder.decode(chunk.value, { stream: !chunk.done });
         const records = buffer.split(/\r?\n\r?\n/);
         buffer = records.pop() ?? "";
