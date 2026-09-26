@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import type { BillingReadModel, GoalBudgetSummary, GoalResult, ArrangementsRead, ArrangementCandidate, ArrangementCouncil, ArrangementNegativeEvidence } from "@maestro/contracts";
-import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, listImprovementCandidateArrangements, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
+import type { BillingReadModel, GoalBudgetSummary, GoalPlan, GoalResult, ArrangementsRead, ArrangementCandidate, ArrangementCouncil, ArrangementNegativeEvidence } from "@maestro/contracts";
+import { listMetronomeChallenges, listEncoreCouncilRounds, listQualityCertifications, listConditionalCertifications, readConcertmasterFinalReport, readEvidenceBundle, getGoalGitIntegrationState, listWorkersForGoal, listImprovementDigests, listImprovementCandidateArrangements, readLatestGoalPlan, GoalPlanNotFoundError, type MetronomeChallenge, type EncoreCouncilRound, type QualityCertification, type ConditionalCertification, type ConcertmasterFinalReport } from "@maestro/persistence";
 import type { EvidenceBundleRead, GoalGitIntegrationState } from "@maestro/contracts";
 import type { ImprovementDigest, Worker } from "@maestro/domain";
 
@@ -18,6 +18,8 @@ export interface ReadStateService {
   listWorkersForGoal(goalId: string, projectId: string): Promise<readonly Worker[]>;
   listImprovementDigestsForGoal(goalId: string, projectId: string, operatorId: string): Promise<readonly ImprovementDigest[]>;
   listArrangementsForGoal(goalId: string, projectId: string, operatorId: string): Promise<ArrangementsRead>;
+  /** The Heads' execution plan (newest approved, else newest), or null before they plan. */
+  getGoalPlan(goalId: string, projectId: string): Promise<GoalPlan | null>;
 }
 
 function arrangementCandidate(record: Awaited<ReturnType<typeof listImprovementCandidateArrangements>>[number]): ArrangementCandidate {
@@ -156,6 +158,16 @@ export function createReadStateService(pool: Pool): ReadStateService {
       const encoreCouncil = records.filter((record) => record.council !== null).map((record) => arrangementCouncil(record.candidate.candidateId, record.council!));
       const negativeEvidence = records.filter((record) => record.candidate.state === "rejected").map((record) => arrangementNegativeEvidence(record.candidate.candidateId, record.council));
       return { active, candidates, encoreCouncil, negativeEvidence };
+    },
+    async getGoalPlan(goalId, projectId) {
+      await assertGoalProject(goalId, projectId);
+      try {
+        const plan = await readLatestGoalPlan(pool, goalId, projectId);
+        return { ...plan, phases: [...plan.phases], slices: plan.slices.map((slice) => ({ ...slice, acceptance: [...slice.acceptance], dependsOn: [...slice.dependsOn] })) };
+      } catch (error) {
+        if (error instanceof GoalPlanNotFoundError) return null;
+        throw error;
+      }
     },
   };
 }

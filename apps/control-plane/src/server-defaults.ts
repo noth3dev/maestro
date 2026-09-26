@@ -200,6 +200,9 @@ function resolveReadState(input: ReadStateService | undefined): ReadStateService
       listArrangementsForGoal: async () => {
         throw new DurableStoreUnavailableError();
       },
+      getGoalPlan: async () => {
+        throw new DurableStoreUnavailableError();
+      },
     }
   );
 }

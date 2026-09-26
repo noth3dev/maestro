@@ -100,3 +100,4 @@ export * from "./release-checkpoint.js";
 export * from "./overture.js";
 
 export * from "./start-goal-orchestration.js";
+export * from "./goal-plan.js";

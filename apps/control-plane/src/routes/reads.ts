@@ -11,6 +11,7 @@ import {
   GoalGitIntegrationStateSchema,
   GoalQuerySchema,
   GoalListSchema,
+  GoalPlanReadSchema,
   MetronomeChallengeListSchema,
   ProjectionReadModelSchema,
   ProjectionQuerySchema,
@@ -109,5 +110,10 @@ export function registerReadRoutes(app: FastifyInstance, deps: ReadRouteDeps): v
     const query = parse(GoalQuerySchema, request.query);
     const operatorId = requestOperator(request as { operator?: OperatorContext }).operatorId;
     return reply.send(ArrangementsReadSchema.parse(await readState.listArrangementsForGoal(goalId, query.projectId, operatorId)));
+  });
+  app.get("/v1/goals/:goalId/plan", async (request, reply) => {
+    const goalId = parse(UuidSchema, (request.params as { goalId?: unknown }).goalId);
+    const query = parse(GoalQuerySchema, request.query);
+    return reply.send(GoalPlanReadSchema.parse({ plan: await readState.getGoalPlan(goalId, query.projectId) }));
   });
 }

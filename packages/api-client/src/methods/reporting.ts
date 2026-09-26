@@ -9,6 +9,7 @@ import {
   WorkerListSchema,
   ImprovementDigestListSchema,
   ArrangementsReadSchema,
+  GoalPlanReadSchema,
   PersonaInspectionSchema,
   PersonaReadQuerySchema,
   PersonaProposalInputSchema,
@@ -31,6 +32,7 @@ export type ReportingMethods = Pick<
   | "listWorkersForGoal"
   | "listImprovementDigestsForGoal"
   | "getArrangements"
+  | "getGoalPlan"
   | "getPersona"
   | "proposePersona"
   | "editPersonaCandidate"
@@ -128,6 +130,14 @@ export function createReportingMethods(ctx: MethodContext): ReportingMethods {
         `v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/arrangements?${new URLSearchParams({ projectId: parsed.projectId })}`,
         { headers },
         ArrangementsReadSchema,
+      );
+    },
+    getGoalPlan(goalId, query) {
+      const parsed = GoalQuerySchema.parse(query);
+      return request(
+        `v1/goals/${encodeURIComponent(UuidSchema.parse(goalId))}/plan?${new URLSearchParams({ projectId: parsed.projectId })}`,
+        { headers },
+        GoalPlanReadSchema,
       );
     },
     getPersona(query) {

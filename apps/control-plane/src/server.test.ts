@@ -26,7 +26,7 @@ function buildAuthenticatedServer(goalService: GoalService, authenticator: Opera
 const event = { cursor: "9007199254740993", eventId: "018f3c9b-7e71-7b44-ae23-3b5d4e8c9f02", projectId: goal.projectId, goalId: goal.goalId, aggregateVersion: "1", eventType: "GoalCreated", schemaVersion: 1, payload: { state: "draft" }, occurredAt: "2025-01-01T00:00:00.000Z" };
 function fakeEvents(overrides: Partial<EventService> = {}): EventService { return { listEvents: async () => [event], ...overrides }; }
 
-const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), getBillingSummary: async () => ({ projectId: goal.projectId, periodDays: 14, dailySpend: Array.from({ length: 14 }, (_, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, costCents: 0 })), goals: [], totals: { budgetCents: 0, reservedCents: 0, costCents: 0 }, departmentBreakdown: { available: false, reason: "Actual costs are tracked at Goal scope only" } }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null, targetRef: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined, getEvidenceBundle: async () => ({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) }), getGitIntegrationState: async () => ({ goalId: goal.goalId, branch: null, latestRevision: null }), listWorkersForGoal: async () => [], listImprovementDigestsForGoal: async () => [], listArrangementsForGoal: async () => ({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [] }) };
+const state: ReadStateService = { listGoals: async () => [goal], getBudgetSummary: async () => ({ goalId: goal.goalId, projectId: goal.projectId, budgetCents: 10, reservedCents: 4, costCents: 3 }), getBillingSummary: async () => ({ projectId: goal.projectId, periodDays: 14, dailySpend: Array.from({ length: 14 }, (_, index) => ({ date: `2026-09-${String(index + 1).padStart(2, "0")}`, costCents: 0 })), goals: [], totals: { budgetCents: 0, reservedCents: 0, costCents: 0 }, departmentBreakdown: { available: false, reason: "Actual costs are tracked at Goal scope only" } }), listMetronomeChallenges: async () => [{ challengeId: goal.goalId, goalId: goal.goalId, reason: "r", evidenceReferences: [], status: "open", correctionRequest: null, raisedBy: "metronome", resolvedBy: null, resolutionReason: null, targetRef: null }], listEncoreCouncilRounds: async () => [], listCertifications: async () => [], getConcertmasterReport: async () => undefined, getEvidenceBundle: async () => ({ bundleId: goal.goalId, goalId: goal.goalId, content: { goalId: goal.goalId }, hash: "a".repeat(64) }), getGitIntegrationState: async () => ({ goalId: goal.goalId, branch: null, latestRevision: null }), listWorkersForGoal: async () => [], listImprovementDigestsForGoal: async () => [], listArrangementsForGoal: async () => ({ active: [], candidates: [], encoreCouncil: [], negativeEvidence: [] }), getGoalPlan: async () => null };
 
 function fakeService(overrides: Partial<GoalService> = {}): GoalService {
   return {
@@ -259,6 +259,26 @@ describe("read state routes", () => {
     expect(response.json()).toEqual(arrangements);
     expect(listArrangementsForGoal).toHaveBeenCalledWith(goal.goalId, goal.projectId, operator.operatorId);
     await app.close();
+  });
+
+  it("returns the Goal plan, or null before the Heads have planned", async () => {
+    const plan = {
+      goalId: goal.goalId, projectId: goal.projectId, version: 1, status: "draft" as const, councilId: null, contentHash: "a".repeat(64), approvalRef: null,
+      phases: [{ phaseNo: 1, title: "Build", outcome: "Works" }],
+      slices: [{ sliceId: "p1s1", phaseNo: 1, departmentId: "engineering", title: "Form", objective: "Build", acceptance: ["Submits"], dependsOn: [], status: "planned" as const, statusReason: null }],
+      createdAt: "2026-09-26T00:00:00.000Z", updatedAt: "2026-09-26T00:00:00.000Z",
+    };
+    const getGoalPlan = vi.fn(async () => plan);
+    const app = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: { ...state, getGoalPlan } });
+    const url = `/v1/goals/${goal.goalId}/plan?projectId=${goal.projectId}`;
+    const response = await app.inject({ method: "GET", url, headers: { authorization: "Bearer test-secret" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ plan });
+    expect(getGoalPlan).toHaveBeenCalledWith(goal.goalId, goal.projectId);
+    const empty = buildServer({ goalService: fakeService(), authenticator: authenticated(), readStateService: state });
+    expect((await empty.inject({ method: "GET", url, headers: { authorization: "Bearer test-secret" } })).json()).toEqual({ plan: null });
+    await app.close();
+    await empty.close();
   });
 
   it("does not serve an evidence bundle for a different project", async () => {

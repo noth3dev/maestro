@@ -29,6 +29,7 @@ import {
   type WorkerList,
   type ImprovementDigestList,
   type ArrangementsRead,
+  type GoalPlanRead,
   type PersonaInspection,
   type PersonaReadQuery,
   type PersonaProposalInput,
@@ -328,6 +329,8 @@ export interface ApiClient {
   listWorkersForGoal(goalId: string, query: GoalQuery): Promise<WorkerList>;
   listImprovementDigestsForGoal(goalId: string, query: GoalQuery): Promise<ImprovementDigestList>;
   getArrangements(goalId: string, query: GoalQuery): Promise<ArrangementsRead>;
+  /** The Department Heads' execution plan (`plan` is null until they have planned). */
+  getGoalPlan(goalId: string, query: GoalQuery): Promise<GoalPlanRead>;
   getPersona(query: PersonaReadQuery): Promise<PersonaInspection>;
   proposePersona(input: PersonaProposalInput, commandId: string): Promise<ImprovementCandidate>;
   editPersonaCandidate(candidateId: string, input: PersonaProposalInput, commandId: string): Promise<ImprovementCandidate>;

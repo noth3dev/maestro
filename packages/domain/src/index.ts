@@ -59,3 +59,4 @@ export * from "./routing-improvement-candidate.js";
 export * from "./channel.js";
 export * from "./hash.js";
 export * from "./overture.js";
+export * from "./goal-plan.js";

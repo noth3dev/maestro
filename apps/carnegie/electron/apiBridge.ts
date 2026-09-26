@@ -114,6 +114,7 @@ export const exposedApiMethods = [
   "listWorkersForGoal",
   "listImprovementDigestsForGoal",
   "getArrangements",
+  "getGoalPlan",
 ] as const satisfies readonly (keyof ApiClient)[];
 export type ExposedApiMethod = (typeof exposedApiMethods)[number];
 

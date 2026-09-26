@@ -123,10 +123,10 @@ describeDatabase("Task Contract control-plane API", () => {
         roles: [
           "conversation-lead",
           "architecture-analyst",
-          "external-research-scout",
           "security-evaluator",
           "design-mock-specialist",
           "task-editor",
+          "plan-reviewer",
         ],
       });
       const confirmed = await fetch(`${baseUrl}/v1/task-contracts/${contractId}/confirmation`, {
