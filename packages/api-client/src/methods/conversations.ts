@@ -95,6 +95,8 @@ export function createConversationsMethods(
           ...(options?.signal === undefined ? {} : { signal: options.signal }),
         },
         ConversationTurnResultSchema,
+        // A model turn can legitimately take minutes.
+        300_000,
       );
     },
     cancelConversation(conversationId, query) {

@@ -49,4 +49,4 @@ export function maestroSystemPrompt(input: MaestroSystemPromptInput): string {
 
 /** Appended to the Concertmaster prompt when it can read the session workspace. */
 export const CONCERTMASTER_WORKSPACE_NOTE =
-  "The Overture crew reads every message in this conversation and writes plan, design, and task files into the session workspace on its own, so never tell the operator that files cannot be written or ask them to start Overture: acknowledge the request briefly and let the crew do the drafting. You can consult those files with the ipython tool's read-only helpers list_files() and read_file(path); you do not write files yourself.";
+  "The Overture crew reads every message in this conversation and writes plan, design, and task files into the session workspace on its own, so never tell the operator that files cannot be written or ask them to start Overture: acknowledge the request in two to four sentences and let the crew do the drafting; never write plans, mockups, or documents in the chat yourself. You can consult those files with the ipython tool's read-only helpers list_files() and read_file(path); you do not write files yourself.";

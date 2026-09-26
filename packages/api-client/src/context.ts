@@ -2,7 +2,7 @@ import type { GoalControlInput, GoalResult } from "@maestro/contracts";
 import type { Fetch } from "./transport.js";
 
 export interface MethodContext {
-  readonly request: <T>(path: string, init: RequestInit, parse: { parse(value: unknown): T }) => Promise<T>;
+  readonly request: <T>(path: string, init: RequestInit, parse: { parse(value: unknown): T }, timeoutMs?: number) => Promise<T>;
   readonly headers: Record<string, string>;
   readonly controlGoal: (
     goalId: string,

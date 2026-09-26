@@ -350,10 +350,10 @@ export function createApiClient({
   if (base.protocol !== "https:" && !(base.protocol === "http:" && loopback))
     throw new Error("Control plane URL must use HTTPS unless it is loopback");
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive safe integer");
-  const request = async <T>(path: string, init: RequestInit, parse: { parse(value: unknown): T }): Promise<T> => {
+  const request = async <T>(path: string, init: RequestInit, parse: { parse(value: unknown): T }, requestTimeoutMs = timeoutMs): Promise<T> => {
     const controller = new AbortController();
     const requestSignal = signal === undefined ? controller.signal : AbortSignal.any([controller.signal, signal]);
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     let response: Response;
     try {
       response = await fetch(new URL(path, base).href, { ...init, signal: requestSignal, redirect: "error" });
