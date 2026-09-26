@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { ToolRegistry, type ModelGatewayPort } from "@maestro/agent-runtime";
 import type {
@@ -65,6 +65,8 @@ export interface OvertureService {
     operator: OperatorContext,
   ): Promise<readonly OvertureMessage[]>;
   getRun(runId: string, projectId: string, conversationId: string, operator: OperatorContext): Promise<OvertureRun>;
+  /** Resolves once background crew turns have finished (tests and shutdown). */
+  idle?(): Promise<void>;
   /** Runs attached to one conversation, oldest first. */
   listRuns?(projectId: string, conversationId: string, operator: OperatorContext): Promise<readonly OvertureRun[]>;
 
@@ -119,7 +121,44 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
     await assertProjectRole(pool, operator.operatorId, projectId, "concertmaster");
   }
 
+  // Role turns can run for minutes (model calls plus workspace tool calls), so
+  // they run after the request returns, one at a time per Run. The chat polls
+  // for the reply; a failure is posted as a visible crew message.
+  const runQueues = new Map<string, Promise<void>>();
+  const inFlight = new Set<Promise<void>>();
+  function scheduleRoleTurn(input: Parameters<OvertureRoleTurnRunner["run"]>[0]): void {
+    if (roleTurnRunner === undefined) return;
+    const runner = roleTurnRunner;
+    const previous = runQueues.get(input.runId) ?? Promise.resolve();
+    const task = previous.then(async () => {
+      try {
+        await runner.run(input);
+      } catch (error) {
+        const reason = error instanceof Error && error.message.trim() !== "" ? error.message : "unknown error";
+        await appendOvertureMessage(pool, {
+          runId: input.runId,
+          projectId: input.projectId,
+          conversationId: input.conversationId,
+          turnId: input.turnId,
+          actor: "conversation-lead",
+          modelRef: null,
+          content: `This Overture turn could not finish: ${reason.slice(0, 500)}`,
+          commandId: randomUUID(),
+        }).catch(() => undefined);
+      }
+    });
+    runQueues.set(input.runId, task);
+    inFlight.add(task);
+    void task.finally(() => {
+      inFlight.delete(task);
+      if (runQueues.get(input.runId) === task) runQueues.delete(input.runId);
+    });
+  }
+
   return {
+    async idle() {
+      while (inFlight.size > 0) await Promise.allSettled([...inFlight]);
+    },
     async createRun(input, operator) {
       await assertRole(operator, input.projectId);
       return createOvertureRun(pool, input);
@@ -131,7 +170,7 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
       if (roleTurnRunner !== undefined) {
         const run = await readOvertureRun(pool, input.runId, input.projectId, input.conversationId);
         if (run?.roles.some((role) => role.roleId === "conversation-lead" && role.status === "active"))
-          await roleTurnRunner.run({
+          scheduleRoleTurn({
             runId: input.runId,
             projectId: input.projectId,
             conversationId: input.conversationId,
@@ -186,7 +225,7 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
         const messages = await readOvertureMessages(pool, input.runId, input.projectId, input.conversationId);
         const roleAlreadyAnswered = messages.some((message) => message.turnId === turn.turnId && message.actor === "conversation-lead");
         if (!roleAlreadyAnswered) {
-          await roleTurnRunner.run({
+          scheduleRoleTurn({
             runId: input.runId,
             projectId: input.projectId,
             conversationId: input.conversationId,

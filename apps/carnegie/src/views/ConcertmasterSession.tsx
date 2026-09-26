@@ -242,11 +242,14 @@ export function ConcertmasterSession({
     void send(start.text, start);
   }, [conversationId, send, start]);
 
+  // Crew turns run in the background; the latest Overture message being the
+  // operator's means a reply is still on its way.
+  const overtureWorking = overtureMessages.at(-1)?.actor === "operator";
   const timeline = useMemo(() => buildSessionTimeline(messages, overtureMessages, pending), [messages, overtureMessages, pending]);
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ block: "end" });
-  }, [timeline.length, busy, clarification]);
+  }, [timeline.length, busy, clarification, overtureWorking]);
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -313,7 +316,7 @@ export function ConcertmasterSession({
               </div>
             </article>
           )}
-          {busy !== undefined && (
+          {(busy !== undefined || overtureWorking) && (
             <p className="cm-typing" role="status">
               {busy === "concertmaster" ? "Concertmaster is replying…" : "Overture crew is working…"}
             </p>

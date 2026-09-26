@@ -84,6 +84,7 @@ describeDatabase("Overture clarification role continuation", () => {
     const commandId = randomUUID();
     const answer = { runId, projectId, conversationId, clarificationId: clarification.clarificationId, answer: "The connected repository", commandId };
     await expect(service.answerClarification(answer, operator)).resolves.toMatchObject({ status: "answered", answer: answer.answer });
+    await service.idle?.();
     const messages = await service.listMessages(runId, projectId, conversationId, "0", operator);
     expect(messages.map((message) => message.actor)).toEqual(["operator", "conversation-lead"]);
     expect(messages[0]).toMatchObject({ content: answer.answer, turnId: commandId });
@@ -91,7 +92,40 @@ describeDatabase("Overture clarification role continuation", () => {
     expect(admissions).toBe(1);
 
     await expect(service.answerClarification(answer, operator)).resolves.toMatchObject({ status: "answered" });
+    await service.idle?.();
     expect((await service.listMessages(runId, projectId, conversationId, "0", operator)).length).toBe(2);
     expect(admissions).toBe(1);
+  });
+
+  it("runs crew turns after the request returns and reports a failed turn in the conversation", async () => {
+    const failingRunId = randomUUID();
+    const conversationId = randomUUID();
+    await pool.query(
+      "INSERT INTO conversations (conversation_id, operator_id, project_id, goal_id, model_provider, model_id, status, version, binding) VALUES ($1, $2, $3, NULL, 'anthropic', 'claude-3-5-sonnet', 'active', 1, '{}'::jsonb)",
+      [conversationId, operatorId, projectId],
+    );
+    const gateway = {
+      listModels: async () => [],
+      admit: async () => {
+        throw new Error("provider is unavailable");
+      },
+      turn: async () => {
+        throw new Error("unreachable");
+      },
+      cancel: async () => ({ state: "confirmed" as const }),
+      recover: async () => "reconnected" as const,
+      close: async () => undefined,
+    } satisfies ModelGatewayPort;
+    const service = createPostgresOvertureService({ pool, gateway, gatewayOperatorId: operatorId, accountRefs: { anthropic: "anthropic-test" }, dataPolicyHash: "policy-1" });
+    await service.createRun({ runId: failingRunId, projectId, conversationId, roles: ["conversation-lead"], commandId: randomUUID() }, operator);
+    const clarification = await service.openClarification({ runId: failingRunId, projectId, conversationId, question: "Which scope?", commandId: randomUUID() }, operator);
+    await service.answerClarification(
+      { runId: failingRunId, projectId, conversationId, clarificationId: clarification.clarificationId, answer: "Only the homepage", commandId: randomUUID() },
+      operator,
+    );
+    await service.idle?.();
+    const messages = await service.listMessages(failingRunId, projectId, conversationId, "0", operator);
+    expect(messages.map((message) => message.actor)).toEqual(["operator", "conversation-lead"]);
+    expect(messages[1]!.content).toBe("This Overture turn could not finish: provider is unavailable");
   });
 });

@@ -28,11 +28,11 @@ export function createOvertureRoleRuntime(options: {
     pathScope: [],
     outboundDataClasses: ["public", "workspace"],
     remaining: {
-      modelTurns: 8,
+      modelTurns: 16,
       toolCalls: options.policy.allowedTools.length * 4,
       childCalls: 0,
       outputTokens: options.policy.outputTokenBudget,
-      wallTimeMs: 120_000,
+      wallTimeMs: 300_000,
       retryCount: 0,
     },
   };

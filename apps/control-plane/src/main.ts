@@ -126,9 +126,19 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     pythonExecutable: config.ipythonPythonExecutable ?? "/usr/bin/python3",
     cwd: config.worktreeRoot,
   });
+
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
-  const executionKernel =
+  const overtureService = createPostgresOvertureService({
+    pool,
+    ...(modelGateway === undefined ? {} : { gateway: modelGateway }),
+    gatewayOperatorId: config.modelGatewayOperatorId,
+    accountRefs: config.modelAccountRefs,
+    dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
+    tools,
+    sessionTools: (scope) => sessionIpPython.tools({ ...scope, access: "write" }),
+    sessionWorkspace,
+  });  const executionKernel =
     overrides.executionKernel ??
     (modelGateway === undefined
       ? createUnavailableNativeExecutionKernel()
@@ -194,16 +204,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     authenticator,
     eventService: { listEvents: (projectId, after) => listGoalEvents(pool, { projectId, after }) },
     ...(conversationService === undefined ? {} : { conversationService }),
-    overture: createPostgresOvertureService({
-      pool,
-      ...(modelGateway === undefined ? {} : { gateway: modelGateway }),
-      gatewayOperatorId: config.modelGatewayOperatorId,
-      accountRefs: config.modelAccountRefs,
-      dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
-      tools,
-      sessionTools: (scope) => sessionIpPython.tools({ ...scope, access: "write" }),
-      sessionWorkspace,
-    }),
+    overture: overtureService,
     sessionWorkspace,
     settingsService,
     routerCatalogService,
@@ -348,6 +349,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         // the durable lease/fence reconciliation path.
         await drainWithTimeout(Promise.resolve(conversationService?.close?.()), timeoutMs);
         await drainWithTimeout(Promise.resolve(ipythonSessions.close()), timeoutMs);
+        await drainWithTimeout(Promise.resolve(overtureService.idle?.()), timeoutMs);
         await drainWithTimeout(sessionIpPython.close(), timeoutMs);
         await drainWithTimeout(Promise.resolve(executionKernel.close?.()), timeoutMs);
       } finally {
