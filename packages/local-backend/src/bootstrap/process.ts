@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { EmbeddedDatabaseHandle } from "@maestro/persistence";
 import type { ConnectionEnvironment } from "../connection.js";
@@ -27,20 +28,17 @@ export const defaultStartModelGateway = async (options: LocalModelGatewayLaunchO
     cwd: dirname(options.entry),
     env: buildLocalModelGatewayEnvironment(options),
     detached: true,
-    stdio: "ignore",
+    stdio: ["ignore", ...logTo("model-gateway.log")],
   });
   return detachProcess(child);
 };
 
 export const defaultStartControlPlane = async (options: LocalControlPlaneLaunchOptions): Promise<LocalProcessHandle> => {
-  // Background work (Heads, meetings) reports failures on stderr; keep it.
-  mkdirSync(join(options.dataDir, "logs"), { recursive: true });
-  const log = openSync(join(options.dataDir, "logs", "control-plane.log"), "a");
   const child = spawn(process.execPath, [options.entry], {
     cwd: dirname(options.entry),
     env: buildLocalControlPlaneEnvironment(options),
     detached: true,
-    stdio: ["ignore", log, log],
+    stdio: ["ignore", ...logTo("control-plane.log", options.dataDir)],
   });
   return detachProcess(child);
 };
@@ -179,4 +177,11 @@ export function delay(milliseconds: number, signal?: AbortSignal): Promise<void>
     }, milliseconds);
     signal?.addEventListener("abort", abort, { once: true });
   });
+}
+
+/** Background work (Heads, meetings, providers) reports failures on stdout/stderr; keep them in <data>/logs. */
+function logTo(file: string, dataDir = process.env.MAESTRO_LOCAL_DATA_DIR?.trim() || join(homedir(), ".local", "share", "maestro")): [number, number] {
+  mkdirSync(join(dataDir, "logs"), { recursive: true });
+  const log = openSync(join(dataDir, "logs", file), "a");
+  return [log, log];
 }
