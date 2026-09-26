@@ -339,12 +339,7 @@ async function mutateParticipation(
     const participation = current.rows[0]!;
     if (requestedSessionRef !== undefined) {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 13))", [participation.head_role_id]);
-      const activeElsewhere = await client.query(
-        `SELECT 1 FROM goal_head_participations
-         WHERE head_role_id = $1 AND status = 'active' AND goal_id <> $2
-         LIMIT 1`,
-        [participation.head_role_id, goalId],
-      );
+      // A Head may be active in other Goals; one session still serves one Goal binding.
       const sessionElsewhere = await client.query(
         `SELECT 1 FROM goal_head_participations
          WHERE active_session_ref = $1 AND status = 'active'
@@ -352,7 +347,7 @@ async function mutateParticipation(
          LIMIT 1`,
         [requestedSessionRef, participation.head_role_id, goalId],
       );
-      if (activeElsewhere.rowCount === 1 || sessionElsewhere.rowCount === 1) {
+      if (sessionElsewhere.rowCount === 1) {
         throw new HeadActivationRuntimeConflictError();
       }
     }

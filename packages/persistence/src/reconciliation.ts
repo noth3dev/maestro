@@ -380,6 +380,10 @@ async function reconcileHeadActivationCommands(
   };
   try {
     for (const command of commands) {
+      // A fully activated Head is a durable identity: its answers rebuild
+      // context from the Goal's records when its in-memory session is gone,
+      // so a restart keeps it active instead of orphaning the Goal.
+      if (command.status === "active") continue;
       await renew();
       if (command.providerExecutionRef === null || command.providerInvocationRef === null) {
         // A one-sided or missing provider binding has no trustworthy cleanup

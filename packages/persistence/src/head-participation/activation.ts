@@ -6,7 +6,6 @@ import {
   HeadActivationBindingConflictError,
   HeadActivationCycleError,
   HeadActivationRequesterInactiveError,
-  HeadActivationRuntimeConflictError,
   type ActivateHeadRequest,
   type ActivationBrief,
   type AttemptOutcome,
@@ -121,17 +120,8 @@ export async function activateHeadParticipation(
       if (inFlight.rowCount !== 0) throw new HeadActivationBindingConflictError("Head activation is already in progress");
     }
 
-    const activeElsewhere = await client.query(
-      `SELECT 1 FROM goal_head_participations
-       WHERE head_role_id = $1 AND status = 'active' AND goal_id <> $2
-       LIMIT 1`,
-      [targetHeadRoleId, request.goalId],
-    );
-    if (activeElsewhere.rowCount === 1) {
-      await insertAttempt(client, request, requester, targetHeadRoleId, requesterHeadRoleId, "runtime_conflict");
-      await client.query("COMMIT"); open = false;
-      throw new HeadActivationRuntimeConflictError();
-    }
+    // A Head may staff several Goals at once (one session per Goal), so
+    // being active elsewhere is not a conflict.
 
     if (current && bindingMismatch(current, requestedContractId, requestedContextId)) {
       await insertAttempt(client, request, requester, targetHeadRoleId, requesterHeadRoleId, "binding_conflict");

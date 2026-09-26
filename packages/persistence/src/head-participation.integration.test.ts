@@ -184,17 +184,19 @@ describeDatabase("Goal Head participation with PostgreSQL", () => {
     await expect(activateHeadParticipation(pool, { ...request, reason: "changed after approval" }, lease)).rejects.toMatchObject({ code: "head_activation_binding_conflict" });
   });
 
-  it("rejects a persistent Head reservation already active in another Goal", async () => {
+  it("lets one Head staff several Goals at once, one session per Goal", async () => {
     const firstGoalId = await goal(); const firstLease = await proof(firstGoalId);
     await activateHeadParticipation(pool, concertmaster(firstGoalId, "product"), firstLease);
     await markHeadParticipationActive(pool, firstGoalId, "product", "opaque:product:first", firstLease);
 
     const secondGoalId = await goal(); const secondLease = await proof(secondGoalId);
-    await expect(activateHeadParticipation(pool, concertmaster(secondGoalId, "product"), secondLease))
-      .rejects.toMatchObject({ code: "head_runtime_conflict" });
-    expect((await pool.query("SELECT goal_id, department_id, status, active_session_ref FROM goal_head_participations ORDER BY goal_id")).rows).toEqual([
-      { goal_id: firstGoalId, department_id: "product", status: "active", active_session_ref: "opaque:product:first" },
-    ]);
+    await activateHeadParticipation(pool, concertmaster(secondGoalId, "product"), secondLease);
+    await markHeadParticipationActive(pool, secondGoalId, "product", "opaque:product:second", secondLease);
+    const rows = (await pool.query<{ goal_id: string; status: string; active_session_ref: string }>("SELECT goal_id, status, active_session_ref FROM goal_head_participations WHERE department_id = 'product'")).rows;
+    expect(rows.map((row) => [row.goal_id, row.status, row.active_session_ref]).sort()).toEqual([
+      [firstGoalId, "active", "opaque:product:first"],
+      [secondGoalId, "active", "opaque:product:second"],
+    ].sort());
   });
 
   it("records a noncyclic duplicate as already_active without another session grant", async () => {

@@ -234,10 +234,16 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
     await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "head:engineering", sessionRef: "opaque:product", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
     await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, { actorId: "head:product", sessionRef: "opaque:product-restarted", commandId: randomUUID() })).rejects.toBeInstanceOf(CouncilProtocolError);
 
-    await pool.query("UPDATE goal_head_participations SET active_session_ref = 'opaque:product-restarted' WHERE goal_id = $1 AND department_id = 'product'", [council.goalId]);
+    // A sleeping Head has no authority.
+    await pool.query("UPDATE goal_head_participations SET status = 'sleeping', active_session_ref = NULL WHERE goal_id = $1 AND department_id = 'product'", [council.goalId]);
     await expect(submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"))).rejects.toBeInstanceOf(CouncilProtocolError);
     expect((await pool.query("SELECT count(*)::int AS count FROM independent_briefs WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(0);
     expect((await pool.query("SELECT count(*)::int AS count FROM council_protocol_events WHERE council_id = $1 AND event_type = 'brief_submitted'", [council.councilId])).rows[0]!.count).toBe(0);
+
+    // The captured Head keeps its authority across a re-created session (e.g. after a restart).
+    await pool.query("UPDATE goal_head_participations SET status = 'active', active_session_ref = 'opaque:product-restarted' WHERE goal_id = $1 AND department_id = 'product'", [council.goalId]);
+    await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+    expect((await pool.query("SELECT count(*)::int AS count FROM independent_briefs WHERE council_id = $1", [council.councilId])).rows[0]!.count).toBe(1);
   });
 
   it("uses current database time after the Council row lock for deadline decisions", async () => {

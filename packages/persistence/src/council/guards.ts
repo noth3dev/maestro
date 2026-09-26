@@ -65,17 +65,23 @@ export async function assertAuthorizedCapturedActor(client: PoolClient, council:
     ? isAuthorizedHeadCouncilActor(context, captured)
     : context.actorId === captured.participantId && context.sessionRef === captured.sessionRef;
   if (!authorized) throw new CouncilProtocolError("Council actor is not bound to the captured Head identity and session");
-  const roleClause = captured.headRoleId === undefined ? "" : " AND head_role_id = $5";
-  const values = captured.headRoleId === undefined
-    ? [council.goalId, departmentId, council.contractId, captured.sessionRef]
-    : [council.goalId, departmentId, council.contractId, captured.sessionRef, captured.headRoleId];
-  const active = await client.query(
-    `SELECT 1 FROM goal_head_participations
-      WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
-        AND status = 'active' AND active_session_ref = $4${roleClause}
-      FOR UPDATE`,
-    values,
-  );
+  // New snapshots authorize the active Head identity (its session can be
+  // re-created); legacy snapshots still require the captured session.
+  const active = captured.headRoleId === undefined
+    ? await client.query(
+        `SELECT 1 FROM goal_head_participations
+          WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
+            AND status = 'active' AND active_session_ref = $4
+          FOR UPDATE`,
+        [council.goalId, departmentId, council.contractId, captured.sessionRef],
+      )
+    : await client.query(
+        `SELECT 1 FROM goal_head_participations
+          WHERE goal_id = $1 AND department_id = $2 AND contract_id = $3
+            AND status = 'active' AND head_role_id = $4
+          FOR UPDATE`,
+        [council.goalId, departmentId, council.contractId, captured.headRoleId],
+      );
   if (active.rowCount !== 1) throw new CouncilProtocolError("Captured Head session is no longer authorized");
 }
 
