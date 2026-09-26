@@ -132,7 +132,10 @@ export function createPostgresOvertureService(options: Pool | OvertureServiceOpt
     const previous = runQueues.get(input.runId) ?? Promise.resolve();
     const task = previous.then(async () => {
       try {
-        await runner.run(input);
+        const run = await readOvertureRun(pool, input.runId, input.projectId, input.conversationId);
+        const assignedRoles = run?.roles.map((role) => role.roleId) ?? [];
+        if (runner.runCrew !== undefined && assignedRoles.length > 1) await runner.runCrew({ ...input, assignedRoles });
+        else await runner.run(input);
       } catch (error) {
         const reason = error instanceof Error && error.message.trim() !== "" ? error.message : "unknown error";
         await appendOvertureMessage(pool, {

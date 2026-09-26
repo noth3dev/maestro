@@ -69,10 +69,20 @@ export const OVERTURE_WORKSPACE_TOOLS = ["ipython"] as const;
 const WORKSPACE_GUIDANCE = [
   "The session workspace is a private Git-backed folder for this conversation, shown to the operator as files in a side panel; it is not the project repository.",
   "Use the ipython tool with its host helpers list_files(), read_file(path), and write_file(path, content); Python cannot open files or import modules directly.",
-  "When the operator asks for planning, write the plan as Markdown files: plan00.md for the overall plan, then plan01.md, plan02.md for phases, and other .md files for research, decisions, or the task definition.",
-  "Put drawings, diagrams, or UI mocks in .canvas files containing self-contained SVG markup.",
+  "Choose the file format that fits the artifact, never a generic one:",
+  "a self-contained .html page with inline CSS (no scripts, external fonts, or network resources; it is previewed as a static page) for any screen, UI, landing page, or frontend mock;",
+  ".svg for logos, icons, illustrations, and diagrams;",
+  ".md for plans, research, decisions, reviews, and task definitions;",
+  "the real extension (.ts, .py, .css, …) for code samples.",
+  "Plans are Markdown: plan00.md for the overall plan, then plan01.md, plan02.md for phases.",
   "When the plan is ready to execute, write task.md with these ## sections: Outcome, Success criteria (bullets), Repository, Base revision, Data boundary, Groups (bullets), Departments (bullets), and optionally Scope, Non-goals, Constraints, Edge cases, Budget. The operator creates, confirms, and launches the Task Contract from task.md; you never launch it.",
   "Read existing files before revising them, write whole files, and keep chat replies short by pointing to the files you wrote.",
+].join(" ");
+
+const CREW_GUIDANCE = [
+  "You are one member of the Overture crew in a shared chat with the operator and the other crew members; crew replies appear as [Role] lines.",
+  "Speak only for your role, build on what others said instead of repeating it, and answer crew members who address you.",
+  "Address a crew member with @lead, @architecture, @research, @security, @design, or @task when you need their input; address the operator plainly.",
 ].join(" ");
 
 export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Object.freeze([
@@ -89,7 +99,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     displayName: "Architecture Analyst",
     taskClass: "architecture",
     modelCapabilityAxes: ["reasoning", "long-context", "coding"],
-    allowedTools: ["read-conversation", "read-project", "read-git"],
+    allowedTools: ["read-conversation", "read-project", "read-git", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
   {
@@ -97,7 +107,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     displayName: "External Research Scout",
     taskClass: "research",
     modelCapabilityAxes: ["knowledge", "long-context", "verification"],
-    allowedTools: ["read-conversation", "search-public-sources"],
+    allowedTools: ["read-conversation", "search-public-sources", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
   {
@@ -105,7 +115,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     displayName: "Security Evaluator",
     taskClass: "security",
     modelCapabilityAxes: ["reasoning", "verification", "refusal-calibration"],
-    allowedTools: ["read-conversation", "read-project", "record-finding"],
+    allowedTools: ["read-conversation", "read-project", "record-finding", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
   {
@@ -113,7 +123,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     displayName: "Design and Mock Specialist",
     taskClass: "design",
     modelCapabilityAxes: ["instruction-fidelity", "knowledge", "long-context"],
-    allowedTools: ["read-conversation", "write-design-artifact"],
+    allowedTools: ["read-conversation", "write-design-artifact", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
   {
@@ -121,7 +131,7 @@ export const OVERTURE_ROLE_DEFINITIONS: readonly OvertureRoleDefinition[] = Obje
     displayName: "Task Editor",
     taskClass: "planning",
     modelCapabilityAxes: ["reasoning", "instruction-fidelity", "verification", "long-context"],
-    allowedTools: ["read-conversation", "read-overture-artifacts", "write-plan-revision", "write-task-contract-draft"],
+    allowedTools: ["read-conversation", "read-overture-artifacts", "write-plan-revision", "write-task-contract-draft", ...OVERTURE_WORKSPACE_TOOLS],
     forbiddenActions: COMMON_FORBIDDEN_ACTIONS,
   },
 ]);
@@ -131,8 +141,8 @@ const ROLE_OUTPUT_BUDGETS: Readonly<Record<OvertureRoleId, number>> = Object.fre
   "architecture-analyst": 4_096,
   "external-research-scout": 3_072,
   "security-evaluator": 3_072,
-  "design-mock-specialist": 3_072,
-  "task-editor": 4_096,
+  "design-mock-specialist": 12_288,
+  "task-editor": 8_192,
 });
 
 export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeContext): OvertureRoleRuntimePolicy {
@@ -149,6 +159,7 @@ export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeCont
       "Work only from the durable conversation and the explicitly granted project context.",
       `You may use: ${definition.allowedTools.join(", ") || "no tools"}.`,
       `You must never: ${definition.forbiddenActions.join(", ")}.`,
+      CREW_GUIDANCE,
       ...(definition.allowedTools.includes("ipython") ? [WORKSPACE_GUIDANCE] : []),
       "Return bounded findings, decisions, or clarification questions; never return private reasoning or raw tool arguments.",
     ].join(" "),
