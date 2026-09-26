@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createSessionWorkspace } from "./session-workspace.js";
+import { createSessionIpPython } from "./session-ipython.js";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { AuthorizedEffectExecutor, type ActionRequest } from "@maestro/authority";
@@ -120,6 +121,11 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
   const ipythonSessions = createControlPlaneIpPythonSessions({ pool, config, overrides, authorityExecutor });
   overrides.onIpPythonSessionManager?.(ipythonSessions);
   const sessionWorkspace = createSessionWorkspace({ root: config.worktreeRoot });
+  const sessionIpPython = createSessionIpPython({
+    workspace: sessionWorkspace,
+    pythonExecutable: config.ipythonPythonExecutable ?? "/usr/bin/python3",
+    cwd: config.worktreeRoot,
+  });
   const tools = new ToolRegistry();
   tools.register(createIpPythonTool({ sessions: ipythonSessions }));
   const executionKernel =
@@ -144,7 +150,14 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     personaGoalEvidenceService,
     personaInspectionService,
     withGoalLease,
-  } = composeFoundationServices({ pool, config, overrides, authorityRepository, modelGateway });
+  } = composeFoundationServices({
+    pool,
+    config,
+    overrides,
+    authorityRepository,
+    modelGateway,
+    sessionTools: (scope) => sessionIpPython.tools({ ...scope, access: "read" }),
+  });
   const {
     headParticipationService,
     councilService,
@@ -188,7 +201,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       accountRefs: config.modelAccountRefs,
       dataPolicyHash: createHash("sha256").update("maestro-overture-data-policy:v1").digest("hex"),
       tools,
-      sessionWorkspace,
+      sessionTools: (scope) => sessionIpPython.tools({ ...scope, access: "write" }),
     }),
     sessionWorkspace,
     settingsService,
@@ -334,6 +347,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         // the durable lease/fence reconciliation path.
         await drainWithTimeout(Promise.resolve(conversationService?.close?.()), timeoutMs);
         await drainWithTimeout(Promise.resolve(ipythonSessions.close()), timeoutMs);
+        await drainWithTimeout(sessionIpPython.close(), timeoutMs);
         await drainWithTimeout(Promise.resolve(executionKernel.close?.()), timeoutMs);
       } finally {
         try {

@@ -1,4 +1,3 @@
-import { resolveCodexAppServerCommand } from "@maestro/model-provider-openai";
 import type { EmbeddedDatabaseHandle } from "@maestro/persistence";
 import type { ConnectionEnvironment } from "../connection.js";
 import { resolveModelGatewayEntry } from "./entry.js";
@@ -103,7 +102,10 @@ export async function ensureLocalModelGatewayForBootstrap(options: {
   const entry = resolveModelGatewayEntry(options.env);
   if (entry === undefined) return { kind: "setup-required", reason: "Local model gateway is not running and its executable was not found; set MAESTRO_MODEL_GATEWAY_ENTRY or configure the gateway separately" };
   const operatorId = options.env.MAESTRO_MODEL_GATEWAY_OPERATOR_ID?.trim() || options.env.MAESTRO_LOCAL_OPERATOR_ID?.trim() || options.operatorId;
-  const codexCommand = resolveCodexAppServerCommand(options.env.MAESTRO_CODEX_APP_SERVER_COMMAND);
+  // The native ChatGPT path is the default: the Codex app-server runs its own
+  // tools on the host and cannot carry Maestro-granted tools, so it is used
+  // only when explicitly configured.
+  const codexCommand = options.env.MAESTRO_CODEX_APP_SERVER_COMMAND?.trim() || undefined;
   let startedProcess: LocalProcessHandle | undefined;
   try {
     startedProcess = await startOwnedProcessWithCancellation(

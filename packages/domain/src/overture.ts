@@ -63,12 +63,13 @@ export class InvalidOvertureRoleError extends Error {
   }
 }
 
-/** Tools that read and write the conversation's own session workspace (never the project repository). */
-export const OVERTURE_WORKSPACE_TOOLS = ["list-workspace-files", "read-workspace-file", "write-workspace-file"] as const;
+/** The session IPython tool, whose host helpers read and write the conversation's own workspace (never the project repository). */
+export const OVERTURE_WORKSPACE_TOOLS = ["ipython"] as const;
 
 const WORKSPACE_GUIDANCE = [
   "The session workspace is a private Git-backed folder for this conversation, shown to the operator as files in a side panel; it is not the project repository.",
-  "When the operator asks for planning, write the plan as Markdown files with write-workspace-file: plan00.md for the overall plan, then plan01.md, plan02.md for phases, and other .md files for research, decisions, or the task definition.",
+  "Use the ipython tool with its host helpers list_files(), read_file(path), and write_file(path, content); Python cannot open files or import modules directly.",
+  "When the operator asks for planning, write the plan as Markdown files: plan00.md for the overall plan, then plan01.md, plan02.md for phases, and other .md files for research, decisions, or the task definition.",
   "Put drawings, diagrams, or UI mocks in .canvas files containing self-contained SVG markup.",
   "Read existing files before revising them, write whole files, and keep chat replies short by pointing to the files you wrote.",
 ].join(" ");
@@ -147,7 +148,7 @@ export function createOvertureRoleRuntimePolicy(context: OvertureRoleRuntimeCont
       "Work only from the durable conversation and the explicitly granted project context.",
       `You may use: ${definition.allowedTools.join(", ") || "no tools"}.`,
       `You must never: ${definition.forbiddenActions.join(", ")}.`,
-      ...(definition.allowedTools.includes("write-workspace-file") ? [WORKSPACE_GUIDANCE] : []),
+      ...(definition.allowedTools.includes("ipython") ? [WORKSPACE_GUIDANCE] : []),
       "Return bounded findings, decisions, or clarification questions; never return private reasoning or raw tool arguments.",
     ].join(" "),
     modelCapabilityAxes: [...definition.modelCapabilityAxes],

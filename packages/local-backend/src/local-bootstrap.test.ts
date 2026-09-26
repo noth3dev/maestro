@@ -123,13 +123,13 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
 }
 
 describe("Codex app-server command propagation", () => {
-  it("passes PATH auto-detected codex to the actual spawned gateway process when unset", async () => {
+  it("keeps the native ChatGPT path even when a codex executable is on PATH", async () => {
     const pathDirectory = await mkdtemp(`${tmpdir()}/maestro-codex-path-`);
     const codex = join(pathDirectory, "codex");
     try {
       await writeFile(codex, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
       const environment = await probeSpawnedGatewayEnvironment({ pathDirectory });
-      expect(environment.codexCommand).toBe(codex);
+      expect(environment).not.toHaveProperty("codexCommand");
     } finally {
       await rm(pathDirectory, { recursive: true, force: true });
     }

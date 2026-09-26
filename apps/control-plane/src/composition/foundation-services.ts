@@ -32,10 +32,12 @@ export interface FoundationServicesDeps {
   overrides: ControlPlaneOverrides;
   authorityRepository: PostgresAuthorityRepository;
   modelGateway?: ModelGatewayPort | undefined;
+  /** Per-conversation read-only session `ipython` tool for the Concertmaster. */
+  sessionTools?: (scope: { projectId: string; conversationId: string }) => import("@maestro/agent-runtime").ToolRegistry;
 }
 
 export function composeFoundationServices(deps: FoundationServicesDeps) {
-  const { pool, config, overrides, authorityRepository, modelGateway } = deps;
+  const { pool, config, overrides, authorityRepository, modelGateway, sessionTools } = deps;
   function parseConversationMissionOverlay(value: unknown): Readonly<Partial<Record<PersonaAxis, number>>> {
     if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("stored mission persona overlay is invalid");
     const result: Partial<Record<PersonaAxis, number>> = {};
@@ -87,6 +89,7 @@ export function composeFoundationServices(deps: FoundationServicesDeps) {
           gatewayOperatorId: config.modelGatewayOperatorId,
           accountRefs: config.modelAccountRefs,
           personaResolver: conversationPersonaResolver,
+          ...(sessionTools === undefined ? {} : { sessionTools }),
         });
   const goalService = createDurableGoalService({
     pool,

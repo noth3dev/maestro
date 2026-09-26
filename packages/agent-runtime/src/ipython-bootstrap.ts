@@ -137,6 +137,9 @@ class Host:
     def git_revision(self, ref="HEAD"):
         return host_call(self._request_id, "git_revision", {"ref": ref})
 
+    def list_files(self, prefix=""):
+        return host_call(self._request_id, "list_files", {"path": prefix})
+
     def write_file(self, path, content):
         return host_call(self._request_id, "write_file", {"path": path, "content": content})
 
@@ -232,6 +235,7 @@ def execute(frame):
     local_namespace["host"] = Host(request_id)
     local_namespace["read_file"] = local_namespace["host"].read_file
     local_namespace["git_revision"] = local_namespace["host"].git_revision
+    local_namespace["list_files"] = local_namespace["host"].list_files
     local_namespace["write_file"] = local_namespace["host"].write_file
     local_namespace["run_test"] = local_namespace["host"].run_test
     local_namespace["run_shell"] = local_namespace["host"].run_shell

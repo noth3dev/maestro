@@ -125,6 +125,8 @@ export function createPostgresConversationService(options: {
   accountRefs: Readonly<Record<string, string>>;
   dataPolicyHash?: string;
   tools?: ToolRegistry;
+  /** Read-only session `ipython` tool for each conversation's workspace. */
+  sessionTools?: (scope: { projectId: string; conversationId: string }) => ToolRegistry;
   /** Resolves the persisted role/task-class persona before a model turn starts. */
   personaResolver?: (input: {
     readonly roleId: string;
@@ -160,7 +162,11 @@ export function createPostgresConversationService(options: {
       }
     }
   };
-  const tools = options.tools ?? new ToolRegistry();
+  const sharedTools = options.tools ?? new ToolRegistry();
+  const toolsFor = (projectId: string, conversationId: string) =>
+    options.sessionTools === undefined ? sharedTools : options.sessionTools({ projectId, conversationId });
+  const sessionToolGrant = () =>
+    options.sessionTools === undefined ? { allowedTools: [] as string[], toolCalls: 0 } : { allowedTools: ["ipython"], toolCalls: 8 };
   const policyHash = options.dataPolicyHash ?? "maestro-local-v1";
 
   async function conversationSystemPrompt(projectId: string, goalId: string | null): Promise<string> {
@@ -168,7 +174,10 @@ export function createPostgresConversationService(options: {
       options.personaResolver === undefined
         ? undefined
         : await options.personaResolver({ roleId: "concertmaster", taskClass: "conversation", projectId, goalId });
-    return buildMaestroSystemPrompt(persona);
+    const prompt = buildMaestroSystemPrompt(persona);
+    return options.sessionTools === undefined
+      ? prompt
+      : `${prompt}\n\nThis conversation has a session workspace where the Overture crew writes plan and design files. Use the ipython tool's read-only helpers list_files() and read_file(path) to consult them; you cannot write files.`;
   }
 
   async function read(conversationId: string, projectId: string, operatorId: string): Promise<ConversationRow> {
@@ -182,14 +191,14 @@ export function createPostgresConversationService(options: {
     // owns planning tools and will receive a separate, explicit grant later.
     return {
       grantId: `grant-${row.conversation_id}`,
-      allowedTools: [],
+      allowedTools: sessionToolGrant().allowedTools,
       allowedSkills: [],
       modelPolicy: [formatModelRef({ provider: row.model_provider, id: row.model_id })],
       pathScope: [],
       outboundDataClasses: ["public", "workspace"],
       remaining: {
         modelTurns: 8,
-        toolCalls: 0,
+        toolCalls: sessionToolGrant().toolCalls,
         childCalls: 0,
         outputTokens: 8_192,
         wallTimeMs: 120_000,
@@ -239,7 +248,7 @@ export function createPostgresConversationService(options: {
     const runtime = createMaestroAgentRuntime({
       gateway: options.gateway,
       binding: row.binding,
-      tools,
+      tools: toolsFor(row.project_id, row.conversation_id),
       systemPrompt: await conversationSystemPrompt(row.project_id, row.goal_id),
       initialMessages,
       onModelEvent: (event) => {
@@ -357,7 +366,7 @@ export function createPostgresConversationService(options: {
       const runtime = createMaestroAgentRuntime({
         gateway: options.gateway,
         binding: binding!,
-        tools,
+        tools: toolsFor(input.projectId, conversationId),
         systemPrompt,
         onModelEvent: (event) => {
           queueTextDelta(stream, conversationId, input.projectId, event);
@@ -378,16 +387,16 @@ export function createPostgresConversationService(options: {
           },
           grant: {
             grantId: `grant-${conversationId}`,
-            // Ordinary Concertmaster conversations never receive planning or
-            // Task Contract tools. Overture will use an explicit runtime grant.
-            allowedTools: [],
+            // Concertmaster conversations may only read their session
+            // workspace; planning writes belong to Overture's grant.
+            allowedTools: sessionToolGrant().allowedTools,
             allowedSkills: [],
             modelPolicy: [input.model],
             pathScope: [],
             outboundDataClasses: ["public", "workspace"],
             remaining: {
               modelTurns: 8,
-              toolCalls: 0,
+              toolCalls: sessionToolGrant().toolCalls,
               childCalls: 0,
               outputTokens: 8_192,
               wallTimeMs: 120_000,
