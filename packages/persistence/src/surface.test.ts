@@ -488,6 +488,7 @@ describe("persistence surface", () => {
         "validateReleaseCandidateIdentity",
         "validateStartGoalOrchestrationCommand",
         "verifyStoredEvidenceBundle",
+        "withdrawCouncilParticipant",
       ]
     `);
   });

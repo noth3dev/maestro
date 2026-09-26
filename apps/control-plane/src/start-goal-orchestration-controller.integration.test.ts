@@ -128,12 +128,17 @@ describeDatabase("start_goal orchestration controller", () => {
         return { councilId: "council-1" } as never;
       },
     };
-    const controller = createStartGoalOrchestrationController({ pool, goalService, headParticipationService, councilService } as never);
+    const briefStages: unknown[] = [];
+    const controller = createStartGoalOrchestrationController({
+      pool, goalService, headParticipationService, councilService, onBriefsPending: (stage: unknown) => briefStages.push(stage),
+    } as never);
 
     await expect(controller.execute(input)).resolves.toMatchObject({ state: "running", stage: "briefs_pending" });
     await expect(controller.execute(input)).resolves.toMatchObject({ state: "running", stage: "briefs_pending" });
     expect(activations).toEqual([expect.any(String)]);
     expect(councils).toHaveLength(1);
+    // The Heads' brief stage starts once, when the Council is created.
+    expect(briefStages).toEqual([{ goalId, councilId: "council-1" }]);
     expect((await pool.query("SELECT stage, state, reason FROM goal_orchestration_runs WHERE goal_id = $1", [goalId])).rows).toEqual([
       { stage: "briefs_pending", state: "running", reason: "council_created" },
     ]);

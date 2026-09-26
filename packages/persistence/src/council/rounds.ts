@@ -51,7 +51,7 @@ export async function recordCouncilRound(pool: Pool, councilId: string, contribu
       }
     }
     requireState(council, "revealed");
-    const present = await client.query<{ department_id: string }>("SELECT department_id FROM council_participants WHERE council_id = $1 AND absent_at IS NULL ORDER BY department_id FOR KEY SHARE", [councilId]);
+    const present = await client.query<{ department_id: string }>("SELECT department_id FROM council_participants WHERE council_id = $1 AND absent_at IS NULL AND withdrawn_at IS NULL ORDER BY department_id FOR KEY SHARE", [councilId]);
     const expected = present.rows.map((row) => row.department_id);
     const actual = [...seen].sort();
     if (expected.length === 0 || expected.length !== actual.length || expected.some((departmentId, index) => departmentId !== actual[index])) throw new CouncilProtocolError("A Council round must contain exactly one contribution from every present participant");

@@ -48,6 +48,8 @@ import { composeExecutionServices } from "./composition/execution-services.js";
 import { composeProviderCredentials, composeSettingsService } from "./composition/provider-access.js";
 import { composeRouterCatalogService } from "./composition/router-catalog.js";
 import { createPostgresOvertureService } from "./overture-service.js";
+import { createGatewayHeadAsk, createHeadBriefRuntime, createKernelHeadAsk, headAskWithFallback, readGoalLaunchModel } from "./head-brief-runtime.js";
+import { createHeadBriefScheduler, listCouncilsAwaitingBriefs } from "./head-brief-scheduler.js";
 import { inspectIpPythonProcessOutcome } from "./composition/ipython.js";
 
 export type { NativeAdmissionInput } from "./native-admission.js";
@@ -146,7 +148,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
           void appendOvertureToolActivity(pool, { runId: scope.runId, projectId: scope.projectId, roleId: scope.roleId, ...activity }).catch(() => undefined),
       }),
     sessionWorkspace,
-  });  const executionKernel =
+  });
+  const executionKernel =
     overrides.executionKernel ??
     (modelGateway === undefined
       ? createUnavailableNativeExecutionKernel()
@@ -275,11 +278,48 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
     metronomeLoop === undefined && drainCapacityQueues !== undefined
       ? createMetronomeLoop({ pool, withGoalLease, intervalMs: 1_000, scanGoals: false, drainCapacityQueues })
       : undefined;
+  const kernelHeadAsk = createKernelHeadAsk(executionKernel);
+  const headBriefScheduler = createHeadBriefScheduler({
+    runtime: createHeadBriefRuntime({
+      pool,
+      withGoalLease,
+      ask:
+        modelGateway === undefined
+          ? kernelHeadAsk
+          : headAskWithFallback(
+              kernelHeadAsk,
+              createGatewayHeadAsk({
+                gateway: modelGateway,
+                gatewayOperatorId: config.modelGatewayOperatorId,
+                accountRefs: config.modelAccountRefs,
+                dataPolicyHash: createHash("sha256").update("maestro-head-brief-data-policy:v1").digest("hex"),
+                readGoalModel: (goalId) => readGoalLaunchModel(pool, goalId),
+              }),
+            ),
+      post: async ({ goalId, headRoleId, content }) => {
+        const run = await pool.query<{ project_id: string; actor_id: string | null }>("SELECT project_id, actor_id FROM goal_orchestration_runs WHERE goal_id = $1", [goalId]);
+        const owner = run.rows[0];
+        if (owner?.actor_id == null) return;
+        const author = { kind: "head" as const, id: headRoleId };
+        await postChannelMessage(pool, {
+          operatorId: owner.actor_id,
+          projectId: owner.project_id,
+          goalId,
+          selector: { kind: "organization", channelId: "head-council" },
+          content,
+          author,
+          authorProof: { issuer: "channel-runtime", author },
+        });
+      },
+    }),
+    onError: (error) => console.error("Head brief stage failed", error),
+  });
   const startGoalOrchestrationController = createStartGoalOrchestrationController({
     pool,
     goalService,
     headParticipationService,
     councilService,
+    onBriefsPending: (input) => headBriefScheduler.schedule(input),
   });
   const startGoalOutboxLoop =
     config.startGoalOutboxIntervalMs === undefined
@@ -341,6 +381,8 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
       metronomeLoop?.start();
       capacityQueueLoop?.start();
       startGoalOutboxLoop?.start();
+      // Heads whose sealed briefs were interrupted by a restart answer again.
+      for (const council of await listCouncilsAwaitingBriefs(pool)) headBriefScheduler.schedule(council);
     },
     async close() {
       if (closed) return;
@@ -358,6 +400,7 @@ export function createControlPlane(config: MaestroConfig, overrides: ControlPlan
         await drainWithTimeout(Promise.resolve(conversationService?.close?.()), timeoutMs);
         await drainWithTimeout(Promise.resolve(ipythonSessions.close()), timeoutMs);
         await drainWithTimeout(Promise.resolve(overtureService.idle?.()), timeoutMs);
+        await drainWithTimeout(headBriefScheduler.idle(), timeoutMs);
         await drainWithTimeout(sessionIpPython.close(), timeoutMs);
         await drainWithTimeout(Promise.resolve(executionKernel.close?.()), timeoutMs);
       } finally {

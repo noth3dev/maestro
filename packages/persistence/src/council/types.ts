@@ -7,7 +7,7 @@ import type {
 } from "@maestro/domain";
 
 export type HeadCouncilState = "collecting" | "revealed" | "resolved" | "escalated" | "stopped_no_new_evidence";
-export type CouncilProtocolEventType = "council_created" | "brief_submitted" | "participant_absent" | "briefs_revealed" | "round_recorded" | "council_stopped" | "decision_resolved" | "decision_escalated";
+export type CouncilProtocolEventType = "council_created" | "brief_submitted" | "participant_absent" | "participant_withdrew" | "briefs_revealed" | "round_recorded" | "council_stopped" | "decision_resolved" | "decision_escalated";
 
 export interface HeadCouncil {
   readonly councilId: string;

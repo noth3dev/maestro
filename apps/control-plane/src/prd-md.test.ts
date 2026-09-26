@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TaskContractSubstanceSchema } from "@maestro/contracts";
+import { PERMANENT_DEPARTMENTS } from "@maestro/domain";
 import { PrdMarkdownError, readPrdSections, taskContractFromPrd } from "./prd-md.js";
 
 const projectId = "11111111-1111-4111-8111-111111111111";
@@ -59,6 +60,11 @@ describe("prd.md", () => {
       expectedDepartments: ["engineering", "design"],
       expectedGroups: ["tech", "product"],
     });
+    // Every Head wakes for planning; the PRD only frames what each is asked.
+    const briefs = substance.headActivationPlan!.departments;
+    expect(briefs.map((brief) => brief.departmentId)).toEqual(PERMANENT_DEPARTMENTS.map((department) => department.departmentId));
+    expect(briefs.find((brief) => brief.departmentId === "design")!.requestedContribution).toContain("Plan the Design Department's part");
+    expect(briefs.find((brief) => brief.departmentId === "security")!.requestedContribution).toContain("Check whether this Goal needs");
   });
 
   it("accepts the earlier task.md headings as aliases", () => {

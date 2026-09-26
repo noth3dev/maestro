@@ -18,6 +18,8 @@ export interface StartGoalOrchestrationControllerDependencies {
   goalService: Pick<GoalService, "getGoal" | "transitionGoal">;
   headParticipationService: Pick<HeadParticipationService, "activate">;
   councilService: Pick<CouncilService, "create">;
+  /** Called once the Council exists, to start the Heads' sealed briefs. */
+  onBriefsPending?: (input: { readonly goalId: string; readonly councilId: string }) => void;
   begin?: typeof beginStartGoalOrchestration;
   record?: typeof recordStartGoalOrchestrationState;
 }
@@ -163,7 +165,7 @@ async function createCouncil(
       deriveCouncilCreationCommandId(command.commandId, command.goalId),
       operator,
     );
-    return transitionState(run, record, deps.pool, {
+    const pending = await transitionState(run, record, deps.pool, {
       goalId: command.goalId,
       commandId: command.commandId,
       eventKey: `${command.commandId}:council-created`,
@@ -172,6 +174,8 @@ async function createCouncil(
       reason: "council_created",
       details: { councilId: council.councilId, nextStage: "brief_submission" },
     });
+    deps.onBriefsPending?.({ goalId: command.goalId, councilId: council.councilId });
+    return pending;
   } catch (error) {
     return transitionState(run, record, deps.pool, {
       goalId: command.goalId,

@@ -1,5 +1,5 @@
 import type { TaskContractSubstance } from "@maestro/contracts";
-import { PERMANENT_DEPARTMENTS } from "@maestro/domain";
+import { createHeadActivationPlan, HEAD_ACTIVATION_PLAN_VERSION, PERMANENT_DEPARTMENTS, type HeadActivationPlan } from "@maestro/domain";
 
 export class PrdMarkdownError extends Error {}
 
@@ -115,10 +115,35 @@ export function taskContractFromPrd(input: {
     forbiddenEffects: ["Unapproved external effects", "Self-approval"],
     environmentAssumptions: ["PostgreSQL-backed Overture state", "Control Plane remains authoritative"],
     externalServiceAssumptions: ["No external effect before launch"],
+    headActivationPlan: headActivationPlanFor(departments, singleLine(sections.goal)),
     budget: {
       ceiling: singleLine(sections.budget) || "Server-defined",
       reportingExpectations: ["Report durable state and evidence"],
       stoppingConditions: ["Stop on a changed workspace revision, authority failure, or provider uncertainty"],
     },
   };
+}
+
+/**
+ * Every permanent Head wakes for the planning Council. Departments the PRD
+ * names are asked for their contribution; the others check whether the Goal
+ * needs them and go back to sleep if not.
+ */
+function headActivationPlanFor(named: readonly string[], goal: string): HeadActivationPlan {
+  return createHeadActivationPlan({
+    version: HEAD_ACTIVATION_PLAN_VERSION,
+    departments: PERMANENT_DEPARTMENTS.map((department) => {
+      const inPrd = named.includes(department.departmentId);
+      return {
+        departmentId: department.departmentId,
+        requestedContribution: inPrd
+          ? `Plan the ${department.displayName}'s part of: ${goal}`
+          : `Check whether this Goal needs the ${department.displayName}: ${goal}`,
+        urgency: inPrd ? "named in the PRD" : "not named in the PRD",
+        contextScope: ["Task Contract", PRD_PATH],
+        budgetEffect: "Planning only; no Workers before Encore approval",
+        reason: inPrd ? "The PRD lists this department" : "Every Head reviews the plan; unneeded Heads go back to sleep",
+      };
+    }),
+  });
 }

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { assertValidDecisionPacket, freezeSealedSubmissionSnapshot, sealedSubmissionSnapshotHash, taskContractContentHash, type IndependentBrief, type TaskContractSubstance } from "@maestro/domain";
 import { bootstrapPermanentOrganization } from "./organization.js";
 import { acquireGoalLease } from "./commands.js";
-import { CouncilBriefIdempotencyError, CouncilBriefsSealedError, CouncilProtocolError, createHeadCouncil, listCouncilProtocolEvents, markMissingCouncilParticipantsAbsent, readHeadCouncil, readRevealedCouncilBriefs, recordCouncilDecisionPacket, recordCouncilRound, revealCouncilBriefs, submitIndependentBrief } from "./council.js";
+import { CouncilBriefIdempotencyError, CouncilBriefsSealedError, CouncilProtocolError, createHeadCouncil, listCouncilProtocolEvents, markMissingCouncilParticipantsAbsent, readHeadCouncil, readRevealedCouncilBriefs, recordCouncilDecisionPacket, recordCouncilRound, revealCouncilBriefs, submitIndependentBrief, withdrawCouncilParticipant } from "./council.js";
 import { StaleGoalLeaseError } from "./commands.js";
 
 const databaseUrl = process.env.MAESTRO_TEST_DATABASE_URL;
@@ -84,6 +84,31 @@ const headContext = (departmentId: string) => ({ actorId: `head:${departmentId}`
    expect(events[0]!.evidenceLineage).toMatchObject({ snapshotHash: council.snapshotHash, evidence });
    await expect(pool.query("UPDATE council_protocol_events SET actor_id = 'tampered' WHERE event_id = $1", [events[0]!.eventId])).rejects.toThrow(/append-only/);
    await expect(pool.query("DELETE FROM council_protocol_events WHERE event_id = $1", [events[0]!.eventId])).rejects.toThrow(/append-only/);
+ });
+
+ it("lets an unneeded Head withdraw before the deadline so the others can reveal", async () => {
+   const { council, proof } = await setup(["product", "engineering", "design"]);
+   await submitIndependentBrief(pool, council.councilId, "product", brief, proof, headContext("product"));
+   await expect(withdrawCouncilParticipant(pool, council.councilId, "product", "not needed", proof, headContext("product"))).rejects.toThrow(/submitted a brief/);
+   await expect(withdrawCouncilParticipant(pool, council.councilId, "design", "  ", proof, headContext("design"))).rejects.toThrow(/reason/);
+   await expect(withdrawCouncilParticipant(pool, council.councilId, "design", "not needed", proof, context("outsider"))).rejects.toBeInstanceOf(CouncilProtocolError);
+   await withdrawCouncilParticipant(pool, council.councilId, "design", "No UI in this Goal", proof, headContext("design"));
+   await withdrawCouncilParticipant(pool, council.councilId, "design", "No UI in this Goal", proof, headContext("design"));
+   await expect(withdrawCouncilParticipant(pool, council.councilId, "design", "changed", proof, headContext("design"))).rejects.toBeInstanceOf(CouncilBriefIdempotencyError);
+   await expect(submitIndependentBrief(pool, council.councilId, "design", brief, proof, headContext("design"))).rejects.toBeInstanceOf(CouncilProtocolError);
+   await expect(revealCouncilBriefs(pool, council.councilId, proof, context("secretary-reveal"))).rejects.toBeInstanceOf(CouncilProtocolError);
+   await submitIndependentBrief(pool, council.councilId, "engineering", brief, proof, headContext("engineering"));
+   await revealCouncilBriefs(pool, council.councilId, proof, context("secretary-reveal"));
+   expect((await readRevealedCouncilBriefs(pool, council.councilId)).map((entry) => entry.departmentId).sort()).toEqual(["engineering", "product"]);
+   const events = await listCouncilProtocolEvents(pool, council.councilId);
+   expect(events.map((event) => event.eventType)).toEqual(["council_created", "brief_submitted", "participant_withdrew", "brief_submitted", "briefs_revealed"]);
+   await expect(pool.query("UPDATE council_participants SET withdrawal_reason = 'rewritten' WHERE council_id = $1 AND department_id = 'design'", [council.councilId])).rejects.toThrow(/immutable/);
+ });
+
+ it("does not reveal when every Head withdrew", async () => {
+   const { council, proof } = await setup(["product"]);
+   await withdrawCouncilParticipant(pool, council.councilId, "product", "not needed", proof, headContext("product"));
+   await expect(revealCouncilBriefs(pool, council.councilId, proof, context("secretary-reveal"))).rejects.toBeInstanceOf(CouncilProtocolError);
  });
 
  it("rejects a Council whose contract content hash is not canonical", async () => {

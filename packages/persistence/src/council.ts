@@ -22,5 +22,6 @@ export {
   submitIndependentBrief,
   markMissingCouncilParticipantsAbsent,
   revealCouncilBriefs,
+  withdrawCouncilParticipant,
 } from "./council/briefs.js";
 export { recordCouncilRound, recordCouncilDecisionPacket } from "./council/rounds.js";

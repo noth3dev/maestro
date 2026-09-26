@@ -4,5 +4,6 @@
  * and data shaping; these functions only assemble text.
  */
 export * from "./concertmaster.js";
+export * from "./head.js";
 export * from "./overture.js";
 export * from "./review.js";

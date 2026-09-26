@@ -94,6 +94,8 @@ export function buildLocalControlPlaneEnvironment(options: LocalControlPlaneLaun
     MAESTRO_PORT: url.port || (url.protocol === "https:" ? "443" : "80"),
     MAESTRO_ACTOR_ID: "maestro-control-plane",
     MAESTRO_INSTANCE_ID: "maestro-local-control-plane",
+    // Launched contracts start their Goal (Heads wake and plan) without extra setup.
+    MAESTRO_START_GOAL_OUTBOX_INTERVAL_MS: "2000",
     MAESTRO_MODEL_GATEWAY_URL: options.modelGatewayUrl,
     MAESTRO_MODEL_GATEWAY_TOKEN: options.modelGatewayToken,
     MAESTRO_MODEL_GATEWAY_OPERATOR_ID: options.modelGatewayOperatorId,

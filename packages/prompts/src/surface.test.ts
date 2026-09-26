@@ -6,12 +6,14 @@ describe("prompts surface", () => {
     expect(Object.keys(surface).sort()).toMatchInlineSnapshot(`
       [
         "CONCERTMASTER_WORKSPACE_NOTE",
+        "HEAD_BRIEF_SYSTEM_PROMPT",
         "OVERTURE_CREW_GUIDANCE",
         "OVERTURE_ROLE_BRIEFS",
         "OVERTURE_TRIAGE_SYSTEM_PROMPT",
         "OVERTURE_WORKSPACE_GUIDANCE",
         "encoreReviewerPrompt",
         "headActivationPrompt",
+        "headBriefPrompt",
         "maestroSystemPrompt",
         "overtureJoinPrompt",
         "overtureRoleSystemPrompt",

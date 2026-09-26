@@ -19,8 +19,8 @@ Operator approvals stay at: contract launch, and critical actions. The Heads' me
 | --- | --- | --- |
 | 1 | Execution plan data model: `goal_plans`, `goal_plan_phases`, `goal_plan_slices` (+ status), persistence API, contracts, read route (`GET /v1/goals/:goalId/plan`) | done |
 | 2 | Kanban view replacing Floor view (reads the Goal plan; empty state until Heads plan) | done |
-| 3 | Head brief runtime wired into orchestration: sealed briefs with a `needed` flag; unneeded Heads return to sleep | next |
-| 4 | Head meeting runtime: reveal → up to 2 discussion rounds → plan proposal (phases/slices) → stored as a draft plan | |
+| 3 | Head brief runtime wired into orchestration: sealed briefs with a `needed` flag; unneeded Heads withdraw (Council protocol) and return to sleep; every permanent Head wakes, the PRD frames each ask; `#head-council` shows each Head's outcome | done |
+| 4 | Head meeting runtime: reveal → up to 2 discussion rounds → plan proposal (phases/slices) → stored as a draft plan | next |
 | 5 | Encore plan approval gate: plan-approval round; approved plan unlocks dispatch; re-approval on phase/scope change | |
 | 6 | Dispatch: approved slices → Department Plan items → Mission Bundles; slice status follows Workers/certification | |
 | 7 | New department types: request → Encore decision → department definition → Head wake | |

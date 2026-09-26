@@ -818,7 +818,7 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     expect(gateway).toMatchObject({ MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_HOST: "127.0.0.1", MAESTRO_MODEL_GATEWAY_PORT: "4321", MAESTRO_OPERATOR_ID: "local-operator", MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex" });
     expect(gateway).not.toHaveProperty("OPENAI_API_KEY");
     const controlPlane = buildLocalControlPlaneEnvironment({ entry: "/tmp/control-plane.js", databaseUrl: "postgresql://localhost/maestro", dataDir: "/tmp/maestro", apiUrl: "http://127.0.0.1:4399", modelGatewayUrl: "http://127.0.0.1:4321", modelGatewayToken: "service-token", modelGatewayOperatorId: "local-operator" });
-    expect(controlPlane).toMatchObject({ MAESTRO_HOST: "127.0.0.1", MAESTRO_PORT: "4399", MAESTRO_MODEL_GATEWAY_URL: "http://127.0.0.1:4321", MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator" });
+    expect(controlPlane).toMatchObject({ MAESTRO_HOST: "127.0.0.1", MAESTRO_PORT: "4399", MAESTRO_MODEL_GATEWAY_URL: "http://127.0.0.1:4321", MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator", MAESTRO_START_GOAL_OUTBOX_INTERVAL_MS: "2000" });
   });
 
   it("fails closed instead of auto-starting a non-loopback model gateway", async () => {

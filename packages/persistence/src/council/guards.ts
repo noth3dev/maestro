@@ -184,7 +184,7 @@ export async function assertParticipantSnapshot(queryable: Pick<Pool | PoolClien
   }
 }
 
-export async function settlementCounts(client: PoolClient, councilId: string): Promise<{ participants: number; briefs: number; absent: number }> { const result = await client.query<{ participants: number; briefs: number; absent: number }>(`SELECT (SELECT count(*)::int FROM council_participants WHERE council_id = $1) participants, (SELECT count(*)::int FROM independent_briefs WHERE council_id = $1) briefs, (SELECT count(*)::int FROM council_participants WHERE council_id = $1 AND absent_at IS NOT NULL) absent`, [councilId]); return result.rows[0]!; }
+export async function settlementCounts(client: PoolClient, councilId: string): Promise<{ participants: number; briefs: number; absent: number; withdrawn: number }> { const result = await client.query<{ participants: number; briefs: number; absent: number; withdrawn: number }>(`SELECT (SELECT count(*)::int FROM council_participants WHERE council_id = $1) participants, (SELECT count(*)::int FROM independent_briefs WHERE council_id = $1) briefs, (SELECT count(*)::int FROM council_participants WHERE council_id = $1 AND absent_at IS NOT NULL) absent, (SELECT count(*)::int FROM council_participants WHERE council_id = $1 AND withdrawn_at IS NOT NULL) withdrawn`, [councilId]); return result.rows[0]!; }
 
 export async function knownEvidenceReferences(client: PoolClient, council: HeadCouncil, prior: readonly CouncilRoundContribution[]): Promise<Set<string>> {
   const durable = await assertDurableEvidenceReferences(client, council.goalId, council.snapshot.projectId, council.snapshot.evidence, "Frozen Council evidence");
