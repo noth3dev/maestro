@@ -61,10 +61,17 @@ test.describe("local bootstrap recovery renderer fixture", () => {
         "Start Docker, then retry local setup. To use a database URL instead, set MAESTRO_LOCAL_DATABASE_URL in the environment used to launch Carnegie and restart Carnegie.",
       ),
     ).toBeVisible();
+    const manualConnection = page.locator("details.setup-manual");
+    await expect(manualConnection).toBeVisible();
+    await expect(manualConnection).not.toHaveAttribute("open", "");
+    await expect(page.getByLabel("Control plane URL")).toBeHidden();
+    await expect(page.getByLabel("Operator token")).toBeHidden();
+    await expect(page.getByLabel("Project ID")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Retry local setup", exact: true })).toBeVisible();
+    await manualConnection.locator("summary").click();
     await expect(page.getByLabel("Control plane URL")).toBeVisible();
     await expect(page.getByLabel("Operator token")).toBeVisible();
     await expect(page.getByLabel("Project ID")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Retry local setup", exact: true })).toBeVisible();
   });
 
   for (const { locale, query, guidance } of [
@@ -114,12 +121,13 @@ test.describe("local bootstrap recovery renderer fixture", () => {
         "Fix the issue described above. If it names a MAESTRO_* setting, update the environment used to launch Carnegie and restart Carnegie before retrying. If a Control Plane is already running on this computer, use Manual connection below.",
       ),
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Manual connection" })).toBeVisible();
+    await expect(page.locator("details.setup-manual summary")).toHaveText("Manual connection");
   });
 
   test("retries through the fixture bridge and preserves focus and manual draft on failure", async ({ page, baseURL }) => {
     await openFixture(page, baseURL);
     const retry = page.getByRole("button", { name: "Retry local setup", exact: true });
+    await page.locator("details.setup-manual summary").click();
     await page.getByLabel("Control plane URL").fill("http://127.0.0.1:4320");
     await page.getByLabel("Operator token").fill("fixture-token");
     await page.getByLabel("Project ID").fill("fixture-project");
@@ -260,6 +268,7 @@ test.describe("local bootstrap recovery renderer fixture", () => {
       await expect(page.getByRole("heading", { name: "Set up Maestro" })).toBeVisible();
       await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
       await expect(page.getByText(/Start Docker/)).toBeVisible();
+      await page.locator("details.setup-manual summary").click();
       const button = page.getByRole("button", { name: "Connect", exact: true });
       const colors = await button.evaluate((element) => {
         const style = getComputedStyle(element);
@@ -278,9 +287,10 @@ test.describe("local bootstrap recovery renderer fixture", () => {
 
   test("shows a strong focus ring on the manual URL input", async ({ page, baseURL }) => {
     await openFixture(page, baseURL);
-    const retry = page.getByRole("button", { name: "Retry local setup", exact: true });
+    const manualSummary = page.locator("details.setup-manual summary");
+    await manualSummary.focus();
+    await page.keyboard.press("Enter");
     const url = page.getByLabel("Control plane URL");
-    await retry.focus();
     await page.keyboard.press("Tab");
     await expect(url).toBeFocused();
     await expect(url).toHaveCSS("outline-style", "solid");
@@ -290,6 +300,7 @@ test.describe("local bootstrap recovery renderer fixture", () => {
 
   test("does not retry local setup while a manual connection save is pending", async ({ page, baseURL }) => {
     await openFixture(page, baseURL);
+    await page.locator("details.setup-manual summary").click();
     await page.getByLabel("Operator token").fill("fixture-token");
     await page.getByLabel("Project ID").fill("fixture-project");
     await page.evaluate(() => {
@@ -312,6 +323,7 @@ test.describe("local bootstrap recovery renderer fixture", () => {
 
   test("renders the connected workspace after the fixture bridge saves a local connection", async ({ page, baseURL }) => {
     await openFixture(page, baseURL);
+    await page.locator("details.setup-manual summary").click();
     await page.getByLabel("Operator token").fill("fixture-token");
     await page.getByLabel("Project ID").fill("fixture-project");
     await page.getByRole("button", { name: "Connect", exact: true }).click();
@@ -320,5 +332,42 @@ test.describe("local bootstrap recovery renderer fixture", () => {
     await expect(page.getByRole("main", { name: "Maestro workspace" })).toBeFocused();
     await expect(page.getByRole("heading", { name: "Set up Maestro" })).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.__manualConnectCount)).toBe(1);
+  });
+
+  test("keeps recovery controls reachable when the startup error is extremely long", async ({ page, baseURL }) => {
+    const wideViewport = { width: 1800, height: 1000 };
+    await page.setViewportSize(wideViewport);
+    await openFixture(page, baseURL);
+    await expect(page.getByRole("heading", { name: "Set up Maestro" })).toBeVisible();
+    const longError = "x".repeat(65_598);
+    await page.evaluate((reason) => {
+      window.__publishBootstrapStatus({ phase: "setup-required", reason, canRetryLocal: true });
+    }, longError);
+    await expect(page.getByRole("alert")).not.toContainText("Docker is required for local automatic setup but is not available");
+
+    const alertText = await page.getByRole("alert").textContent();
+    expect(alertText?.length ?? 0).toBeLessThan(512);
+    expect(alertText).not.toContain(longError.slice(0, 128));
+    await page.locator("details.setup-manual summary").click();
+
+    for (const viewport of [wideViewport, { width: 360, height: 720 }]) {
+      await page.setViewportSize(viewport);
+      const card = await page.locator(".setup-card").boundingBox();
+      expect(card).not.toBeNull();
+      expect(card!.x).toBeGreaterThanOrEqual(0);
+      expect(card!.x + card!.width).toBeLessThanOrEqual(viewport.width);
+
+      for (const selector of [".setup-retry-button", "#setup-api-url", "#setup-token", "#setup-project-id", ".setup-submit"]) {
+        const control = page.locator(selector);
+        await control.scrollIntoViewIfNeeded();
+        await expect(control).toBeVisible();
+        const box = await control.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+        expect(box!.y).toBeGreaterThanOrEqual(0);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+      }
+    }
   });
 });

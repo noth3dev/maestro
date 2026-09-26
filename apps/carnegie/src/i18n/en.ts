@@ -39,6 +39,8 @@ export const en = {
     dockerUnavailableRecoveryHint:
       "Start Docker, then retry local setup. To use a database URL instead, set MAESTRO_LOCAL_DATABASE_URL in the environment used to launch Carnegie and restart Carnegie.",
     dockerDiagnosticsRecoveryHint: "Run the Docker diagnostic command shown in the reason above, then retry local setup.",
+    longDiagnosticError: "Local setup failed. The diagnostic is too long to display; retry local setup or use Manual connection below.",
+    databaseLockedError: "The local database may be busy or locked. Close other Maestro instances, then retry local setup.",
     retryLocal: "Retry local setup",
     retryingLocal: "Starting local setup…",
     retryFailed: "Local setup did not complete. Review the reason above, then retry.",

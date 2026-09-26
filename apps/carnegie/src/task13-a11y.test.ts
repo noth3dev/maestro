@@ -18,7 +18,7 @@ describe("Task 13 Carnegie accessibility and scale contract", () => {
     expect(home).not.toContain('<div className="home-card" onClick=');
     expect(home).toContain('<button type="button" className="home-card"');
     expect(home).toContain('aria-pressed={mode === "maestro"}');
-    expect(home).toContain('aria-pressed={isFlashmob}');
+    expect(home).toContain("aria-pressed={isFlashmob}");
   });
 
   it("exposes a keyboard-operable switch with an accessible name", () => {
@@ -40,7 +40,7 @@ describe("Task 13 Carnegie accessibility and scale contract", () => {
     expect(styles).toContain(":focus-visible");
     expect(styles).toMatch(/@media \(max-width: 960px\)/);
     expect(styles).toMatch(/@media \(max-width: 640px\)/);
-    expect(styles).toContain("overflow-wrap:anywhere");
+    expect(styles.replace(/\s+/g, "")).toContain("overflow-wrap:anywhere");
   });
 
   it("keeps native window controls labelled and the agreed page zoom wired", () => {

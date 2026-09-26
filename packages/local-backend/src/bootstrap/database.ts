@@ -28,7 +28,12 @@ export async function ensureLocalDatabase(options: {
   runCommand: LocalCommandRunner;
   retryDelayMs: number;
   signal?: AbortSignal;
-  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean; port?: number }) => Promise<EmbeddedDatabaseHandle>;
+  startEmbeddedDatabase?: (options: {
+    dataDir: string;
+    detached?: boolean;
+    port?: number;
+    signal?: AbortSignal;
+  }) => Promise<EmbeddedDatabaseHandle>;
   onStep?: (event: LocalBootstrapStepEvent) => void;
 }): Promise<{ kind: "ready"; databaseUrl: string; process?: EmbeddedDatabaseHandle } | { kind: "unavailable"; reason: string }> {
   const engine = options.env.MAESTRO_LOCAL_DB_ENGINE?.trim().toLowerCase();
@@ -36,18 +41,29 @@ export async function ensureLocalDatabase(options: {
   const trimmedPort = rawPort?.trim();
   const port = configuredEmbeddedDatabasePort(rawPort);
   if (options.databaseUrl !== undefined && options.databaseUrl !== "") return { kind: "ready", databaseUrl: options.databaseUrl };
-  if (engine === "docker") return ensureDockerDatabase({ databaseUrl: DOCKER_LOCAL_DATABASE_URL, runCommand: options.runCommand, retryDelayMs: options.retryDelayMs, ...(options.signal === undefined ? {} : { signal: options.signal }), ...(options.onStep === undefined ? {} : { onStep: options.onStep }) });
-  if (engine !== undefined && engine !== "embedded") return { kind: "unavailable", reason: "MAESTRO_LOCAL_DB_ENGINE must be embedded or docker" };
-  if (trimmedPort !== undefined && trimmedPort !== "" && port === undefined) return { kind: "unavailable", reason: "MAESTRO_EMBEDDED_DATABASE_PORT must be an integer from 1 to 65535" };
+  if (engine === "docker")
+    return ensureDockerDatabase({
+      databaseUrl: DOCKER_LOCAL_DATABASE_URL,
+      runCommand: options.runCommand,
+      retryDelayMs: options.retryDelayMs,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.onStep === undefined ? {} : { onStep: options.onStep }),
+    });
+  if (engine !== undefined && engine !== "embedded")
+    return { kind: "unavailable", reason: "MAESTRO_LOCAL_DB_ENGINE must be embedded or docker" };
+  if (trimmedPort !== undefined && trimmedPort !== "" && port === undefined)
+    return { kind: "unavailable", reason: "MAESTRO_EMBEDDED_DATABASE_PORT must be an integer from 1 to 65535" };
 
   reportSetupStep(options.onStep, "postgres-ready", "started", "Starting embedded PostgreSQL-compatible database");
   try {
     const process = await startOwnedProcessWithCancellation(
-      () => (options.startEmbeddedDatabase ?? startEmbeddedDatabase)({
-        dataDir: options.dataDir,
-        detached: options.startEmbeddedDatabase === undefined,
-        ...(port === undefined ? {} : { port }),
-      }),
+      () =>
+        (options.startEmbeddedDatabase ?? startEmbeddedDatabase)({
+          dataDir: options.dataDir,
+          detached: options.startEmbeddedDatabase === undefined,
+          ...(port === undefined ? {} : { port }),
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        }),
       options.signal,
     );
     if (process === undefined) throw new Error("embedded database did not return a process");
@@ -75,9 +91,23 @@ async function ensureDockerDatabase(options: {
   const inspect = await runDockerCommand(["inspect", "--format", "{{.State.Running}}", LOCAL_POSTGRES_CONTAINER]);
   if (inspect.code !== 0) {
     const started = await runDockerCommand([
-      "run", "-d", "--name", LOCAL_POSTGRES_CONTAINER, "--restart", "unless-stopped",
-      "-e", "POSTGRES_USER=maestro", "-e", "POSTGRES_DB=maestro_local", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
-      "-p", "127.0.0.1:55432:5432", "-v", "maestro-local-postgres-data:/var/lib/postgresql/data", "postgres:17-alpine",
+      "run",
+      "-d",
+      "--name",
+      LOCAL_POSTGRES_CONTAINER,
+      "--restart",
+      "unless-stopped",
+      "-e",
+      "POSTGRES_USER=maestro",
+      "-e",
+      "POSTGRES_DB=maestro_local",
+      "-e",
+      "POSTGRES_HOST_AUTH_METHOD=trust",
+      "-p",
+      "127.0.0.1:55432:5432",
+      "-v",
+      "maestro-local-postgres-data:/var/lib/postgresql/data",
+      "postgres:17-alpine",
     ]);
     if (started.code !== 0) {
       const reason = dockerUnavailableReason(started.stderr || inspect.stderr);
@@ -108,6 +138,7 @@ async function ensureDockerDatabase(options: {
 }
 
 function dockerUnavailableReason(detail: string): string {
-  if (/not found|cannot connect|is the docker daemon running/i.test(detail)) return "Docker is required for local automatic setup but is not available; install/start Docker or set MAESTRO_LOCAL_DATABASE_URL";
+  if (/not found|cannot connect|is the docker daemon running/i.test(detail))
+    return "Docker is required for local automatic setup but is not available; install/start Docker or set MAESTRO_LOCAL_DATABASE_URL";
   return "Docker PostgreSQL could not be started; run `docker ps -a` and check the maestro-local-postgres container";
 }

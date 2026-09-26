@@ -1,21 +1,52 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { startEmbeddedDatabase } from "@maestro/persistence";
+import { createServer } from "node:net";
+import { startEmbeddedDatabase as startEmbeddedDatabaseDirect } from "@maestro/persistence";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { Pool } from "pg";
 import { describe, expect, it, vi } from "vitest";
-import { buildLocalControlPlaneEnvironment, buildLocalModelGatewayEnvironment, buildNodeChildEnvironment, configuredEmbeddedDatabasePort, resolveInstalledControlPlaneEntry, resolveLocalConnection, resolvePackagedAppEntry, type LocalBootstrapStepEvent, type LocalProcessHandle, type LocalSecretStore } from "./local-bootstrap.js";
+import {
+  buildLocalControlPlaneEnvironment,
+  buildLocalModelGatewayEnvironment,
+  buildNodeChildEnvironment,
+  configuredEmbeddedDatabasePort,
+  resolveInstalledControlPlaneEntry,
+  resolveLocalConnection,
+  resolvePackagedAppEntry,
+  type LocalBootstrapStepEvent,
+  type LocalProcessHandle,
+  type LocalSecretStore,
+} from "./local-bootstrap.js";
 import { resolveCodexAppServerCommand } from "@maestro/model-provider-openai";
 
 function secretStore(initial?: string): LocalSecretStore {
   let value = initial;
   return {
     read: () => value,
-    write: (next) => { value = next; },
-    clear: () => { value = undefined; },
+    write: (next) => {
+      value = next;
+    },
+    clear: () => {
+      value = undefined;
+    },
   };
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function availableLocalPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("Could not allocate a local TCP port");
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error === undefined ? resolve() : reject(error)));
+  });
+  return address.port;
+}
 
 describe("Electron child runtime environment", () => {
   it("runs script children as Node when composed inside Electron", () => {
@@ -163,20 +194,26 @@ describe("resolveLocalConnection", () => {
     expect(configuredEmbeddedDatabasePort(value)).toBeUndefined();
   });
 
-  it.each([["1", 1], ["65535", 65_535], [" 55434 ", 55_434]])("accepts valid embedded database port override %s", (value, expected) => {
+  it.each([
+    ["1", 1],
+    ["65535", 65_535],
+    [" 55434 ", 55_434],
+  ])("accepts valid embedded database port override %s", (value, expected) => {
     expect(configuredEmbeddedDatabasePort(value)).toBe(expected);
   });
 
   it.each(["0", "65536", "abc", "1e3"])("fails closed for invalid embedded database port override %s", async (value) => {
     const startEmbeddedDatabase = vi.fn(async () => ({ databaseUrl: "postgresql://embedded", stop: vi.fn(async () => undefined) }));
-    await expect(resolveLocalConnection({
-      env: { MAESTRO_EMBEDDED_DATABASE_PORT: value },
-      fetch: vi.fn().mockRejectedValue(new Error("control plane is down")),
-      secretStore: secretStore(),
-      runCommand: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })),
-      startEmbeddedDatabase,
-      retryDelayMs: 0,
-    })).resolves.toEqual({
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_EMBEDDED_DATABASE_PORT: value },
+        fetch: vi.fn().mockRejectedValue(new Error("control plane is down")),
+        secretStore: secretStore(),
+        runCommand: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })),
+        startEmbeddedDatabase,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({
       kind: "setup-required",
       reason: "MAESTRO_EMBEDDED_DATABASE_PORT must be an integer from 1 to 65535",
     });
@@ -203,6 +240,28 @@ describe("resolveLocalConnection", () => {
     finishDatabase?.({ databaseUrl: "postgresql://localhost/maestro", stop });
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("does not stop a shared database that finishes starting after cancellation", async () => {
+    const controller = new AbortController();
+    let finishDatabase: ((database: { databaseUrl: string; shared: true; stop: () => Promise<void> }) => void) | undefined;
+    const stop = vi.fn(async () => undefined);
+    const database = new Promise<{ databaseUrl: string; shared: true; stop: () => Promise<void> }>((resolve) => {
+      finishDatabase = resolve;
+    });
+    const startup = resolveLocalConnection({
+      env: {},
+      fetch: vi.fn(),
+      secretStore: secretStore(),
+      runCommand: vi.fn(),
+      startEmbeddedDatabase: async () => database,
+      signal: controller.signal,
+    });
+    controller.abort();
+    await expect(startup).rejects.toMatchObject({ name: "AbortError" });
+    finishDatabase?.({ databaseUrl: "postgresql://localhost/maestro", shared: true, stop });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(stop).not.toHaveBeenCalled();
   });
 
   it("does not start a model gateway when its initial probe is cancelled", async () => {
@@ -336,7 +395,8 @@ describe("resolveLocalConnection", () => {
 
   it("uses the embedded Postgres-compatible engine by default when Docker is unavailable", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -356,16 +416,21 @@ describe("resolveLocalConnection", () => {
     });
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const dataDir = await mkdtemp(`${tmpdir()}/maestro-embedded-bootstrap-`);
-    let embedded: Awaited<ReturnType<typeof startEmbeddedDatabase>> | undefined;
+    let embedded: Awaited<ReturnType<typeof startEmbeddedDatabaseDirect>> | undefined;
     try {
       const result = await resolveLocalConnection({
-        env: { MAESTRO_LOCAL_DATA_DIR: dataDir, MAESTRO_EMBEDDED_DATABASE_PORT: "55434", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+        env: {
+          MAESTRO_LOCAL_DATA_DIR: dataDir,
+          MAESTRO_EMBEDDED_DATABASE_PORT: "55434",
+          MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+          MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js",
+        },
         fetch,
         secretStore: secretStore(),
         runCommand,
         startEmbeddedDatabase: async (options) => {
           expect(options.port).toBe(55434);
-          embedded = await startEmbeddedDatabase({ dataDir: options.dataDir, detached: false, port: options.port ?? 0 });
+          embedded = await startEmbeddedDatabaseDirect({ dataDir: options.dataDir, detached: false, port: options.port ?? 0 });
           return embedded;
         },
         startControlPlane: vi.fn(async () => undefined),
@@ -375,7 +440,9 @@ describe("resolveLocalConnection", () => {
       });
       expect(result).toMatchObject({ kind: "configured", apiUrl: "http://127.0.0.1:4310" });
       expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "docker-check" }));
-      expect(setupEvents).toContainEqual(expect.objectContaining({ step: "postgres-ready", status: "completed", message: expect.stringContaining("Embedded") }));
+      expect(setupEvents).toContainEqual(
+        expect.objectContaining({ step: "postgres-ready", status: "completed", message: expect.stringContaining("Embedded") }),
+      );
     } finally {
       await embedded?.stop();
       await rm(dataDir, { recursive: true, force: true });
@@ -397,28 +464,48 @@ describe("resolveLocalConnection", () => {
   });
 
   it("rejects a non-UUID local operator override before starting services", async () => {
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_OPERATOR_ID: "local-operator" }, fetch: vi.fn(), secretStore: secretStore(), runCommand: vi.fn() })).resolves.toEqual({
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_LOCAL_OPERATOR_ID: "local-operator" },
+        fetch: vi.fn(),
+        secretStore: secretStore(),
+        runCommand: vi.fn(),
+      }),
+    ).resolves.toEqual({
       kind: "setup-required",
       reason: "MAESTRO_LOCAL_OPERATOR_ID must be a canonical UUID",
     });
   });
 
   it("rejects uppercase local UUID overrides to match the persistence contract", async () => {
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_OPERATOR_ID: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA" }, fetch: vi.fn(), secretStore: secretStore(), runCommand: vi.fn() })).resolves.toEqual({
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_LOCAL_OPERATOR_ID: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA" },
+        fetch: vi.fn(),
+        secretStore: secretStore(),
+        runCommand: vi.fn(),
+      }),
+    ).resolves.toEqual({
       kind: "setup-required",
       reason: "MAESTRO_LOCAL_OPERATOR_ID must be a canonical UUID",
     });
   });
 
   it("reuses a keychain token and repairs a missing default Goal", async () => {
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ projects: ["11111111-1111-4111-8111-111111111111"] }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ goals: [] }))
-      .mockResolvedValueOnce(response({ goalId: "22222222-2222-4222-8222-222222222222", projectId: "11111111-1111-4111-8111-111111111111", state: "draft", version: 1 }, 201));
+      .mockResolvedValueOnce(
+        response(
+          { goalId: "22222222-2222-4222-8222-222222222222", projectId: "11111111-1111-4111-8111-111111111111", state: "draft", version: 1 },
+          201,
+        ),
+      );
 
     const store = secretStore("credential.secret");
     const runCommand = vi.fn();
@@ -434,15 +521,26 @@ describe("resolveLocalConnection", () => {
 
   it("returns the single local project when a consumer requests it", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ projects: [projectId] }))
       .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }));
+      .mockResolvedValueOnce(
+        response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }),
+      );
 
-    await expect(resolveLocalConnection({ env: {}, fetch, includeProjectId: true, secretStore: secretStore("credential.secret"), runCommand: vi.fn() })).resolves.toEqual({
+    await expect(
+      resolveLocalConnection({
+        env: {},
+        fetch,
+        includeProjectId: true,
+        secretStore: secretStore("credential.secret"),
+        runCommand: vi.fn(),
+      }),
+    ).resolves.toEqual({
       kind: "configured",
       apiUrl: "http://127.0.0.1:4310",
       token: "credential.secret",
@@ -452,39 +550,65 @@ describe("resolveLocalConnection", () => {
 
   it("restarts a missing model gateway while retaining the Control Plane session", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockRejectedValueOnce(new Error("gateway connection refused"))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ projects: [projectId] }))
       .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }));
+      .mockResolvedValueOnce(
+        response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }),
+      );
     const startModelGateway = vi.fn(async () => undefined);
     const startControlPlane = vi.fn(async () => undefined);
-    await expect(resolveLocalConnection({ env: {}, fetch, secretStore: secretStore("credential.secret"), runCommand: vi.fn(), startModelGateway, startControlPlane, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "credential.secret" });
+    await expect(
+      resolveLocalConnection({
+        env: {},
+        fetch,
+        secretStore: secretStore("credential.secret"),
+        runCommand: vi.fn(),
+        startModelGateway,
+        startControlPlane,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "credential.secret" });
     expect(startModelGateway).toHaveBeenCalledOnce();
     expect(startControlPlane).not.toHaveBeenCalled();
   });
 
   it("does not spawn a duplicate while an existing gateway is becoming ready", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({}, 503))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ projects: [projectId] }))
       .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }));
+      .mockResolvedValueOnce(
+        response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }),
+      );
     const startModelGateway = vi.fn(async () => undefined);
-    await expect(resolveLocalConnection({ env: {}, fetch, secretStore: secretStore("credential.secret"), runCommand: vi.fn(), startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "credential.secret" });
+    await expect(
+      resolveLocalConnection({
+        env: {},
+        fetch,
+        secretStore: secretStore("credential.secret"),
+        runCommand: vi.fn(),
+        startModelGateway,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "credential.secret" });
     expect(startModelGateway).not.toHaveBeenCalled();
   });
 
   it("keeps the gateway credential stable when rotating an invalid Control Plane token", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
@@ -492,7 +616,9 @@ describe("resolveLocalConnection", () => {
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ projects: [projectId] }))
       .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }));
+      .mockResolvedValueOnce(
+        response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }),
+      );
     const store = secretStore("old-credential.stable-secret");
     const runCommand = vi.fn(async (file: string, args: readonly string[], options?: { env?: Record<string, string | undefined> }) => {
       if (file === process.execPath && args.some((arg) => arg.endsWith("local-bootstrap.js"))) {
@@ -502,21 +628,37 @@ describe("resolveLocalConnection", () => {
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
     const startModelGateway = vi.fn(async () => undefined);
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_EMBEDDED_DATABASE_PORT: "55434" }, fetch, secretStore: store, runCommand, startModelGateway, retryDelayMs: 0 })).resolves.toEqual({ kind: "configured", apiUrl: "http://127.0.0.1:4310", token: "55555555-5555-4555-8555-555555555555.stable-secret" });
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_EMBEDDED_DATABASE_PORT: "55434" },
+        fetch,
+        secretStore: store,
+        runCommand,
+        startModelGateway,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({
+      kind: "configured",
+      apiUrl: "http://127.0.0.1:4310",
+      token: "55555555-5555-4555-8555-555555555555.stable-secret",
+    });
     expect(startModelGateway).not.toHaveBeenCalled();
     expect(store.read()).toBe("55555555-5555-4555-8555-555555555555.stable-secret");
   });
 
   it("reuses a keychain token after restarting the local Control Plane", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockResolvedValueOnce(response([]))
       .mockResolvedValueOnce(response({ projects: [projectId] }))
       .mockResolvedValueOnce(response([]))
-      .mockResolvedValueOnce(response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }));
+      .mockResolvedValueOnce(
+        response({ goals: [{ goalId: "22222222-2222-4222-8222-222222222222", projectId, state: "draft", version: 1 }] }),
+      );
 
     const runCommand = vi.fn(async (file: string, args: readonly string[]) => {
       if (file === "docker" && args[0] === "inspect") return { code: 0, stdout: "true", stderr: "" };
@@ -525,7 +667,16 @@ describe("resolveLocalConnection", () => {
     });
     const startControlPlane = vi.fn(async () => undefined);
 
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker", MAESTRO_EMBEDDED_DATABASE_PORT: "55434" }, fetch, secretStore: secretStore("credential.secret"), runCommand, startControlPlane, retryDelayMs: 0 })).resolves.toEqual({
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_LOCAL_DB_ENGINE: "docker", MAESTRO_EMBEDDED_DATABASE_PORT: "55434" },
+        fetch,
+        secretStore: secretStore("credential.secret"),
+        runCommand,
+        startControlPlane,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({
       kind: "configured",
       apiUrl: "http://127.0.0.1:4310",
       token: "credential.secret",
@@ -536,7 +687,8 @@ describe("resolveLocalConnection", () => {
 
   it("starts Docker PostgreSQL and Control Plane, bootstraps auth, and creates a default Goal", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -556,7 +708,15 @@ describe("resolveLocalConnection", () => {
         expect(options?.env?.MAESTRO_LOCAL_BOOTSTRAP_SECRET).toBeTruthy();
         expect(options?.env?.MAESTRO_LOCAL_OPERATOR_ID).toMatch(UUID_PATTERN);
         expect(options?.env?.MAESTRO_LOCAL_CREDENTIAL_ID).toBe(options?.env?.MAESTRO_LOCAL_OPERATOR_ID);
-        return { code: 0, stdout: JSON.stringify({ operatorId: "33333333-3333-4333-8333-333333333333", credentialId: "44444444-4444-4444-8444-444444444444", projectId }), stderr: "" };
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            operatorId: "33333333-3333-4333-8333-333333333333",
+            credentialId: "44444444-4444-4444-8444-444444444444",
+            projectId,
+          }),
+          stderr: "",
+        };
       }
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
@@ -564,7 +724,16 @@ describe("resolveLocalConnection", () => {
     const startControlPlane = vi.fn(async () => undefined);
 
     const setupEvents: LocalBootstrapStepEvent[] = [];
-    const result = await resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: store, runCommand, startModelGateway, startControlPlane, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
+    const result = await resolveLocalConnection({
+      env: { MAESTRO_LOCAL_DB_ENGINE: "docker" },
+      fetch,
+      secretStore: store,
+      runCommand,
+      startModelGateway,
+      startControlPlane,
+      retryDelayMs: 0,
+      onStep: (event) => setupEvents.push(event),
+    });
     expect(setupEvents.filter((event) => event.status === "started").map((event) => event.step)).toEqual([
       "docker-check",
       "postgres-ready",
@@ -582,11 +751,10 @@ describe("resolveLocalConnection", () => {
     expect(runCommand).toHaveBeenCalledWith("docker", expect.arrayContaining(["run"]));
   });
 
-
-
   it("starts Control Plane before the model gateway and shares its service token", async () => {
     const projectId = "11111111-1111-4111-8111-111111111111";
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockRejectedValueOnce(new Error("connection refused"))
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockRejectedValueOnce(new Error("connection refused"))
@@ -609,9 +777,14 @@ describe("resolveLocalConnection", () => {
       throw new Error(`unexpected command: ${file} ${args.join(" ")}`);
     });
     const startupOrder: string[] = [];
-    const startModelGateway = vi.fn(async () => { startupOrder.push("model-gateway"); });
+    const startModelGateway = vi.fn(async () => {
+      startupOrder.push("model-gateway");
+    });
     let controlPlaneOptions: Record<string, unknown> | undefined;
-    const startControlPlane = vi.fn(async (options: Record<string, unknown>) => { startupOrder.push("control-plane"); controlPlaneOptions = options; });
+    const startControlPlane = vi.fn(async (options: Record<string, unknown>) => {
+      startupOrder.push("control-plane");
+      controlPlaneOptions = options;
+    });
 
     const options = {
       env: {
@@ -656,14 +829,78 @@ describe("resolveLocalConnection", () => {
   });
 
   it("passes flexible Ensemble routing configuration to the local Control Plane", async () => {
-    const controlPlane = buildLocalControlPlaneEnvironment({ entry: "/tmp/control-plane.js", databaseUrl: "postgresql://localhost/maestro", dataDir: "/tmp/maestro", apiUrl: "http://127.0.0.1:4399", modelGatewayUrl: "http://127.0.0.1:4321", modelGatewayToken: "service-token", modelGatewayOperatorId: "local-operator", modelRoutingMode: "ensemble", ensembleCandidateCatalogPath: "/tmp/ensemble-candidates.json", modelAccountRefs: "openai-codex=openai-codex-local-operator", modelMapPath: "/tmp/model-map.json" });
-    expect(controlPlane).toMatchObject({ MAESTRO_MODEL_ROUTING_MODE: "ensemble", MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: "/tmp/ensemble-candidates.json", MAESTRO_MODEL_ACCOUNT_REFS: "openai-codex=openai-codex-local-operator", MAESTRO_MODEL_MAP: "/tmp/model-map.json" });
+    const controlPlane = buildLocalControlPlaneEnvironment({
+      entry: "/tmp/control-plane.js",
+      databaseUrl: "postgresql://localhost/maestro",
+      dataDir: "/tmp/maestro",
+      apiUrl: "http://127.0.0.1:4399",
+      modelGatewayUrl: "http://127.0.0.1:4321",
+      modelGatewayToken: "service-token",
+      modelGatewayOperatorId: "local-operator",
+      modelRoutingMode: "ensemble",
+      ensembleCandidateCatalogPath: "/tmp/ensemble-candidates.json",
+      modelAccountRefs: "openai-codex=openai-codex-local-operator",
+      modelMapPath: "/tmp/model-map.json",
+    });
+    expect(controlPlane).toMatchObject({
+      MAESTRO_MODEL_ROUTING_MODE: "ensemble",
+      MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: "/tmp/ensemble-candidates.json",
+      MAESTRO_MODEL_ACCOUNT_REFS: "openai-codex=openai-codex-local-operator",
+      MAESTRO_MODEL_MAP: "/tmp/model-map.json",
+    });
   });
+
+  it("keeps a detached database live after one bootstrap fails and another caller reuses it", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "maestro-embedded-shared-bootstrap-"));
+    const port = await availableLocalPort();
+    let owner: Awaited<ReturnType<typeof startEmbeddedDatabaseDirect>> | undefined;
+    let reuser: Awaited<ReturnType<typeof startEmbeddedDatabaseDirect>> | undefined;
+    let pool: Pool | undefined;
+    try {
+      const startEmbeddedDatabase = vi.fn(async (options: { dataDir: string; detached?: boolean; port?: number }) => {
+        owner = await startEmbeddedDatabaseDirect({ dataDir: options.dataDir, detached: true, port: options.port });
+        reuser = await startEmbeddedDatabaseDirect({ dataDir: options.dataDir, detached: true, port: options.port });
+        pool = new Pool({ connectionString: reuser.databaseUrl, max: 1 });
+        pool.on("error", () => undefined);
+        await pool.query("SELECT 1");
+        return owner;
+      });
+      const result = await resolveLocalConnection({
+        env: {
+          MAESTRO_LOCAL_DATA_DIR: dataDir,
+          MAESTRO_EMBEDDED_DATABASE_PORT: String(port),
+          MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+        },
+        fetch: vi.fn().mockRejectedValue(new Error("Control Plane is down")),
+        secretStore: secretStore(),
+        runCommand: vi.fn(async () => ({ code: 1, stdout: "", stderr: "bootstrap failed" })),
+        startEmbeddedDatabase,
+        retryDelayMs: 0,
+      });
+
+      expect(result.kind).toBe("setup-required");
+      expect(owner).toBeDefined();
+      expect(reuser?.databaseUrl).toBe(owner?.databaseUrl);
+      await expect(pool!.query("SELECT 1")).resolves.toMatchObject({ rowCount: 1 });
+    } finally {
+      await pool?.end();
+      await reuser?.stop();
+      await owner?.stop();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   it("stops an embedded database when model-gateway startup fails", async () => {
     const stopDatabase = vi.fn(async () => undefined);
-    const fetch = vi.fn().mockRejectedValueOnce(new Error("Control Plane is down")).mockResolvedValueOnce(response({ status: "ok" }));
-    const runCommand = vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" }));
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Control Plane is down"))
+      .mockResolvedValueOnce(response({ status: "ok" }));
+    const runCommand = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+      stderr: "",
+    }));
     const result = await resolveLocalConnection({
       env: { MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
       fetch,
@@ -671,7 +908,9 @@ describe("resolveLocalConnection", () => {
       runCommand,
       startEmbeddedDatabase: vi.fn(async () => ({ databaseUrl: "postgresql://maestro@127.0.0.1:55433/maestro_local", stop: stopDatabase })),
       startControlPlane: vi.fn(async () => undefined),
-      startModelGateway: vi.fn(async () => { throw new Error("gateway failed"); }),
+      startModelGateway: vi.fn(async () => {
+        throw new Error("gateway failed");
+      }),
       retryDelayMs: 0,
     });
     expect(result).toMatchObject({ kind: "setup-required", reason: expect.stringContaining("model gateway") });
@@ -686,7 +925,11 @@ describe("resolveLocalConnection", () => {
     const runCommand = vi.fn(async () => ({ code: 1, stdout: "", stderr: "bootstrap failed" }));
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: {
+        MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+        MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+        MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js",
+      },
       fetch,
       secretStore: secretStore(),
       runCommand,
@@ -695,13 +938,21 @@ describe("resolveLocalConnection", () => {
       retryDelayMs: 0,
       onStep: (event) => setupEvents.push(event),
     });
-    expect(result).toMatchObject({ kind: "setup-required", reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs" });
-    expect(setupEvents.at(-1)).toMatchObject({ step: "migrations", status: "failed", message: expect.stringContaining("Local operator bootstrap failed") });
+    expect(result).toMatchObject({
+      kind: "setup-required",
+      reason: "Local operator bootstrap failed; check PostgreSQL and Control Plane logs",
+    });
+    expect(setupEvents.at(-1)).toMatchObject({
+      step: "migrations",
+      status: "failed",
+      message: expect.stringContaining("Local operator bootstrap failed"),
+    });
     expect(gatewayStop).not.toHaveBeenCalled();
   });
 
   it("stops newly started children when Control Plane startup fails", async () => {
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockRejectedValueOnce(new Error("Control Plane is down"))
       .mockRejectedValue(new Error("Control Plane is still down"));
     const gatewayStop = vi.fn(async () => undefined);
@@ -712,17 +963,31 @@ describe("resolveLocalConnection", () => {
     const startControlPlane = vi.fn(async () => controlPlaneHandle);
     const setupEvents: LocalBootstrapStepEvent[] = [];
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: {
+        MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+        MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+        MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js",
+      },
       fetch,
       secretStore: secretStore(),
-      runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
+      runCommand: vi.fn(async () => ({
+        code: 0,
+        stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+        stderr: "",
+      })),
       startModelGateway,
       startControlPlane,
       retryDelayMs: 0,
       onStep: (event) => setupEvents.push(event),
     });
     expect(result.kind).toBe("setup-required");
-    expect(setupEvents).toContainEqual(expect.objectContaining({ step: "control-plane-up", status: "failed", message: expect.stringContaining("Control Plane startup failed") }));
+    expect(setupEvents).toContainEqual(
+      expect.objectContaining({
+        step: "control-plane-up",
+        status: "failed",
+        message: expect.stringContaining("Control Plane startup failed"),
+      }),
+    );
     expect(setupEvents).not.toContainEqual(expect.objectContaining({ step: "migrations", status: "failed" }));
     expect(gatewayStop).not.toHaveBeenCalled();
     expect(controlPlaneStop).toHaveBeenCalledOnce();
@@ -734,7 +999,9 @@ describe("resolveLocalConnection", () => {
     const gatewayUrl = "http://127.0.0.1:46201";
     const projectId = "11111111-1111-4111-8111-111111111111";
     const startModelGateway = vi.fn(async () => {
-      setImmediate(() => { childStarted = true; });
+      setImmediate(() => {
+        childStarted = true;
+      });
       return { stop: vi.fn(async () => undefined) };
     });
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
@@ -752,10 +1019,20 @@ describe("resolveLocalConnection", () => {
       return response({});
     });
     const result = await resolveLocalConnection({
-      env: { MAESTRO_API_URL: "http://127.0.0.1:46202", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
+      env: {
+        MAESTRO_API_URL: "http://127.0.0.1:46202",
+        MAESTRO_MODEL_GATEWAY_URL: gatewayUrl,
+        MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js",
+        MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+        MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+      },
       fetch,
       secretStore: secretStore(),
-      runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
+      runCommand: vi.fn(async () => ({
+        code: 0,
+        stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+        stderr: "",
+      })),
       startModelGateway,
       startControlPlane: vi.fn(async () => {
         controlPlaneStarted = true;
@@ -772,7 +1049,9 @@ describe("resolveLocalConnection", () => {
     const port = 46000 + Math.floor(Math.random() * 1000);
     const gatewayUrl = `http://127.0.0.1:${port}`;
     const entry = `${directory}/gateway.mjs`;
-    await writeFile(entry, `import { createServer } from "node:http";
+    await writeFile(
+      entry,
+      `import { createServer } from "node:http";
 import { writeFileSync } from "node:fs";
 const token = process.env.MAESTRO_MODEL_GATEWAY_TOKEN;
 const server = createServer((request, response) => {
@@ -782,7 +1061,8 @@ const server = createServer((request, response) => {
 });
 server.listen(Number(process.env.MAESTRO_MODEL_GATEWAY_PORT), process.env.MAESTRO_MODEL_GATEWAY_HOST, () => writeFileSync(${JSON.stringify(outputPath)}, JSON.stringify({ token, host: process.env.MAESTRO_MODEL_GATEWAY_HOST, port: process.env.MAESTRO_MODEL_GATEWAY_PORT, operator: process.env.MAESTRO_OPERATOR_ID, pid: process.pid, codexCommand: process.env.MAESTRO_CODEX_APP_SERVER_COMMAND, codexModels: process.env.MAESTRO_CODEX_MODELS })));
 process.on("SIGTERM", () => server.close(() => process.exit(0)));
-`);
+`,
+    );
     const realFetch = globalThis.fetch;
     let controlPlaneStarted = false;
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -794,19 +1074,46 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     });
     try {
       const result = await resolveLocalConnection({
-        env: { MAESTRO_API_URL: "http://127.0.0.1:46199", MAESTRO_MODEL_GATEWAY_URL: gatewayUrl, MAESTRO_MODEL_GATEWAY_ENTRY: entry, MAESTRO_CONTROL_PLANE_ENTRY: `${directory}/control.js`, MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex", MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro" },
+        env: {
+          MAESTRO_API_URL: "http://127.0.0.1:46199",
+          MAESTRO_MODEL_GATEWAY_URL: gatewayUrl,
+          MAESTRO_MODEL_GATEWAY_ENTRY: entry,
+          MAESTRO_CONTROL_PLANE_ENTRY: `${directory}/control.js`,
+          MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex",
+          MAESTRO_CODEX_MODELS: "gpt-5.3-codex",
+          MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+        },
         fetch,
         secretStore: secretStore(),
-        runCommand: vi.fn(async () => ({ code: 0, stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }), stderr: "" })),
-        startControlPlane: vi.fn(async () => { controlPlaneStarted = true; }),
+        runCommand: vi.fn(async () => ({
+          code: 0,
+          stdout: JSON.stringify({ credentialId: "44444444-4444-4444-8444-444444444444" }),
+          stderr: "",
+        })),
+        startControlPlane: vi.fn(async () => {
+          controlPlaneStarted = true;
+        }),
         retryDelayMs: 0,
       });
       expect(result.kind).toBe("setup-required");
       const childEnvironment = JSON.parse(await readFile(outputPath, "utf8")) as Record<string, string | undefined>;
-      expect(childEnvironment).toEqual({ token: expect.any(String), host: "127.0.0.1", port: String(port), operator: expect.stringMatching(UUID_PATTERN), pid: expect.any(Number), codexCommand: "/tmp/codex", codexModels: "gpt-5.3-codex" });
+      expect(childEnvironment).toEqual({
+        token: expect.any(String),
+        host: "127.0.0.1",
+        port: String(port),
+        operator: expect.stringMatching(UUID_PATTERN),
+        pid: expect.any(Number),
+        codexCommand: "/tmp/codex",
+        codexModels: "gpt-5.3-codex",
+      });
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 25));
       let childAlive = false;
-      try { process.kill(Number(childEnvironment.pid), 0); childAlive = true; } catch { /* The cleanup handle terminated the child. */ }
+      try {
+        process.kill(Number(childEnvironment.pid), 0);
+        childAlive = true;
+      } catch {
+        /* The cleanup handle terminated the child. */
+      }
       expect(childAlive).toBe(false);
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -814,23 +1121,60 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
   });
 
   it("passes the gateway token and Codex configuration only through child environment builders", () => {
-    const gateway = buildLocalModelGatewayEnvironment({ entry: "/tmp/gateway.js", apiUrl: "http://127.0.0.1:4321", token: "service-token", operatorId: "local-operator", codexCommand: "/tmp/codex", codexModels: "gpt-5.3-codex" });
-    expect(gateway).toMatchObject({ MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_HOST: "127.0.0.1", MAESTRO_MODEL_GATEWAY_PORT: "4321", MAESTRO_OPERATOR_ID: "local-operator", MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex", MAESTRO_CODEX_MODELS: "gpt-5.3-codex" });
+    const gateway = buildLocalModelGatewayEnvironment({
+      entry: "/tmp/gateway.js",
+      apiUrl: "http://127.0.0.1:4321",
+      token: "service-token",
+      operatorId: "local-operator",
+      codexCommand: "/tmp/codex",
+      codexModels: "gpt-5.3-codex",
+    });
+    expect(gateway).toMatchObject({
+      MAESTRO_MODEL_GATEWAY_TOKEN: "service-token",
+      MAESTRO_MODEL_GATEWAY_HOST: "127.0.0.1",
+      MAESTRO_MODEL_GATEWAY_PORT: "4321",
+      MAESTRO_OPERATOR_ID: "local-operator",
+      MAESTRO_CODEX_APP_SERVER_COMMAND: "/tmp/codex",
+      MAESTRO_CODEX_MODELS: "gpt-5.3-codex",
+    });
     expect(gateway).not.toHaveProperty("OPENAI_API_KEY");
-    const controlPlane = buildLocalControlPlaneEnvironment({ entry: "/tmp/control-plane.js", databaseUrl: "postgresql://localhost/maestro", dataDir: "/tmp/maestro", apiUrl: "http://127.0.0.1:4399", modelGatewayUrl: "http://127.0.0.1:4321", modelGatewayToken: "service-token", modelGatewayOperatorId: "local-operator" });
-    expect(controlPlane).toMatchObject({ MAESTRO_HOST: "127.0.0.1", MAESTRO_PORT: "4399", MAESTRO_MODEL_GATEWAY_URL: "http://127.0.0.1:4321", MAESTRO_MODEL_GATEWAY_TOKEN: "service-token", MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator" });
+    const controlPlane = buildLocalControlPlaneEnvironment({
+      entry: "/tmp/control-plane.js",
+      databaseUrl: "postgresql://localhost/maestro",
+      dataDir: "/tmp/maestro",
+      apiUrl: "http://127.0.0.1:4399",
+      modelGatewayUrl: "http://127.0.0.1:4321",
+      modelGatewayToken: "service-token",
+      modelGatewayOperatorId: "local-operator",
+    });
+    expect(controlPlane).toMatchObject({
+      MAESTRO_HOST: "127.0.0.1",
+      MAESTRO_PORT: "4399",
+      MAESTRO_MODEL_GATEWAY_URL: "http://127.0.0.1:4321",
+      MAESTRO_MODEL_GATEWAY_TOKEN: "service-token",
+      MAESTRO_MODEL_GATEWAY_OPERATOR_ID: "local-operator",
+    });
   });
 
   it("fails closed instead of auto-starting a non-loopback model gateway", async () => {
     const fetch = vi.fn().mockRejectedValue(new Error("connection refused"));
     const runCommand = vi.fn(async () => ({ code: 0, stdout: "accepting connections", stderr: "" }));
-    await expect(resolveLocalConnection({ env: { MAESTRO_MODEL_GATEWAY_URL: "http://192.0.2.10:4321" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0 })).resolves.toEqual({ kind: "setup-required", reason: "Local model gateway auto-start requires a loopback host" });
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_MODEL_GATEWAY_URL: "http://192.0.2.10:4321" },
+        fetch,
+        secretStore: secretStore(),
+        runCommand,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({ kind: "setup-required", reason: "Local model gateway auto-start requires a loopback host" });
     expect(runCommand).not.toHaveBeenCalled();
   });
 
   it("reports keychain persistence failure as a failed Control Plane step", async () => {
     const setupEvents: LocalBootstrapStepEvent[] = [];
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockRejectedValueOnce(new Error("gateway is down"))
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -842,12 +1186,18 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     }));
     const store: LocalSecretStore = {
       read: () => undefined,
-      write: () => { throw new Error("keychain unavailable"); },
+      write: () => {
+        throw new Error("keychain unavailable");
+      },
       clear: vi.fn(),
     };
 
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: {
+        MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+        MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+        MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js",
+      },
       fetch,
       secretStore: store,
       runCommand,
@@ -857,12 +1207,17 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     });
 
     expect(result).toMatchObject({ kind: "setup-required", reason: expect.stringContaining("OS keychain") });
-    expect(setupEvents.at(-1)).toMatchObject({ step: "control-plane-up", status: "failed", message: expect.stringContaining("OS keychain") });
+    expect(setupEvents.at(-1)).toMatchObject({
+      step: "control-plane-up",
+      status: "failed",
+      message: expect.stringContaining("OS keychain"),
+    });
   });
 
   it("reports final Control Plane authentication failure as a failed Control Plane step", async () => {
     const setupEvents: LocalBootstrapStepEvent[] = [];
-    const fetch = vi.fn()
+    const fetch = vi
+      .fn()
       .mockResolvedValueOnce(response({ status: "ok" }))
       .mockRejectedValueOnce(new Error("gateway is down"))
       .mockResolvedValueOnce(response({ status: "ok" }))
@@ -875,7 +1230,11 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     }));
 
     const result = await resolveLocalConnection({
-      env: { MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro", MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js", MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js" },
+      env: {
+        MAESTRO_LOCAL_DATABASE_URL: "postgresql://localhost/maestro",
+        MAESTRO_CONTROL_PLANE_ENTRY: "/tmp/control.js",
+        MAESTRO_MODEL_GATEWAY_ENTRY: "/tmp/gateway.js",
+      },
       fetch,
       secretStore: secretStore(),
       runCommand,
@@ -884,8 +1243,15 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
       onStep: (event) => setupEvents.push(event),
     });
 
-    expect(result).toMatchObject({ kind: "setup-required", reason: "Local operator bootstrap completed but Control Plane authentication failed" });
-    expect(setupEvents.at(-1)).toMatchObject({ step: "control-plane-up", status: "failed", message: "Local operator bootstrap completed but Control Plane authentication failed" });
+    expect(result).toMatchObject({
+      kind: "setup-required",
+      reason: "Local operator bootstrap completed but Control Plane authentication failed",
+    });
+    expect(setupEvents.at(-1)).toMatchObject({
+      step: "control-plane-up",
+      status: "failed",
+      message: "Local operator bootstrap completed but Control Plane authentication failed",
+    });
   });
 
   it("reports the bootstrap step that failed", async () => {
@@ -893,7 +1259,14 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const fetch = vi.fn().mockRejectedValue(new Error("connection refused"));
     const runCommand = vi.fn(async () => ({ code: 127, stdout: "", stderr: "docker: command not found" }));
 
-    await resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0, onStep: (event) => setupEvents.push(event) });
+    await resolveLocalConnection({
+      env: { MAESTRO_LOCAL_DB_ENGINE: "docker" },
+      fetch,
+      secretStore: secretStore(),
+      runCommand,
+      retryDelayMs: 0,
+      onStep: (event) => setupEvents.push(event),
+    });
 
     expect(setupEvents.at(-1)).toMatchObject({ step: "docker-check", status: "failed", message: expect.stringContaining("Docker") });
   });
@@ -902,7 +1275,15 @@ process.on("SIGTERM", () => server.close(() => process.exit(0)));
     const fetch = vi.fn().mockRejectedValue(new Error("connection refused"));
     const runCommand = vi.fn(async () => ({ code: 127, stdout: "", stderr: "docker: command not found" }));
 
-    await expect(resolveLocalConnection({ env: { MAESTRO_LOCAL_DB_ENGINE: "docker" }, fetch, secretStore: secretStore(), runCommand, retryDelayMs: 0 })).resolves.toMatchObject({
+    await expect(
+      resolveLocalConnection({
+        env: { MAESTRO_LOCAL_DB_ENGINE: "docker" },
+        fetch,
+        secretStore: secretStore(),
+        runCommand,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toMatchObject({
       kind: "setup-required",
       reason: expect.stringContaining("Docker"),
     });

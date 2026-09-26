@@ -8,10 +8,11 @@ import type { WebContents } from "electron";
 import { loadConnectionConfig, saveConnectionConfig, clearConnectionConfig, type ConnectionConfig } from "./store.js";
 import { createBootstrapRunner, initializeCarnegieConnection } from "./bootstrap.js";
 import { sanitizeBootstrapStatus, type BootstrapStatus } from "./bootstrap-status.js";
+import { createConfigErrorHandler, withSanitizedConfigError } from "./config-error-handler.js";
 import { isProviderAuthUrlAllowed } from "../src/lib/provider-account-login.js";
 import { loadPreferences, savePreferences } from "./preferences.js";
 import { createBridgedApi, isExposedMethod } from "./apiBridge.js";
-import { invokeWithErrorEnvelope, redactBridgeText } from "./api-error-bridge.js";
+import { invokeWithErrorEnvelope } from "./api-error-bridge.js";
 import { EVENT_STREAM_CHANNELS, pumpEventStream, type EventStreamMessage } from "./event-stream-bridge.js";
 import { abortAllEventStreams, abortEventStreamsForSender, type ActiveEventStream } from "./event-stream-lifecycle.js";
 import {
@@ -244,10 +245,12 @@ function registerIpcHandlers(): void {
     BrowserWindow.fromWebContents(event.sender)?.close();
   });
 
-  ipcMain.handle("maestro:config:get", () => {
-    const config = loadConnectionConfig();
-    return config === undefined ? undefined : { apiUrl: config.apiUrl, projectId: config.projectId };
-  });
+  ipcMain.handle("maestro:config:get", () =>
+    withSanitizedConfigError(() => {
+      const config = loadConnectionConfig();
+      return config === undefined ? undefined : { apiUrl: config.apiUrl, projectId: config.projectId };
+    }, "Could not load the saved connection"),
+  );
 
   ipcMain.handle("maestro:bootstrap:status", () => sanitizeBootstrapStatus(bootstrapStatus));
   ipcMain.handle("maestro:bootstrap:retry", () => runBootstrap());
@@ -257,24 +260,31 @@ function registerIpcHandlers(): void {
     return shell.openExternal(value);
   });
 
-  ipcMain.handle("maestro:config:error", () => setupError === undefined ? undefined : redactBridgeText(setupError));
+  ipcMain.handle(
+    "maestro:config:error",
+    createConfigErrorHandler(() => setupError),
+  );
 
-  ipcMain.handle("maestro:config:save", (_event, config: ConnectionConfig) => {
-    const publicConfig = saveConnectionConfig(config);
-    setupError = undefined;
-    connect(config);
-    bootstrapStatus = { phase: "ready" };
-    publishBootstrapStatus();
-    return publicConfig;
-  });
+  ipcMain.handle("maestro:config:save", (_event, config: ConnectionConfig) =>
+    withSanitizedConfigError(() => {
+      const publicConfig = saveConnectionConfig(config);
+      setupError = undefined;
+      connect(config);
+      bootstrapStatus = { phase: "ready" };
+      publishBootstrapStatus();
+      return publicConfig;
+    }, "Could not save the connection"),
+  );
 
-  ipcMain.handle("maestro:config:clear", () => {
-    clearConnectionConfig();
-    setupError = "Control Plane connection is not configured";
-    connect(undefined);
-    bootstrapStatus = { phase: "setup-required", reason: setupError };
-    publishBootstrapStatus();
-  });
+  ipcMain.handle("maestro:config:clear", () =>
+    withSanitizedConfigError(() => {
+      clearConnectionConfig();
+      setupError = "Control Plane connection is not configured";
+      connect(undefined);
+      bootstrapStatus = { phase: "setup-required", reason: setupError };
+      publishBootstrapStatus();
+    }, "Could not clear the saved connection"),
+  );
 
   ipcMain.handle("maestro:preferences:get", () => loadPreferences());
   ipcMain.handle("maestro:preferences:save", (_event, preferences: ReturnType<typeof loadPreferences>) => {

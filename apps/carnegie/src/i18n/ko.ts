@@ -40,6 +40,10 @@ export const ko: Translations = {
     dockerUnavailableRecoveryHint:
       "Docker를 실행한 뒤 로컬 설정을 다시 시도하세요. 데이터베이스 URL을 사용하려면 Carnegie를 시작할 때 사용하는 환경에 MAESTRO_LOCAL_DATABASE_URL을 설정한 뒤 Carnegie를 다시 시작하세요.",
     dockerDiagnosticsRecoveryHint: "위 원인에 나온 Docker 진단 명령을 실행한 뒤 로컬 설정을 다시 시도하세요.",
+    longDiagnosticError:
+      "로컬 설정에 실패했습니다. 진단 메시지가 너무 길어 표시하지 않았습니다. 로컬 설정을 다시 시도하거나 아래의 수동 연결을 사용하세요.",
+    databaseLockedError:
+      "로컬 데이터베이스가 사용 중이거나 잠겼을 수 있습니다. 다른 Maestro 인스턴스를 닫은 뒤 로컬 설정을 다시 시도하세요.",
     retryLocal: "로컬 설정 다시 시도",
     retryingLocal: "로컬 설정을 시작하는 중…",
     retryFailed: "로컬 설정을 완료하지 못했습니다. 위 원인을 확인한 뒤 다시 시도하세요.",

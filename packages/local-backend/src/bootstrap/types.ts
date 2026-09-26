@@ -54,22 +54,21 @@ export interface LocalBootstrapOptions {
   runCommand?: LocalCommandRunner;
   startControlPlane?: (options: LocalControlPlaneLaunchOptions) => Promise<LocalProcessHandle | void>;
   startModelGateway?: (options: LocalModelGatewayLaunchOptions) => Promise<LocalProcessHandle | void>;
-  startEmbeddedDatabase?: (options: { dataDir: string; detached?: boolean; port?: number }) => Promise<EmbeddedDatabaseHandle>;
+  startEmbeddedDatabase?: (options: {
+    dataDir: string;
+    detached?: boolean;
+    port?: number;
+    signal?: AbortSignal;
+  }) => Promise<EmbeddedDatabaseHandle>;
   retryDelayMs?: number;
   signal?: AbortSignal;
   onStep?: (event: LocalBootstrapStepEvent) => void;
   includeProjectId?: boolean;
 }
 
-export const LOCAL_BOOTSTRAP_STEP_ORDER = [
-  "docker-check",
-  "postgres-ready",
-  "migrations",
-  "control-plane-up",
-  "model-gateway-up",
-] as const;
+export const LOCAL_BOOTSTRAP_STEP_ORDER = ["docker-check", "postgres-ready", "migrations", "control-plane-up", "model-gateway-up"] as const;
 
-export type LocalBootstrapStepName = typeof LOCAL_BOOTSTRAP_STEP_ORDER[number];
+export type LocalBootstrapStepName = (typeof LOCAL_BOOTSTRAP_STEP_ORDER)[number];
 export type LocalBootstrapStepStatus = "pending" | "started" | "completed" | "failed";
 
 export interface LocalBootstrapStepEvent {

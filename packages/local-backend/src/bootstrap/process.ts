@@ -2,24 +2,25 @@ import { execFile, spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import type { EmbeddedDatabaseHandle } from "@maestro/persistence";
 import type { ConnectionEnvironment } from "../connection.js";
-import type {
-  LocalCommandRunner,
-  LocalControlPlaneLaunchOptions,
-  LocalModelGatewayLaunchOptions,
-  LocalProcessHandle,
-} from "./types.js";
+import type { LocalCommandRunner, LocalControlPlaneLaunchOptions, LocalModelGatewayLaunchOptions, LocalProcessHandle } from "./types.js";
 
-export const defaultRunCommand: LocalCommandRunner = (file, args, options) => new Promise((resolveResult) => {
-  execFile(file, [...args], {
-    ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
-    ...(options?.env === undefined ? {} : { env: options.env }),
-    ...(options?.signal === undefined ? {} : { signal: options.signal }),
-    maxBuffer: 1_024 * 1_024,
-  }, (error, stdout, stderr) => {
-    const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;
-    resolveResult({ code, stdout: String(stdout), stderr: String(stderr) });
+export const defaultRunCommand: LocalCommandRunner = (file, args, options) =>
+  new Promise((resolveResult) => {
+    execFile(
+      file,
+      [...args],
+      {
+        ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
+        ...(options?.env === undefined ? {} : { env: options.env }),
+        ...(options?.signal === undefined ? {} : { signal: options.signal }),
+        maxBuffer: 1_024 * 1_024,
+      },
+      (error, stdout, stderr) => {
+        const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;
+        resolveResult({ code, stdout: String(stdout), stderr: String(stderr) });
+      },
+    );
   });
-});
 
 export const defaultStartModelGateway = async (options: LocalModelGatewayLaunchOptions): Promise<LocalProcessHandle> => {
   const child = spawn(process.execPath, [options.entry], {
@@ -50,12 +51,22 @@ function detachProcess(child: ReturnType<typeof spawn>): LocalProcessHandle {
   return {
     stop: async () => {
       if (child.exitCode !== null || child.signalCode !== null) return;
-      try { child.kill("SIGTERM"); } catch { /* The child may have exited between checks. */ }
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* The child may have exited between checks. */
+      }
     },
   };
 }
 
-export function localHelperEnvironment(options: { env: ConnectionEnvironment; databaseUrl: string; secret: string; projectId: string; operatorId: string }): Record<string, string | undefined> {
+export function localHelperEnvironment(options: {
+  env: ConnectionEnvironment;
+  databaseUrl: string;
+  secret: string;
+  projectId: string;
+  operatorId: string;
+}): Record<string, string | undefined> {
   const entry = options.env.MAESTRO_CONTROL_PLANE_ENTRY;
   return cleanEnvironment({
     ...(entry === undefined ? {} : { MAESTRO_CONTROL_PLANE_ENTRY: entry }),
@@ -99,7 +110,9 @@ export function buildLocalControlPlaneEnvironment(options: LocalControlPlaneLaun
     MAESTRO_MODEL_GATEWAY_OPERATOR_ID: options.modelGatewayOperatorId,
     ...(options.modelRoutingMode === undefined ? {} : { MAESTRO_MODEL_ROUTING_MODE: options.modelRoutingMode }),
     ...(options.nativeModelRef === undefined ? {} : { MAESTRO_NATIVE_MODEL: options.nativeModelRef }),
-    ...(options.ensembleCandidateCatalogPath === undefined ? {} : { MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: options.ensembleCandidateCatalogPath }),
+    ...(options.ensembleCandidateCatalogPath === undefined
+      ? {}
+      : { MAESTRO_ENSEMBLE_CANDIDATE_CATALOG: options.ensembleCandidateCatalogPath }),
     ...(options.modelAccountRefs === undefined ? {} : { MAESTRO_MODEL_ACCOUNT_REFS: options.modelAccountRefs }),
     ...(options.modelMapPath === undefined ? {} : { MAESTRO_MODEL_MAP: options.modelMapPath }),
   });
@@ -154,9 +167,13 @@ export function startOwnedProcessWithCancellation<T extends LocalProcessHandle |
   signal?: AbortSignal,
 ): Promise<T | void> {
   const operation = start();
-  void operation.then((process) => {
-    if (signal?.aborted) void process?.stop().catch(() => undefined);
-  }, () => undefined);
+  void operation.then(
+    (process) => {
+      const sharedDatabase = process !== undefined && "shared" in process && process.shared === true;
+      if (signal?.aborted && !sharedDatabase) void process?.stop().catch(() => undefined);
+    },
+    () => undefined,
+  );
   return abortableOperation(operation, signal);
 }
 

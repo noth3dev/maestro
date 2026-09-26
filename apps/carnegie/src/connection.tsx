@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { BootstrapStatus, MaestroBridge, PublicConnectionConfig } from "./global.js";
-import { redactSensitiveText } from "./lib/command-id.js";
+import { safeBootstrapErrorMessage, sanitizeRendererBootstrapStatus } from "./bootstrap-status.js";
 
 export type SessionRecovery =
   | { kind: "invalid-session"; action: "sign-in-again"; message: string }
@@ -11,21 +11,35 @@ export type SessionRecovery =
 type ErrorWithStatus = { status?: unknown; code?: unknown; message?: unknown };
 
 function errorDetails(error: unknown): ErrorWithStatus {
-  return error instanceof Error ? error : typeof error === "object" && error !== null ? error as ErrorWithStatus : {};
+  return error instanceof Error ? error : typeof error === "object" && error !== null ? (error as ErrorWithStatus) : {};
 }
 
 export function isSessionFailure(error: unknown): boolean {
   const details = errorDetails(error);
   const message = typeof details.message === "string" ? details.message.toLowerCase() : "";
-  return details.status === 401 || details.code === "authentication_required" || details.code === "session_invalid" ||
-    message.includes("stored control-plane token") || message.includes("session is invalid") || message.includes("session expired");
+  return (
+    details.status === 401 ||
+    details.code === "authentication_required" ||
+    details.code === "session_invalid" ||
+    message.includes("stored control-plane token") ||
+    message.includes("session is invalid") ||
+    message.includes("session expired")
+  );
 }
 
 export function classifySessionRecovery(error: unknown): SessionRecovery {
   const details = errorDetails(error);
   const message = typeof details.message === "string" ? details.message.toLowerCase() : "";
-  if (message.includes("stored control-plane token") || message.includes("durable store") || message.includes("session could not be read")) {
-    return { kind: "durable-store-unavailable", action: "repair-storage", message: "The saved session could not be read. Repair or reconnect the local session." };
+  if (
+    message.includes("stored control-plane token") ||
+    message.includes("durable store") ||
+    message.includes("session could not be read")
+  ) {
+    return {
+      kind: "durable-store-unavailable",
+      action: "repair-storage",
+      message: "The saved session could not be read. Repair or reconnect the local session.",
+    };
   }
   if (message.includes("session") && (message.includes("invalid") || message.includes("expired") || details.code === "session_invalid")) {
     return { kind: "invalid-session", action: "sign-in-again", message: "Your session is invalid. Sign in again." };
@@ -65,27 +79,25 @@ interface ConnectionState {
 }
 
 function errorMessage(error: unknown): string {
-  return redactSensitiveText(error instanceof Error ? error.message : "Could not load the local workspace");
+  return safeBootstrapErrorMessage(error, "Could not load the local workspace");
 }
 
 export async function readConnectionState(source: ConnectionRefreshSource): Promise<ConnectionState> {
-  const [loaded, error, status] = await Promise.allSettled([
-    source.config.get(),
-    source.config.error(),
-    source.bootstrap.status(),
-  ]);
-  const bootstrap = status.status === "fulfilled"
-    ? status.value
-    : { phase: "setup-required" as const, reason: errorMessage(status.reason) };
+  const [loaded, error, status] = await Promise.allSettled([source.config.get(), source.config.error(), source.bootstrap.status()]);
+  const bootstrap =
+    status.status === "fulfilled"
+      ? sanitizeRendererBootstrapStatus(status.value)
+      : { phase: "setup-required" as const, reason: errorMessage(status.reason) };
   const bootstrapReason = bootstrap.phase === "setup-required" ? bootstrap.reason : undefined;
-  const setupError = error.status === "fulfilled"
-    ? error.value ?? bootstrapReason
-    : bootstrap.phase === "starting"
-      ? undefined
-      : bootstrapReason ?? errorMessage(loaded.status === "rejected" ? loaded.reason : error.reason);
+  const setupError =
+    error.status === "fulfilled"
+      ? (error.value ?? bootstrapReason)
+      : bootstrap.phase === "starting"
+        ? undefined
+        : (bootstrapReason ?? errorMessage(loaded.status === "rejected" ? loaded.reason : error.reason));
   return {
     config: bootstrap.phase === "setup-required" || loaded.status !== "fulfilled" ? undefined : loaded.value,
-    setupError: setupError === undefined ? undefined : redactSensitiveText(setupError),
+    setupError: setupError === undefined ? undefined : safeBootstrapErrorMessage(setupError),
     bootstrap,
   };
 }
@@ -123,15 +135,16 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     };
     const unsubscribe = window.maestro.bootstrap.onStatus((status) => {
       if (!active) return;
-      setBootstrap(status);
-      if (status.phase === "starting") {
+      const safeStatus = sanitizeRendererBootstrapStatus(status);
+      setBootstrap(safeStatus);
+      if (safeStatus.phase === "starting") {
         readGeneration += 1;
         setLoading(true);
         return;
       }
-      if (status.phase === "setup-required") {
+      if (safeStatus.phase === "setup-required") {
         setConfig(undefined);
-        setSetupError(status.reason);
+        setSetupError(safeStatus.reason);
         setRecovery(undefined);
       }
       void refresh();
@@ -197,7 +210,26 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const reportSessionFailure = useCallback((error: unknown) => setRecovery(classifySessionRecovery(error)), []);
 
-  return <ConnectionContext.Provider value={{ config, loading, connect, disconnect, retryConnection, retryBootstrap, retryingBootstrap, workspaceFocusRequest, recovery, reportSessionFailure, setupError, bootstrap }}>{children}</ConnectionContext.Provider>;
+  return (
+    <ConnectionContext.Provider
+      value={{
+        config,
+        loading,
+        connect,
+        disconnect,
+        retryConnection,
+        retryBootstrap,
+        retryingBootstrap,
+        workspaceFocusRequest,
+        recovery,
+        reportSessionFailure,
+        setupError,
+        bootstrap,
+      }}
+    >
+      {children}
+    </ConnectionContext.Provider>
+  );
 }
 
 export function SessionRecoveryNotice({ recovery, onAction }: { recovery: SessionRecovery; onAction: () => void }) {
@@ -210,8 +242,12 @@ export function SessionRecoveryNotice({ recovery, onAction }: { recovery: Sessio
   return (
     <main id="session-recovery" className="home-main" tabIndex={-1}>
       <h1 className="home-title">session recovery</h1>
-      <p className="form-hint" role="alert">{recovery.message}</p>
-      <button type="button" className="btn btn-primary" onClick={onAction}>{actionLabels[recovery.action]}</button>
+      <p className="form-hint" role="alert">
+        {recovery.message}
+      </p>
+      <button type="button" className="btn btn-primary" onClick={onAction}>
+        {actionLabels[recovery.action]}
+      </button>
     </main>
   );
 }
